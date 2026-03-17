@@ -1,0 +1,244 @@
+/*
+ * Project: MXKeys - Matrix Federation Trust Infrastructure
+ * Company: Matrix.Family Inc. - Delaware C-Corp
+ * Dev: Brabus
+ * Date: Sat Mar 15 2026 UTC
+ * Status: Created
+ * Contact: @support:matrix.family
+ *
+ * Minimal YAML config loader with environment variable override.
+ * Zero external dependencies.
+ */
+
+package config
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+)
+
+// Load loads a YAML config file into a map
+func Load(path string) (map[string]interface{}, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	result := make(map[string]interface{})
+	scanner := bufio.NewScanner(file)
+	var currentPath []string
+	var indentStack []int
+
+	lineNum := 0
+	for scanner.Scan() {
+		lineNum++
+		line := scanner.Text()
+
+		// Skip empty lines and comments
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		// Calculate indent
+		indent := 0
+		for _, c := range line {
+			if c == ' ' {
+				indent++
+			} else if c == '\t' {
+				indent += 2
+			} else {
+				break
+			}
+		}
+
+		// Adjust current path based on indent
+		for len(indentStack) > 0 && indent <= indentStack[len(indentStack)-1] {
+			indentStack = indentStack[:len(indentStack)-1]
+			if len(currentPath) > 0 {
+				currentPath = currentPath[:len(currentPath)-1]
+			}
+		}
+
+		// Parse key: value
+		parts := strings.SplitN(trimmed, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		// Handle list item
+		if strings.HasPrefix(key, "- ") {
+			key = strings.TrimPrefix(key, "- ")
+			// Add to list at current path
+			listPath := strings.Join(currentPath, ".")
+			existing := getPath(result, listPath)
+			var list []interface{}
+			if existing != nil {
+				if l, ok := existing.([]interface{}); ok {
+					list = l
+				}
+			}
+			list = append(list, key)
+			setPath(result, listPath, list)
+			continue
+		}
+
+		if value == "" {
+			// Nested object
+			currentPath = append(currentPath, key)
+			indentStack = append(indentStack, indent)
+		} else {
+			// Simple value
+			fullPath := strings.Join(append(currentPath, key), ".")
+			setPath(result, fullPath, parseValue(value))
+		}
+	}
+
+	return result, scanner.Err()
+}
+
+func parseValue(s string) interface{} {
+	// Remove quotes
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		return s[1 : len(s)-1]
+	}
+
+	// Try bool
+	if s == "true" {
+		return true
+	}
+	if s == "false" {
+		return false
+	}
+
+	// Try int
+	if i, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return i
+	}
+
+	// Try float
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		return f
+	}
+
+	return s
+}
+
+func setPath(m map[string]interface{}, path string, value interface{}) {
+	parts := strings.Split(path, ".")
+	current := m
+	for i, part := range parts {
+		if i == len(parts)-1 {
+			current[part] = value
+		} else {
+			if _, ok := current[part]; !ok {
+				current[part] = make(map[string]interface{})
+			}
+			if next, ok := current[part].(map[string]interface{}); ok {
+				current = next
+			}
+		}
+	}
+}
+
+func getPath(m map[string]interface{}, path string) interface{} {
+	parts := strings.Split(path, ".")
+	var current interface{} = m
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		if mp, ok := current.(map[string]interface{}); ok {
+			current = mp[part]
+		} else {
+			return nil
+		}
+	}
+	return current
+}
+
+// GetString gets a string value from config
+func GetString(m map[string]interface{}, path string) string {
+	v := getPath(m, path)
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
+}
+
+// GetInt gets an int value from config
+func GetInt(m map[string]interface{}, path string) int {
+	v := getPath(m, path)
+	switch val := v.(type) {
+	case int:
+		return val
+	case int64:
+		return int(val)
+	case float64:
+		return int(val)
+	}
+	return 0
+}
+
+// GetBool gets a bool value from config
+func GetBool(m map[string]interface{}, path string) bool {
+	v := getPath(m, path)
+	if b, ok := v.(bool); ok {
+		return b
+	}
+	return false
+}
+
+// GetStringSlice gets a string slice from config
+func GetStringSlice(m map[string]interface{}, path string) []string {
+	v := getPath(m, path)
+	if arr, ok := v.([]interface{}); ok {
+		result := make([]string, 0, len(arr))
+		for _, item := range arr {
+			if s, ok := item.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result
+	}
+	return nil
+}
+
+// WithEnvOverride overrides config values with environment variables
+// Env format: PREFIX_SECTION_KEY (e.g., MXKEYS_SERVER_PORT)
+func WithEnvOverride(m map[string]interface{}, prefix string) {
+	for _, env := range os.Environ() {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key, value := parts[0], parts[1]
+
+		if !strings.HasPrefix(key, prefix+"_") {
+			continue
+		}
+
+		// Convert MXKEYS_SERVER_PORT to server.port
+		path := strings.ToLower(strings.TrimPrefix(key, prefix+"_"))
+		path = strings.ReplaceAll(path, "_", ".")
+
+		setPath(m, path, parseValue(value))
+	}
+}
+
+// Validate validates required config fields
+func Validate(m map[string]interface{}, required []string) error {
+	for _, path := range required {
+		if getPath(m, path) == nil {
+			return fmt.Errorf("missing required config: %s", path)
+		}
+	}
+	return nil
+}

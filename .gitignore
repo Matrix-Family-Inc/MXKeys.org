@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.cursor/
+*.log
+.DS_Store
+mxkeys
+config.yaml
+.env
+.env.*
+*.key
+*.pem
+*.crt
+*.p12
+*.backup
+*.bak
+docs/release-100-checklist.md

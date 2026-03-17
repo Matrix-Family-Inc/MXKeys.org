@@ -1,0 +1,45 @@
+# MXKeys Configuration Example
+# Copy to /etc/mxkeys/config.yaml or config.yaml in working directory
+
+server:
+  name: mxkeys.example.org
+  port: 8448
+  bind_address: "0.0.0.0"
+
+database:
+  url: postgres://mxkeys:password@localhost/mxkeys?sslmode=disable
+  max_connections: 10
+  max_idle_connections: 2
+
+logging:
+  level: info    # debug, info, warn, error
+  format: text   # text, json
+
+keys:
+  storage_path: /var/lib/mxkeys/keys
+  validity_hours: 24
+  cache_ttl_hours: 1
+  fetch_timeout_s: 30
+  cleanup_hours: 6
+
+trusted_servers:
+  fallback:
+    - matrix.org
+
+rate_limit:
+  requests_per_second: 50
+  burst: 100
+  query_per_second: 10
+  query_burst: 20
+
+security:
+  max_server_name_length: 255
+  max_servers_per_query: 100
+  max_json_depth: 10
+  max_signatures_per_key: 10
+
+# Optional: Pin trusted notary keys for fallback servers
+# trusted_notaries:
+#   - server_name: matrix.org
+#     key_id: ed25519:auto
+#     public_key: "base64-encoded-public-key"

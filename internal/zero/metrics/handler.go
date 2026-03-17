@@ -1,0 +1,34 @@
+/*
+ * Project: MXKeys - Matrix Federation Trust Infrastructure
+ * Company: Matrix.Family Inc. - Delaware C-Corp
+ * Dev: Brabus
+ * Date: Sat Mar 15 2026 UTC
+ * Status: Created
+ * Contact: @support:matrix.family
+ */
+
+package metrics
+
+import (
+	"net/http"
+)
+
+// Handler returns an http.Handler that serves metrics
+func Handler() http.Handler {
+	return &metricsHandler{registry: DefaultRegistry}
+}
+
+// HandlerFor returns an http.Handler for a specific registry
+func HandlerFor(r *Registry) http.Handler {
+	return &metricsHandler{registry: r}
+}
+
+type metricsHandler struct {
+	registry *Registry
+}
+
+func (h *metricsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	collectRuntimeMetrics()
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	h.registry.WriteTo(w)
+}

@@ -1,0 +1,8 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Federation ring -->
+  <circle cx="512" cy="512" r="360" stroke="#3D9970" stroke-width="76" stroke-linecap="round" stroke-dasharray="260 320 200 360 220 420" transform="rotate(-18 512 512)" fill="none"/>
+  <!-- Inner halo -->
+  <circle cx="524" cy="500" r="96" fill="#1c1c1e"/>
+  <!-- Core node -->
+  <circle cx="524" cy="500" r="52" fill="#3D9970"/>
+</svg>

@@ -1,0 +1,47 @@
+Project: MXKeys
+Company: Matrix.Family Inc. - Delaware C-Corp
+Dev: Brabus
+Date: Mon Mar 16 2026 UTC
+Status: Created
+Contact: @support:matrix.family
+
+# ADR-0003: PostgreSQL as Persistent Key Cache
+
+## Status
+
+Accepted
+
+## Context
+
+MXKeys needs durable key-response storage beyond process lifetime, with deterministic query behavior and operational observability.
+A pure in-memory approach would lose state on restart and increase upstream fetch pressure.
+
+## Decision
+
+Use PostgreSQL as persistent cache/storage for verified federation key responses, with in-memory cache as fast-path layer.
+
+## Consequences
+
+Positive:
+
+- persistence across restarts and deploys,
+- lower repeated upstream fetch load,
+- improved operational introspection through SQL-backed data.
+
+Trade-offs:
+
+- database availability becomes part of readiness semantics,
+- requires backup/restore and schema lifecycle operations.
+
+## Alternatives Considered
+
+- memory-only cache,
+- embedded local storage,
+- external distributed cache without relational persistence.
+
+## References
+
+- `internal/server/storage.go`
+- `internal/server/handlers.go`
+- `internal/keys/notary.go`
+- `docs/deployment.md`
