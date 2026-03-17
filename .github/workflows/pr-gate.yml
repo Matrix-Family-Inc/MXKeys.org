@@ -1,0 +1,128 @@
+# Project: MXKeys - Matrix Federation Trust Infrastructure
+# Company: Matrix.Family Inc. - Delaware C-Corp
+# Dev: Brabus
+# Date: Sun Mar 15 2026 UTC
+# Status: Created
+# Contact: @support:matrix.family
+
+name: PR Gate
+
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: unit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run unit suite
+        run: go test -count=1 ./...
+
+  integration:
+    name: integration-with-fixtures
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run integration-like package tests
+        run: go test -count=1 ./internal/server ./internal/keys ./internal/cluster ./internal/zero/canonical ./internal/zero/merkle ./internal/zero/raft
+
+  race:
+    name: race
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run race detector
+        run: go test -race -count=1 ./...
+
+  vet:
+    name: vet
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run go vet
+        run: go vet ./...
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Check gofmt
+        shell: bash
+        run: |
+          set -euo pipefail
+          files="$(git ls-files '*.go')"
+          if [ -z "${files}" ]; then
+            exit 0
+          fi
+          unformatted="$(gofmt -l ${files})"
+          if [ -n "${unformatted}" ]; then
+            echo "Found unformatted files:"
+            echo "${unformatted}"
+            exit 1
+          fi
+
+  security-vuln:
+    name: security-vuln
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Run govulncheck (patched toolchain)
+        run: GOTOOLCHAIN=go1.26.1 "$(go env GOPATH)/bin/govulncheck" ./...
+
+  security-sast:
+    name: security-sast
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+      - name: Run gosec (high severity)
+        run: "$(go env GOPATH)/bin/gosec" -severity high ./...

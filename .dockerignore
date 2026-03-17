@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Build artifacts
+mxkeys
+*.exe
+*.test
+*.out
+
+# Test files
+*_test.go
+testdata/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Landing page
+landing/
+
+# Local config
+config.yaml
+*.key
+
+# Misc
+.DS_Store
+Thumbs.db

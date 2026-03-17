@@ -1,0 +1,12 @@
+# Project: MXKeys (mxkeys.org)
+# Company: EasyProTech LLC
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://mxkeys.org/sitemap.xml
+
+# Disallow development paths
+Disallow: /src/
+Disallow: /node_modules/

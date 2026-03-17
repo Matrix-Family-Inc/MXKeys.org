@@ -1,0 +1,71 @@
+# Project: MXKeys - Matrix Federation Trust Infrastructure
+# Company: Matrix.Family Inc. - Delaware C-Corp
+# Dev: Brabus
+# Date: Sun Mar 15 2026 UTC
+# Status: Created
+# Contact: @support:matrix.family
+
+name: Release Live Interop Gate
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - release/**
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  MXKEYS_LIVE_TEST: "1"
+  MXKEYS_LIVE_BASE_URL: ${{ vars.MXKEYS_LIVE_BASE_URL != '' && vars.MXKEYS_LIVE_BASE_URL || 'https://mxkeys.org' }}
+
+jobs:
+  live-federation-strictness:
+    name: live-federation-strictness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run strictness live test
+        run: go test -count=1 ./internal/server -run TestLiveFederationQueryStrictness -v
+
+  live-query-compatibility:
+    name: live-query-compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run query compatibility live test
+        run: go test -count=1 ./internal/server -run TestLiveQueryCompatibility -v
+
+  live-notary-interop:
+    name: live-notary-interop
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run notary failure-path live test
+        run: go test -count=1 ./internal/server -run TestLiveNotaryFailurePath -v
