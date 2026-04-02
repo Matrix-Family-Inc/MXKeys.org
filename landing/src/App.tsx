@@ -1,10 +1,14 @@
 /*
  * Project: MXKeys
- * Company: Matrix.Family Inc. - Delaware C-Corp
- * Dev: Brabus
+ * Company: Matrix Family Inc. (https://matrix.family)
+ * Owner: Matrix Family Inc.
+ * Maintainer: Brabus
+ * Role: Lead Architect
+ * Contact: dev@matrix.family
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
  * Date: Tue Jan 27 2026 UTC
- * Status: Updated - Unified URLs and Footer
- * Contact: @support:matrix.family
+ * Status: Updated
  */
 
 import { useTranslation } from 'react-i18next';
@@ -26,7 +30,6 @@ import {
   Github,
 } from 'lucide-react';
 import { Logo } from './components/Logo';
-import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { URLS, EXTERNAL, MATRIX_CONTACTS, getLinkProps } from './config/urls';
 
 function App() {
@@ -83,7 +86,6 @@ function App() {
             >
               <Github size={18} />
             </a>
-            <LanguageSwitcher />
           </div>
         </div>
       </header>
@@ -140,7 +142,7 @@ function App() {
                   {...getLinkProps(URLS.matrixFamily)}
                   className="badge badge-accent hover:opacity-80 transition-opacity"
                 >
-                  Matrix.Family
+                  Matrix Family
                 </a>
                 <a 
                   href={URLS.hushmeApp}
@@ -387,21 +389,21 @@ function App() {
 
             <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
               <div className="card">
-                <h4 className="font-semibold text-[var(--color-text)] mb-4">{t('integration.synapse')}</h4>
-                <div className="code-block">
-                  <div className="comment"># homeserver.yaml</div>
-                  <div><span className="keyword">trusted_key_servers</span>:</div>
-                  <div className="pl-4">- <span className="keyword">server_name</span>: <span className="string">"mxkeys.org"</span></div>
-                </div>
-              </div>
-
-              <div className="card">
                 <h4 className="font-semibold text-[var(--color-text)] mb-4">{t('integration.mxcore')}</h4>
                 <div className="code-block">
                   <div className="comment"># config.yaml</div>
                   <div><span className="keyword">federation</span>:</div>
                   <div className="pl-4"><span className="keyword">trusted_key_servers</span>:</div>
                   <div className="pl-8">- <span className="string">"mxkeys.org"</span></div>
+                </div>
+              </div>
+
+              <div className="card">
+                <h4 className="font-semibold text-[var(--color-text)] mb-4">{t('integration.synapse')}</h4>
+                <div className="code-block">
+                  <div className="comment"># homeserver.yaml</div>
+                  <div><span className="keyword">trusted_key_servers</span>:</div>
+                  <div className="pl-4">- <span className="keyword">server_name</span>: <span className="string">"mxkeys.org"</span></div>
                 </div>
               </div>
             </div>

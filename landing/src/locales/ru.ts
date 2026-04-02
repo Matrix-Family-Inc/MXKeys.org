@@ -1,10 +1,14 @@
 /*
  * Project: MXKeys
- * Company: Matrix.Family Inc. - Delaware C-Corp
- * Dev: Brabus
+ * Company: Matrix Family Inc. (https://matrix.family)
+ * Owner: Matrix Family Inc.
+ * Maintainer: Brabus
+ * Role: Lead Architect
+ * Contact: dev@matrix.family
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
  * Date: Tue Jan 27 2026 UTC
  * Status: Created
- * Contact: @support:matrix.family
  */
 
 export const ru = {
@@ -160,11 +164,11 @@ export const ru = {
   },
 
   ecosystem: {
-    title: 'Часть Matrix.Family',
-    description: 'MXKeys разработан и поддерживается командой Matrix.Family. Доступен для всех Matrix-серверов.',
+    title: 'Часть Matrix Family',
+    description: 'MXKeys разрабатывается Matrix Family Inc. Доступен для всех Matrix-серверов.',
     
     matrixFamily: {
-      title: 'Matrix.Family',
+      title: 'Matrix Family',
       description: 'Ecosystem Hub',
     },
     hushme: {
@@ -190,7 +194,7 @@ export const ru = {
     resources: 'Ресурсы',
     contact: 'Контакты',
     
-    matrixFamily: 'Matrix.Family',
+    matrixFamily: 'Matrix Family',
     hushme: 'HushMe Client',
     hushmeStore: 'HushMe Store',
     mxcore: 'MXCore',
@@ -208,8 +212,8 @@ export const ru = {
     matrixSpec: 'Matrix Spec',
     hushmeSpace: 'HushMe Space',
 
-    copyrightPrefix: '© 2025-2026 Matrix.Family Inc. Часть экосистемы ',
-    copyrightLink: 'Matrix.Family',
+    copyrightPrefix: '© 2026 Matrix Family Inc. All rights reserved. Часть экосистемы ',
+    copyrightLink: 'Matrix Family',
     copyrightSuffix: '.',
     tagline: 'Key Notary for Matrix federation.',
   },

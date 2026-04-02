@@ -1,9 +1,13 @@
 Project: MXKeys
-Company: Matrix.Family Inc. - Delaware C-Corp
-Dev: Brabus
+Company: Matrix Family Inc. (https://matrix.family)
+Owner: Matrix Family Inc.
+Maintainer: Brabus
+Role: Lead Architect
+Contact: dev@matrix.family
+Support: support@matrix.family
+Matrix: @support:matrix.family
 Date: Mon Mar 16 2026 UTC
 Status: Created
-Contact: @support:matrix.family
 
 Apache License
 Version 2.0, January 2004
@@ -182,4 +186,4 @@ of your accepting any such warranty or additional liability.
 
 END OF TERMS AND CONDITIONS
 
-Copyright (c) 2026 Matrix.Family Inc. - Delaware C-Corp
+Copyright (c) 2026 Matrix Family Inc. All rights reserved.

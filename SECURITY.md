@@ -11,7 +11,7 @@
 If you discover a security vulnerability in MXKeys, please report it responsibly:
 
 1. **Do NOT** open a public GitHub issue
-2. Send details to: **@support:matrix.family**
+2. Send details to: **security@matrix.family** or **@support:matrix.family**
 3. Include:
    - Description of the vulnerability
    - Steps to reproduce

@@ -1,14 +1,14 @@
 /*
- * Project: MXKeys - Matrix Federation Trust Infrastructure
- * Company: Matrix.Family Inc. - Delaware C-Corp
- * Dev: Brabus
+ * Project: MXKeys
+ * Company: Matrix Family Inc. (https://matrix.family)
+ * Owner: Matrix Family Inc.
+ * Maintainer: Brabus
+ * Role: Lead Architect
+ * Contact: dev@matrix.family
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
  * Date: Sun Mar 16 2026 UTC
  * Status: Created
- * Contact: @support:matrix.family
- *
- * Distributed Notary Cluster
- * Multi-node coordination using CRDT-based state synchronization.
- * Provides eventually consistent key cache across cluster nodes.
  */
 
 package cluster
