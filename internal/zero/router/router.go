@@ -1,13 +1,14 @@
 /*
- * Project: MXKeys - Matrix Federation Trust Infrastructure
- * Company: Matrix.Family Inc. - Delaware C-Corp
- * Dev: Brabus
+ * Project: MXKeys
+ * Company: Matrix Family Inc. (https://matrix.family)
+ * Owner: Matrix Family Inc.
+ * Maintainer: Brabus
+ * Role: Lead Architect
+ * Contact: dev@matrix.family
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
  * Date: Sat Mar 15 2026 UTC
  * Status: Created
- * Contact: @support:matrix.family
- *
- * Lightweight HTTP router based on net/http.ServeMux (Go 1.22+).
- * Supports path parameters, middleware, and method routing.
  */
 
 package router

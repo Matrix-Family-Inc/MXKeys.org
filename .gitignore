@@ -14,3 +14,4 @@ config.yaml
 *.backup
 *.bak
 docs/release-100-checklist.md
+matrix-family-info.md

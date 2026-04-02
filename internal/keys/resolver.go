@@ -1,14 +1,14 @@
 /*
- * Project: MXKeys - Matrix Federation Trust Infrastructure
- * Company: Matrix.Family Inc. - Delaware C-Corp
- * Dev: Brabus
+ * Project: MXKeys
+ * Company: Matrix Family Inc. (https://matrix.family)
+ * Owner: Matrix Family Inc.
+ * Maintainer: Brabus
+ * Role: Lead Architect
+ * Contact: dev@matrix.family
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
  * Date: Thu 06 Feb 2026 UTC
  * Status: Created
- * Contact: @support:matrix.family
- *
- * Server name resolution per Matrix spec (server discovery algorithm).
- * Supports: IP literals, explicit ports, .well-known delegation, SRV records.
- * Spec: https://spec.matrix.org/latest/server-server-api/#resolving-server-names
  */
 
 package keys

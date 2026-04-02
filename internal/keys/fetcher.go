@@ -1,14 +1,14 @@
 /*
- * Project: MXKeys - Matrix Federation Trust Infrastructure
- * Company: Matrix.Family Inc. - Delaware C-Corp
- * Dev: Brabus
+ * Project: MXKeys
+ * Company: Matrix Family Inc. (https://matrix.family)
+ * Owner: Matrix Family Inc.
+ * Maintainer: Brabus
+ * Role: Lead Architect
+ * Contact: dev@matrix.family
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
  * Date: Thu 06 Feb 2026 UTC
- * Status: Updated - Full server discovery + canonical JSON verification
- * Contact: @support:matrix.family
- *
- * Fetches and verifies keys from remote Matrix servers.
- * Uses Resolver for proper server name discovery (well-known, SRV, fallback).
- * Uses canonical JSON from mautrix for signature verification per Matrix spec.
+ * Status: Updated
  */
 
 package keys
