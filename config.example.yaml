@@ -37,9 +37,39 @@ security:
   max_servers_per_query: 100
   max_json_depth: 10
   max_signatures_per_key: 10
+  require_request_id: false
 
 # Optional: Pin trusted notary keys for fallback servers
-# trusted_notaries:
-#   - server_name: matrix.org
-#     key_id: ed25519:auto
-#     public_key: "base64-encoded-public-key"
+trusted_notaries:
+  # One entry per trusted perspective notary.
+  # Public key may be base64 (raw/std encoding).
+  - server_name: matrix.org
+    key_id: ed25519:auto
+    public_key: "base64-encoded-public-key"
+
+trust_policy:
+  enabled: false
+  deny_list: []
+  allow_list: []
+  require_notary_signatures: 0
+  max_key_age_hours: 0
+  require_well_known: false
+  require_valid_tls: false
+  block_private_ips: true
+
+transparency:
+  enabled: false
+  log_all_keys: true
+  log_key_changes: true
+  log_anomalies: true
+  retention_days: 365
+  table_name: key_transparency_log
+
+cluster:
+  enabled: false
+  node_id: ""
+  bind_address: "0.0.0.0"
+  bind_port: 7946
+  seeds: []
+  consensus_mode: crdt # crdt | raft
+  sync_interval: 5

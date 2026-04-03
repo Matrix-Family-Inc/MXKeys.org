@@ -38,8 +38,10 @@ required_checks=(
   "race"
   "vet"
   "lint"
+  "frontend-build"
   "live-federation-strictness"
   "live-query-compatibility"
+  "live-notary-interop"
 )
 
 contexts="$(jq -r '.required_status_checks.contexts[]?' <<<"${resp}")"

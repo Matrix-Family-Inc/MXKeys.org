@@ -48,6 +48,8 @@ type Notary struct {
 	validityHours int
 	cacheTTLHours int
 	trustPolicy   *TrustPolicy
+	transparency  *TransparencyLog
+	analytics     *Analytics
 }
 
 type cachedResponse struct {
@@ -56,13 +58,27 @@ type cachedResponse struct {
 }
 
 // NewNotary creates new notary service
-func NewNotary(db *sql.DB, serverName string, keyStoragePath string, validityHours, cacheTTLHours int, fallbackServers []string, fetchTimeout time.Duration) (*Notary, error) {
+func NewNotary(
+	db *sql.DB,
+	serverName string,
+	keyStoragePath string,
+	validityHours, cacheTTLHours int,
+	fallbackServers []string,
+	fetchTimeout time.Duration,
+	trustedNotaries []TrustedNotaryKey,
+	maxSignaturesPerKey int,
+) (*Notary, error) {
 	storage, err := NewStorage(db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create storage: %w", err)
 	}
 
-	fetcher := NewFetcher(fallbackServers, fetchTimeout)
+	fetcher := NewFetcherWithConfig(FetcherConfig{
+		FallbackServers: fallbackServers,
+		Timeout:         fetchTimeout,
+		TrustedNotaries: trustedNotaries,
+		MaxSignatures:   maxSignaturesPerKey,
+	})
 
 	n := &Notary{
 		serverName:    serverName,
@@ -172,6 +188,12 @@ func (n *Notary) QueryKeys(ctx context.Context, request *KeyQueryRequest) *KeyQu
 		keys, err := n.GetServerKeysWithCriteria(ctx, serverName, minValidUntil)
 		if err != nil {
 			log.Warn("Failed to get keys for server", "server", serverName, "error", err)
+			if n.analytics != nil {
+				n.analytics.RecordFetchFailure(serverName, err.Error())
+			}
+			if n.transparency != nil {
+				_ = n.transparency.LogFailure(ctx, serverName, err.Error())
+			}
 
 			response.Failures[serverName] = map[string]interface{}{
 				"errcode": "M_UNKNOWN",
@@ -184,11 +206,21 @@ func (n *Notary) QueryKeys(ctx context.Context, request *KeyQueryRequest) *KeyQu
 		n.addNotarySignature(keys)
 
 		if violation := n.checkResponsePolicy(serverName, keys); violation != nil {
+			if n.transparency != nil {
+				_ = n.transparency.LogPolicyViolation(ctx, violation)
+			}
 			response.Failures[serverName] = map[string]interface{}{
 				"errcode": "M_FORBIDDEN",
 				"error":   fmt.Sprintf("Trust policy violation (%s): %s", violation.Rule, violation.Details),
 			}
 			continue
+		}
+
+		if n.analytics != nil {
+			n.analytics.RecordKeyObservation(serverName, keys)
+		}
+		if n.transparency != nil {
+			_ = n.transparency.LogKey(ctx, serverName, keys)
 		}
 
 		response.ServerKeys = append(response.ServerKeys, *keys)
@@ -494,4 +526,14 @@ func (n *Notary) GetCacheSize() int {
 // SetTrustPolicy sets runtime trust policy checks for query flow.
 func (n *Notary) SetTrustPolicy(tp *TrustPolicy) {
 	n.trustPolicy = tp
+}
+
+// SetTransparencyLog enables transparency logging for query-path events.
+func (n *Notary) SetTransparencyLog(tl *TransparencyLog) {
+	n.transparency = tl
+}
+
+// SetAnalytics enables runtime analytics aggregation for query-path events.
+func (n *Notary) SetAnalytics(a *Analytics) {
+	n.analytics = a
 }

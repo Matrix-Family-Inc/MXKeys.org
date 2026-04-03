@@ -101,6 +101,22 @@ jobs:
             exit 1
           fi
 
+  frontend-build:
+    name: frontend-build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: landing
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Build landing
+        run: bun run build
+
   security-vuln:
     name: security-vuln
     runs-on: ubuntu-latest

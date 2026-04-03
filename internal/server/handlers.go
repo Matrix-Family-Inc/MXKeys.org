@@ -217,18 +217,22 @@ func (s *Server) handleKeyQuery(w http.ResponseWriter, r *http.Request) {
 
 	var request keys.KeyQueryRequest
 	if err := decodeStrictJSON(r.Body, &request); err != nil {
-		RecordRequestRejection(RejectReasonInvalidJSON)
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
+			RecordRequestRejection(RejectReasonBodyTooLarge)
+			RecordKeyQuery(QueryStatusFailure, 0)
 			writeMatrixError(w, http.StatusRequestEntityTooLarge, "M_TOO_LARGE", "Request body too large")
 			return
 		}
+		RecordRequestRejection(RejectReasonInvalidJSON)
+		RecordKeyQuery(QueryStatusFailure, 0)
 		writeMatrixError(w, http.StatusBadRequest, "M_BAD_JSON", "Invalid JSON: "+err.Error())
 		return
 	}
 
 	if len(request.ServerKeys) == 0 {
 		RecordRequestRejection(RejectReasonEmptyRequest)
+		RecordKeyQuery(QueryStatusFailure, 0)
 		writeMatrixError(w, http.StatusBadRequest, "M_BAD_JSON", "No servers specified in server_keys")
 		return
 	}
@@ -240,6 +244,7 @@ func (s *Server) handleKeyQuery(w http.ResponseWriter, r *http.Request) {
 
 	if len(request.ServerKeys) > maxServers {
 		RecordRequestRejection(RejectReasonTooManyServers)
+		RecordKeyQuery(QueryStatusFailure, len(request.ServerKeys))
 		writeMatrixError(w, http.StatusBadRequest, "M_BAD_JSON", fmt.Sprintf("Too many servers in request (max %d)", maxServers))
 		return
 	}
@@ -252,6 +257,7 @@ func (s *Server) handleKeyQuery(w http.ResponseWriter, r *http.Request) {
 
 	if err := validateKeyQueryServerKeys(request.ServerKeys, maxNameLen); err != nil {
 		RecordRequestRejection(RejectReasonInvalidServerName)
+		RecordKeyQuery(QueryStatusFailure, len(request.ServerKeys))
 		writeMatrixError(w, http.StatusBadRequest, "M_INVALID_PARAM", err.Error())
 		return
 	}
@@ -263,6 +269,12 @@ func (s *Server) handleKeyQuery(w http.ResponseWriter, r *http.Request) {
 	)
 
 	response := s.notary.QueryKeys(r.Context(), &request)
+
+	status := QueryStatusSuccess
+	if len(response.ServerKeys) == 0 && len(response.Failures) > 0 {
+		status = QueryStatusFailure
+	}
+	RecordKeyQuery(status, len(request.ServerKeys))
 
 	log.Info("Key query completed",
 		"servers_returned", len(response.ServerKeys),

@@ -54,6 +54,22 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// RequestIDRequirementMiddleware rejects requests without X-Request-ID when required.
+func RequestIDRequirementMiddleware(required bool, next http.Handler) http.Handler {
+	if !required {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.TrimSpace(r.Header.Get("X-Request-ID")) == "" {
+			RecordRequestRejection(RejectReasonMissingRequestID)
+			w.Header().Set("Content-Type", "application/json")
+			writeMatrixError(w, http.StatusBadRequest, "M_INVALID_PARAM", "X-Request-ID header is required")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // extractClientIP extracts the client IP from the request
 func extractClientIP(r *http.Request) string {
 	// Check X-Forwarded-For header (for reverse proxy)

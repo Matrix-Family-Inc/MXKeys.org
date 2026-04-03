@@ -28,6 +28,7 @@ const (
 	RejectReasonMethodNotAllowed  = "method_not_allowed"
 	RejectReasonInvalidServerName = "invalid_server_name"
 	RejectReasonInvalidKeyID      = "invalid_key_id"
+	RejectReasonMissingRequestID  = "missing_request_id"
 )
 
 // Query status

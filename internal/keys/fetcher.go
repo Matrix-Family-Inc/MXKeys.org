@@ -56,6 +56,7 @@ type Fetcher struct {
 	circuitBreaker  *CircuitBreaker
 	trustedNotaries map[string]TrustedNotaryKey
 	retryAttempts   int
+	maxSignatures   int
 }
 
 // FetcherConfig holds fetcher configuration
@@ -64,6 +65,7 @@ type FetcherConfig struct {
 	Timeout         time.Duration
 	TrustedNotaries []TrustedNotaryKey
 	RetryAttempts   int
+	MaxSignatures   int
 }
 
 // NewFetcher creates a new remote key fetcher with server discovery support.
@@ -79,6 +81,9 @@ func NewFetcher(fallbackServers []string, timeout time.Duration) *Fetcher {
 func NewFetcherWithConfig(cfg FetcherConfig) *Fetcher {
 	if cfg.RetryAttempts <= 0 {
 		cfg.RetryAttempts = defaultRetryAttempts
+	}
+	if cfg.MaxSignatures <= 0 {
+		cfg.MaxSignatures = 10
 	}
 
 	trustedMap := make(map[string]TrustedNotaryKey)
@@ -113,6 +118,7 @@ func NewFetcherWithConfig(cfg FetcherConfig) *Fetcher {
 		circuitBreaker:  NewCircuitBreaker(5, 60*time.Second),
 		trustedNotaries: trustedMap,
 		retryAttempts:   cfg.RetryAttempts,
+		maxSignatures:   cfg.MaxSignatures,
 	}
 }
 
@@ -472,6 +478,9 @@ func (f *Fetcher) verifySelfSignature(resp *ServerKeysResponse, rawJSON []byte) 
 	serverSigs, ok := resp.Signatures[resp.ServerName]
 	if !ok {
 		return fmt.Errorf("no self-signature found for %s", resp.ServerName)
+	}
+	if len(serverSigs) > f.maxSignatures {
+		return fmt.Errorf("too many signatures for %s: %d > %d", resp.ServerName, len(serverSigs), f.maxSignatures)
 	}
 
 	// Remove signatures and unsigned for canonical JSON
