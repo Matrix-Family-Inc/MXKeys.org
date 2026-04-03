@@ -25,6 +25,7 @@ func (s *Server) handleTransparencyLog(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if s.transparency == nil {
+		w.WriteHeader(http.StatusNotFound)
 		writeJSON(w, map[string]string{
 			"errcode": "M_NOT_FOUND",
 			"error":   "Transparency log not enabled",
@@ -96,6 +97,7 @@ func (s *Server) handleTransparencyVerify(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json")
 
 	if s.transparency == nil {
+		w.WriteHeader(http.StatusNotFound)
 		writeJSON(w, map[string]string{
 			"errcode": "M_NOT_FOUND",
 			"error":   "Transparency log not enabled",
@@ -161,6 +163,7 @@ func (s *Server) handleTransparencyProof(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 
 	if s.merkleTree == nil {
+		w.WriteHeader(http.StatusNotFound)
 		writeJSON(w, map[string]string{
 			"errcode": "M_NOT_FOUND",
 			"error":   "Merkle tree not enabled",

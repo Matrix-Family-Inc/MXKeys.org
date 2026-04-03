@@ -32,6 +32,8 @@ type RateLimiter struct {
 	queryRate    rate.Limit
 	queryBurst   int
 	cleanupEvery time.Duration
+	stopCh       chan struct{}
+	stopOnce     sync.Once
 }
 
 type visitor struct {
@@ -64,6 +66,7 @@ func NewRateLimiter(cfg RateLimitConfig) *RateLimiter {
 		queryRate:    rate.Limit(cfg.QueryRequestsPerSecond),
 		queryBurst:   cfg.QueryBurst,
 		cleanupEvery: 5 * time.Minute,
+		stopCh:       make(chan struct{}),
 	}
 
 	go rl.cleanupLoop()
@@ -72,15 +75,6 @@ func NewRateLimiter(cfg RateLimitConfig) *RateLimiter {
 }
 
 func (rl *RateLimiter) getVisitor(ip string) *visitor {
-	rl.mu.RLock()
-	v, exists := rl.visitors[ip]
-	rl.mu.RUnlock()
-
-	if exists {
-		v.lastSeen = time.Now()
-		return v
-	}
-
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
@@ -89,7 +83,7 @@ func (rl *RateLimiter) getVisitor(ip string) *visitor {
 		return v
 	}
 
-	v = &visitor{
+	v := &visitor{
 		limiter:      rate.NewLimiter(rl.globalRate, rl.globalBurst),
 		queryLimiter: rate.NewLimiter(rl.queryRate, rl.queryBurst),
 		lastSeen:     time.Now(),
@@ -102,9 +96,20 @@ func (rl *RateLimiter) cleanupLoop() {
 	ticker := time.NewTicker(rl.cleanupEvery)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		rl.cleanup()
+	for {
+		select {
+		case <-rl.stopCh:
+			return
+		case <-ticker.C:
+			rl.cleanup()
+		}
 	}
+}
+
+func (rl *RateLimiter) Stop() {
+	rl.stopOnce.Do(func() {
+		close(rl.stopCh)
+	})
 }
 
 func (rl *RateLimiter) cleanup() {

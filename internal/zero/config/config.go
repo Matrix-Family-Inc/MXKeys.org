@@ -188,6 +188,24 @@ func GetInt(m map[string]interface{}, path string) int {
 	return 0
 }
 
+// GetFloat gets a float64 value from config
+func GetFloat(m map[string]interface{}, path string) float64 {
+	v := getPath(m, path)
+	switch val := v.(type) {
+	case float64:
+		return val
+	case int:
+		return float64(val)
+	case int64:
+		return float64(val)
+	case string:
+		if f, err := strconv.ParseFloat(val, 64); err == nil {
+			return f
+		}
+	}
+	return 0
+}
+
 // GetBool gets a bool value from config
 func GetBool(m map[string]interface{}, path string) bool {
 	v := getPath(m, path)
@@ -210,6 +228,11 @@ func GetStringSlice(m map[string]interface{}, path string) []string {
 		return result
 	}
 	return nil
+}
+
+// Has reports whether a path exists in config map.
+func Has(m map[string]interface{}, path string) bool {
+	return getPath(m, path) != nil
 }
 
 // WithEnvOverride overrides config values with environment variables

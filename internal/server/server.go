@@ -16,6 +16,7 @@ package server
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -63,6 +64,10 @@ func New(cfg *config.Config) (*Server, error) {
 
 	// Create notary service
 	fetchTimeout := time.Duration(cfg.Keys.FetchTimeoutS) * time.Second
+	trustedNotaries, err := decodeTrustedNotaries(cfg.Security.TrustedNotaries)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode trusted notaries: %w", err)
+	}
 	notary, err := keys.NewNotary(
 		db,
 		cfg.Server.Name,
@@ -71,6 +76,8 @@ func New(cfg *config.Config) (*Server, error) {
 		cfg.Keys.CacheTTLHours,
 		cfg.TrustedServers.Fallback,
 		fetchTimeout,
+		trustedNotaries,
+		cfg.Security.MaxSignaturesPerKey,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create notary: %w", err)
@@ -126,6 +133,7 @@ func New(cfg *config.Config) (*Server, error) {
 			log.Error("Failed to initialize transparency log", "error", err)
 		} else {
 			s.transparency = transparencyLog
+			s.notary.SetTransparencyLog(transparencyLog)
 			s.merkleTree = merkle.New()
 			log.Info("Transparency log enabled")
 		}
@@ -135,6 +143,7 @@ func New(cfg *config.Config) (*Server, error) {
 	s.analytics = keys.NewAnalytics(db, keys.AnalyticsConfig{
 		Enabled: true,
 	})
+	s.notary.SetAnalytics(s.analytics)
 
 	if cfg.Cluster.Enabled {
 		clusterCfg := cluster.ClusterConfig{
@@ -206,6 +215,7 @@ func (s *Server) Handler() http.Handler {
 	handler = s.rateLimiter.Middleware(handler)
 	handler = loggingMiddleware(handler)
 	handler = SecurityHeadersMiddleware(handler)
+	handler = RequestIDRequirementMiddleware(s.config.Security.RequireRequestID, handler)
 	handler = RequestIDMiddleware(handler)
 	return handler
 }
@@ -270,6 +280,10 @@ func (s *Server) gracefulShutdown(srv *http.Server) error {
 	// Flush any pending metrics
 	log.Info("Flushing metrics...")
 
+	if s.rateLimiter != nil {
+		s.rateLimiter.Stop()
+	}
+
 	// Close database connection
 	log.Info("Closing database connection...")
 	if err := s.db.Close(); err != nil {
@@ -286,7 +300,32 @@ func (s *Server) Close() error {
 	if s.cluster != nil {
 		s.cluster.Stop()
 	}
+	if s.rateLimiter != nil {
+		s.rateLimiter.Stop()
+	}
 	return s.db.Close()
+}
+
+func decodeTrustedNotaries(configured []config.TrustedNotary) ([]keys.TrustedNotaryKey, error) {
+	if len(configured) == 0 {
+		return nil, nil
+	}
+	out := make([]keys.TrustedNotaryKey, 0, len(configured))
+	for _, item := range configured {
+		pub, err := base64.RawStdEncoding.DecodeString(item.PublicKey)
+		if err != nil {
+			pub, err = base64.StdEncoding.DecodeString(item.PublicKey)
+			if err != nil {
+				return nil, fmt.Errorf("server=%s key_id=%s: invalid base64 public key", item.ServerName, item.KeyID)
+			}
+		}
+		out = append(out, keys.TrustedNotaryKey{
+			ServerName: item.ServerName,
+			KeyID:      item.KeyID,
+			PublicKey:  pub,
+		})
+	}
+	return out, nil
 }
 
 type responseWriter struct {
