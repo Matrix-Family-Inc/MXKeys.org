@@ -1,183 +1,140 @@
 package server
 
 import (
-	"io"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+
+	"mxkeys/internal/config"
 )
 
-func TestOversizedRequestBodyRejected(t *testing.T) {
-	maxBodySize := int64(1024)
+func newValidationOnlyServer() *Server {
+	return &Server{
+		config: &config.Config{
+			Security: config.SecurityConfig{
+				MaxServerNameLength: 255,
+				MaxServersPerQuery:  100,
+			},
+		},
+	}
+}
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
+func decodeMatrixErrorBody(t *testing.T, rr *httptest.ResponseRecorder) map[string]string {
+	t.Helper()
+	var out map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+		t.Fatalf("response body is not JSON: %v", err)
+	}
+	return out
+}
 
-		_, err := io.ReadAll(r.Body)
-		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusRequestEntityTooLarge)
-			writeJSON(w, map[string]string{
-				"errcode": "M_TOO_LARGE",
-				"error":   "Request body too large",
-			})
-			return
-		}
+func TestHandleKeyQueryRejectsOversizedBody(t *testing.T) {
+	s := newValidationOnlyServer()
+	hugeBody := `{"server_keys":{"example.org":{}},"padding":"` + strings.Repeat("a", maxRequestBodySize+16) + `"}`
 
-		w.WriteHeader(http.StatusOK)
-	})
-
-	largeBody := strings.Repeat("x", 2048)
-	req := httptest.NewRequest("POST", "/_matrix/key/v2/query", strings.NewReader(largeBody))
+	req := httptest.NewRequest(http.MethodPost, "/_matrix/key/v2/query", strings.NewReader(hugeBody))
 	rr := httptest.NewRecorder()
-
-	handler.ServeHTTP(rr, req)
+	s.handleKeyQuery(rr, req)
 
 	if rr.Code != http.StatusRequestEntityTooLarge {
-		t.Errorf("expected 413, got %d", rr.Code)
+		t.Fatalf("expected 413, got %d", rr.Code)
+	}
+	errBody := decodeMatrixErrorBody(t, rr)
+	if errBody["errcode"] != "M_TOO_LARGE" {
+		t.Fatalf("expected M_TOO_LARGE, got %q", errBody["errcode"])
 	}
 }
 
-func TestAcceptableRequestBodySize(t *testing.T) {
-	maxBodySize := int64(1024)
+func TestHandleKeyQueryRejectsEmptyRequest(t *testing.T) {
+	s := newValidationOnlyServer()
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
-
-		_, err := io.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusRequestEntityTooLarge)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-	})
-
-	smallBody := strings.Repeat("x", 512)
-	req := httptest.NewRequest("POST", "/_matrix/key/v2/query", strings.NewReader(smallBody))
+	req := httptest.NewRequest(http.MethodPost, "/_matrix/key/v2/query", strings.NewReader(`{"server_keys":{}}`))
 	rr := httptest.NewRecorder()
-
-	handler.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rr.Code)
-	}
-}
-
-func TestExactLimitBodySize(t *testing.T) {
-	maxBodySize := int64(1024)
-
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
-
-		_, err := io.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusRequestEntityTooLarge)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-	})
-
-	exactBody := strings.Repeat("x", 1024)
-	req := httptest.NewRequest("POST", "/_matrix/key/v2/query", strings.NewReader(exactBody))
-	rr := httptest.NewRecorder()
-
-	handler.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("exact limit should be accepted, got %d", rr.Code)
-	}
-}
-
-func TestOneByteTooLarge(t *testing.T) {
-	maxBodySize := int64(1024)
-
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
-
-		_, err := io.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusRequestEntityTooLarge)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-	})
-
-	overBody := strings.Repeat("x", 1025)
-	req := httptest.NewRequest("POST", "/_matrix/key/v2/query", strings.NewReader(overBody))
-	rr := httptest.NewRecorder()
-
-	handler.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusRequestEntityTooLarge {
-		t.Errorf("one byte over limit should be rejected, got %d", rr.Code)
-	}
-}
-
-func TestEmptyBodyAccepted(t *testing.T) {
-	maxBodySize := int64(1024)
-
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
-
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusRequestEntityTooLarge)
-			return
-		}
-
-		if len(body) == 0 {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-	})
-
-	req := httptest.NewRequest("POST", "/_matrix/key/v2/query", strings.NewReader(""))
-	rr := httptest.NewRecorder()
-
-	handler.ServeHTTP(rr, req)
+	s.handleKeyQuery(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
-		t.Errorf("empty body should be handled (rejected as bad request), got %d", rr.Code)
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	errBody := decodeMatrixErrorBody(t, rr)
+	if errBody["errcode"] != "M_BAD_JSON" {
+		t.Fatalf("expected M_BAD_JSON, got %q", errBody["errcode"])
 	}
 }
 
-func TestVeryLargeQueryRejected(t *testing.T) {
-	maxBodySize := int64(64 * 1024)
+func TestHandleKeyQueryRespectsConfiguredMaxServers(t *testing.T) {
+	s := newValidationOnlyServer()
+	s.config.Security.MaxServersPerQuery = 2
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
-
-		_, err := io.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusRequestEntityTooLarge)
-			return
+	var b strings.Builder
+	b.WriteString(`{"server_keys":{`)
+	for i := 0; i < 3; i++ {
+		if i > 0 {
+			b.WriteString(",")
 		}
+		b.WriteString(`"s-`)
+		b.WriteString(strconv.Itoa(i))
+		b.WriteString(`.example.org":{}`)
+	}
+	b.WriteString(`}}`)
 
-		w.WriteHeader(http.StatusOK)
-	})
-
-	hugeBody := strings.Repeat("x", 128*1024)
-	req := httptest.NewRequest("POST", "/_matrix/key/v2/query", strings.NewReader(hugeBody))
+	req := httptest.NewRequest(http.MethodPost, "/_matrix/key/v2/query", strings.NewReader(b.String()))
 	rr := httptest.NewRecorder()
+	s.handleKeyQuery(rr, req)
 
-	handler.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusRequestEntityTooLarge {
-		t.Errorf("huge request should be rejected, got %d", rr.Code)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	errBody := decodeMatrixErrorBody(t, rr)
+	if errBody["errcode"] != "M_BAD_JSON" {
+		t.Fatalf("expected M_BAD_JSON, got %q", errBody["errcode"])
 	}
 }
 
-func TestContentLengthHeaderRespected(t *testing.T) {
-	req := httptest.NewRequest("POST", "/_matrix/key/v2/query", strings.NewReader("small body"))
-	req.ContentLength = 1000000
+func TestHandleKeyQueryRejectsInvalidServerAndKeyCriteria(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		wantErr    string
+		statusCode int
+	}{
+		{
+			name:       "invalid server name",
+			body:       `{"server_keys":{"../etc/passwd":{"ed25519:auto":{}}}}`,
+			wantErr:    "M_INVALID_PARAM",
+			statusCode: http.StatusBadRequest,
+		},
+		{
+			name:       "invalid key id",
+			body:       `{"server_keys":{"example.org":{"rsa:bad":{}}}}`,
+			wantErr:    "M_INVALID_PARAM",
+			statusCode: http.StatusBadRequest,
+		},
+		{
+			name:       "negative minimum_valid_until_ts",
+			body:       `{"server_keys":{"example.org":{"ed25519:auto":{"minimum_valid_until_ts":-1}}}}`,
+			wantErr:    "M_INVALID_PARAM",
+			statusCode: http.StatusBadRequest,
+		},
+	}
 
-	if req.ContentLength > 64*1024 {
-		t.Log("large Content-Length would be rejected before reading body")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newValidationOnlyServer()
+			req := httptest.NewRequest(http.MethodPost, "/_matrix/key/v2/query", strings.NewReader(tt.body))
+			rr := httptest.NewRecorder()
+
+			s.handleKeyQuery(rr, req)
+
+			if rr.Code != tt.statusCode {
+				t.Fatalf("expected status %d, got %d", tt.statusCode, rr.Code)
+			}
+			errBody := decodeMatrixErrorBody(t, rr)
+			if errBody["errcode"] != tt.wantErr {
+				t.Fatalf("expected errcode %s, got %q", tt.wantErr, errBody["errcode"])
+			}
+		})
 	}
 }

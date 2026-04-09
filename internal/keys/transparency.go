@@ -18,12 +18,12 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"mxkeys/internal/zero/log"
+	"mxkeys/internal/zero/merkle"
 	"mxkeys/internal/zero/metrics"
 )
 
@@ -70,6 +70,7 @@ type TransparencyLog struct {
 	mu         sync.RWMutex
 	lastHash   string
 	keyHistory map[string]*keyHistoryEntry // serverName -> history
+	merkleTree *merkle.Tree
 
 	// Metrics
 	entriesTotal   *metrics.Counter
@@ -105,6 +106,7 @@ func NewTransparencyLog(db *sql.DB, cfg TransparencyConfig) (*TransparencyLog, e
 		logAnomalies:  cfg.LogAnomalies,
 		retentionDays: cfg.RetentionDays,
 		keyHistory:    make(map[string]*keyHistoryEntry),
+		merkleTree:    merkle.New(),
 		entriesTotal: metrics.NewCounter(metrics.CounterOpts{
 			Namespace: "mxkeys",
 			Subsystem: "transparency",
@@ -128,6 +130,9 @@ func NewTransparencyLog(db *sql.DB, cfg TransparencyConfig) (*TransparencyLog, e
 			return nil, err
 		}
 		if err := tl.loadLastHash(); err != nil {
+			return nil, err
+		}
+		if err := tl.rebuildMerkleTree(context.Background()); err != nil {
 			return nil, err
 		}
 		log.Info("Transparency log initialized",
@@ -186,377 +191,6 @@ func (tl *TransparencyLog) loadLastHash() error {
 	return nil
 }
 
-// LogKey records a key observation
-func (tl *TransparencyLog) LogKey(ctx context.Context, serverName string, resp *ServerKeysResponse) error {
-	if !tl.enabled || !tl.logAllKeys {
-		return nil
-	}
-
-	tl.mu.Lock()
-	defer tl.mu.Unlock()
-
-	for keyID, verifyKey := range resp.VerifyKeys {
-		keyHash := hashKey(verifyKey.Key)
-
-		history, exists := tl.keyHistory[serverName]
-		if !exists {
-			// First time seeing this server
-			history = &keyHistoryEntry{
-				firstSeen: time.Now(),
-			}
-			tl.keyHistory[serverName] = history
-
-			if err := tl.appendEntry(ctx, &TransparencyLogEntry{
-				Timestamp:    time.Now(),
-				ServerName:   serverName,
-				KeyID:        keyID,
-				EventType:    EventKeyFirstSeen,
-				KeyHash:      keyHash,
-				ValidUntilTS: resp.ValidUntilTS,
-			}); err != nil {
-				return err
-			}
-		} else if history.lastKeyHash != keyHash {
-			// Key rotation detected
-			if tl.logKeyChanges {
-				if err := tl.appendEntry(ctx, &TransparencyLogEntry{
-					Timestamp:    time.Now(),
-					ServerName:   serverName,
-					KeyID:        keyID,
-					EventType:    EventKeyRotation,
-					Details:      fmt.Sprintf("previous_key_id=%s", history.lastKeyID),
-					KeyHash:      keyHash,
-					ValidUntilTS: resp.ValidUntilTS,
-				}); err != nil {
-					return err
-				}
-			}
-
-			// Check for anomalies
-			if tl.logAnomalies {
-				tl.checkAnomalies(ctx, serverName, keyID, history)
-			}
-
-			history.rotationCount++
-		}
-
-		// Update history
-		history.lastKeyID = keyID
-		history.lastKeyHash = keyHash
-		history.lastSeen = time.Now()
-	}
-
-	return nil
-}
-
-// LogVerification records a successful key verification
-func (tl *TransparencyLog) LogVerification(ctx context.Context, serverName, keyID string) error {
-	if !tl.enabled || !tl.logAllKeys {
-		return nil
-	}
-
-	tl.mu.Lock()
-	defer tl.mu.Unlock()
-
-	return tl.appendEntry(ctx, &TransparencyLogEntry{
-		Timestamp:  time.Now(),
-		ServerName: serverName,
-		KeyID:      keyID,
-		EventType:  EventKeyVerified,
-	})
-}
-
-// LogFailure records a fetch failure
-func (tl *TransparencyLog) LogFailure(ctx context.Context, serverName string, reason string) error {
-	if !tl.enabled {
-		return nil
-	}
-
-	tl.mu.Lock()
-	defer tl.mu.Unlock()
-
-	return tl.appendEntry(ctx, &TransparencyLogEntry{
-		Timestamp:  time.Now(),
-		ServerName: serverName,
-		EventType:  EventFetchFailed,
-		Details:    reason,
-	})
-}
-
-// LogPolicyViolation records a trust policy violation
-func (tl *TransparencyLog) LogPolicyViolation(ctx context.Context, violation *PolicyViolation) error {
-	if !tl.enabled {
-		return nil
-	}
-
-	tl.mu.Lock()
-	defer tl.mu.Unlock()
-
-	return tl.appendEntry(ctx, &TransparencyLogEntry{
-		Timestamp:  time.Now(),
-		ServerName: violation.ServerName,
-		EventType:  EventPolicyViolation,
-		Details:    fmt.Sprintf("%s: %s", violation.Rule, violation.Details),
-	})
-}
-
-// checkAnomalies detects suspicious key behavior
-func (tl *TransparencyLog) checkAnomalies(ctx context.Context, serverName, keyID string, history *keyHistoryEntry) {
-	now := time.Now()
-
-	// Rapid rotation: more than 3 rotations in 24 hours
-	if history.rotationCount > 3 && now.Sub(history.firstSeen) < 24*time.Hour {
-		tl.anomaliesTotal.Inc()
-		tl.appendEntry(ctx, &TransparencyLogEntry{
-			Timestamp:  now,
-			ServerName: serverName,
-			KeyID:      keyID,
-			EventType:  EventAnomalyRapid,
-			Details:    fmt.Sprintf("rotations=%d in %v", history.rotationCount, now.Sub(history.firstSeen)),
-		})
-	}
-}
-
-// appendEntry adds a new entry to the log with hash chaining
-func (tl *TransparencyLog) appendEntry(ctx context.Context, entry *TransparencyLogEntry) error {
-	entry.PreviousHash = tl.lastHash
-	entry.EntryHash = tl.computeEntryHash(entry)
-
-	query := fmt.Sprintf(`
-		INSERT INTO %s (timestamp, server_name, key_id, event_type, details, key_hash, valid_until_ts, previous_hash, entry_hash)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-	`, tl.tableName)
-
-	_, err := tl.db.ExecContext(ctx, query,
-		entry.Timestamp,
-		entry.ServerName,
-		entry.KeyID,
-		entry.EventType,
-		entry.Details,
-		entry.KeyHash,
-		entry.ValidUntilTS,
-		entry.PreviousHash,
-		entry.EntryHash,
-	)
-
-	if err != nil {
-		return err
-	}
-
-	tl.lastHash = entry.EntryHash
-	tl.entriesTotal.Inc()
-
-	log.Debug("Transparency log entry",
-		"server", entry.ServerName,
-		"event", entry.EventType,
-		"hash", entry.EntryHash[:16],
-	)
-
-	return nil
-}
-
-// computeEntryHash creates a SHA-256 hash of the entry for chain integrity
-func (tl *TransparencyLog) computeEntryHash(entry *TransparencyLogEntry) string {
-	data := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%d|%s",
-		entry.Timestamp.Format(time.RFC3339Nano),
-		entry.ServerName,
-		entry.KeyID,
-		entry.EventType,
-		entry.Details,
-		entry.KeyHash,
-		entry.ValidUntilTS,
-		entry.PreviousHash,
-	)
-
-	hash := sha256.Sum256([]byte(data))
-	return hex.EncodeToString(hash[:])
-}
-
-// Query returns log entries matching criteria
-func (tl *TransparencyLog) Query(ctx context.Context, serverName string, since time.Time, limit int) ([]TransparencyLogEntry, error) {
-	if !tl.enabled {
-		return nil, nil
-	}
-
-	query := fmt.Sprintf(`
-		SELECT id, timestamp, server_name, key_id, event_type, details, key_hash, valid_until_ts, previous_hash, entry_hash
-		FROM %s
-		WHERE ($1 = '' OR server_name = $1)
-		AND timestamp >= $2
-		ORDER BY id DESC
-		LIMIT $3
-	`, tl.tableName)
-
-	rows, err := tl.db.QueryContext(ctx, query, serverName, since, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var entries []TransparencyLogEntry
-	for rows.Next() {
-		var e TransparencyLogEntry
-		var keyID, details, keyHash, prevHash sql.NullString
-		var validUntil sql.NullInt64
-
-		err := rows.Scan(
-			&e.ID, &e.Timestamp, &e.ServerName, &keyID, &e.EventType,
-			&details, &keyHash, &validUntil, &prevHash, &e.EntryHash,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		e.KeyID = keyID.String
-		e.Details = details.String
-		e.KeyHash = keyHash.String
-		e.ValidUntilTS = validUntil.Int64
-		e.PreviousHash = prevHash.String
-
-		entries = append(entries, e)
-	}
-
-	return entries, nil
-}
-
-// VerifyChain verifies the hash chain integrity
-func (tl *TransparencyLog) VerifyChain(ctx context.Context, limit int) (bool, error) {
-	if !tl.enabled {
-		return true, nil
-	}
-
-	query := fmt.Sprintf(`
-		SELECT timestamp, server_name, key_id, event_type, details, key_hash, valid_until_ts, previous_hash, entry_hash
-		FROM %s
-		ORDER BY id ASC
-		LIMIT $1
-	`, tl.tableName)
-
-	rows, err := tl.db.QueryContext(ctx, query, limit)
-	if err != nil {
-		return false, err
-	}
-	defer rows.Close()
-
-	expectedPrevHash := "genesis"
-	for rows.Next() {
-		var e TransparencyLogEntry
-		var keyID, details, keyHash, prevHash sql.NullString
-		var validUntil sql.NullInt64
-
-		err := rows.Scan(
-			&e.Timestamp, &e.ServerName, &keyID, &e.EventType,
-			&details, &keyHash, &validUntil, &prevHash, &e.EntryHash,
-		)
-		if err != nil {
-			return false, err
-		}
-
-		e.KeyID = keyID.String
-		e.Details = details.String
-		e.KeyHash = keyHash.String
-		e.ValidUntilTS = validUntil.Int64
-		e.PreviousHash = prevHash.String
-
-		// Verify previous hash
-		if e.PreviousHash != expectedPrevHash {
-			log.Error("Chain verification failed",
-				"expected_prev", expectedPrevHash,
-				"got_prev", e.PreviousHash,
-				"entry_hash", e.EntryHash,
-			)
-			return false, nil
-		}
-
-		// Verify entry hash
-		computedHash := tl.computeEntryHash(&e)
-		if computedHash != e.EntryHash {
-			log.Error("Entry hash verification failed",
-				"expected", computedHash,
-				"got", e.EntryHash,
-			)
-			return false, nil
-		}
-
-		expectedPrevHash = e.EntryHash
-	}
-
-	return true, nil
-}
-
-// Cleanup removes entries older than retention period
-func (tl *TransparencyLog) Cleanup(ctx context.Context) (int64, error) {
-	if !tl.enabled || tl.retentionDays <= 0 {
-		return 0, nil
-	}
-
-	cutoff := time.Now().AddDate(0, 0, -tl.retentionDays)
-
-	query := fmt.Sprintf(`DELETE FROM %s WHERE timestamp < $1`, tl.tableName)
-	result, err := tl.db.ExecContext(ctx, query, cutoff)
-	if err != nil {
-		return 0, err
-	}
-
-	deleted, _ := result.RowsAffected()
-	if deleted > 0 {
-		log.Info("Transparency log cleanup",
-			"deleted", deleted,
-			"cutoff", cutoff,
-		)
-	}
-
-	return deleted, nil
-}
-
-// Stats returns log statistics
-func (tl *TransparencyLog) Stats(ctx context.Context) (map[string]interface{}, error) {
-	if !tl.enabled {
-		return map[string]interface{}{"enabled": false}, nil
-	}
-
-	var totalEntries, uniqueServers int64
-	var oldestEntry, newestEntry time.Time
-
-	query := fmt.Sprintf(`
-		SELECT 
-			COUNT(*) as total,
-			COUNT(DISTINCT server_name) as servers,
-			MIN(timestamp) as oldest,
-			MAX(timestamp) as newest
-		FROM %s
-	`, tl.tableName)
-
-	row := tl.db.QueryRowContext(ctx, query)
-	var oldest, newest sql.NullTime
-	err := row.Scan(&totalEntries, &uniqueServers, &oldest, &newest)
-	if err != nil {
-		return nil, err
-	}
-
-	if oldest.Valid {
-		oldestEntry = oldest.Time
-	}
-	if newest.Valid {
-		newestEntry = newest.Time
-	}
-
-	tl.mu.RLock()
-	lastHash := tl.lastHash
-	historySize := len(tl.keyHistory)
-	tl.mu.RUnlock()
-
-	return map[string]interface{}{
-		"enabled":         true,
-		"total_entries":   totalEntries,
-		"unique_servers":  uniqueServers,
-		"oldest_entry":    oldestEntry,
-		"newest_entry":    newestEntry,
-		"last_hash":       hashPreview(lastHash),
-		"tracked_servers": historySize,
-	}, nil
-}
-
 // hashKey creates a SHA-256 hash of a key
 func hashKey(key string) string {
 	hash := sha256.Sum256([]byte(key))
@@ -571,13 +205,4 @@ func hashPreview(hash string) string {
 		return hash
 	}
 	return hash[:16] + "..."
-}
-
-// ExportJSON exports log entries as JSON
-func (tl *TransparencyLog) ExportJSON(ctx context.Context, serverName string, since time.Time) ([]byte, error) {
-	entries, err := tl.Query(ctx, serverName, since, 10000)
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(entries)
 }

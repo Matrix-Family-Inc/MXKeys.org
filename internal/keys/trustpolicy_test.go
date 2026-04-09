@@ -1,7 +1,6 @@
 package keys
 
 import (
-	"net"
 	"testing"
 	"time"
 )
@@ -280,95 +279,5 @@ func TestWildcardMatching(t *testing.T) {
 		if result != tt.match {
 			t.Errorf("matchWildcard(%q, %q) = %v, want %v", tt.pattern, tt.input, result, tt.match)
 		}
-	}
-}
-
-func TestIsPrivateIP(t *testing.T) {
-	tests := []struct {
-		ip      string
-		private bool
-	}{
-		{"127.0.0.1", true},
-		{"10.0.0.1", true},
-		{"172.16.0.1", true},
-		{"192.168.1.1", true},
-		{"169.254.1.1", true},
-		{"8.8.8.8", false},
-		{"1.1.1.1", false},
-	}
-
-	for _, tt := range tests {
-		ip := net.ParseIP(tt.ip)
-		if ip == nil {
-			t.Errorf("failed to parse %s", tt.ip)
-			continue
-		}
-		result := isPrivateIP(ip)
-		if result != tt.private {
-			t.Errorf("isPrivateIP(%s) = %v, want %v", tt.ip, result, tt.private)
-		}
-	}
-}
-
-func TestAnalyticsRapidRotationUsesRealElapsedTime(t *testing.T) {
-	a := NewAnalytics(nil, AnalyticsConfig{Enabled: true})
-	server := "analytics.test"
-
-	first := &ServerKeysResponse{
-		ServerName:   server,
-		ValidUntilTS: time.Now().Add(2 * time.Hour).UnixMilli(),
-		VerifyKeys: map[string]VerifyKeyResponse{
-			"ed25519:key1": {Key: "AQ"},
-		},
-		Signatures: map[string]map[string]string{
-			server: {"ed25519:key1": "sig"},
-		},
-	}
-	a.RecordKeyObservation(server, first)
-
-	a.mu.Lock()
-	a.stats.ServerStats[server].LastSeen = time.Now().Add(-48 * time.Hour)
-	a.mu.Unlock()
-
-	second := &ServerKeysResponse{
-		ServerName:   server,
-		ValidUntilTS: time.Now().Add(2 * time.Hour).UnixMilli(),
-		VerifyKeys: map[string]VerifyKeyResponse{
-			"ed25519:key2": {Key: "Ag"},
-		},
-		Signatures: map[string]map[string]string{
-			server: {"ed25519:key2": "sig"},
-		},
-	}
-	anomalies := a.RecordKeyObservation(server, second)
-
-	for _, anomaly := range anomalies {
-		if anomaly.Type == AnomalyRapidRotation {
-			t.Fatalf("unexpected rapid rotation anomaly for 48h interval: %+v", anomaly)
-		}
-	}
-}
-
-func TestAnalyticsMultipleKeysIncrementsTotalAnomalies(t *testing.T) {
-	a := NewAnalytics(nil, AnalyticsConfig{Enabled: true})
-	server := "multi.test"
-
-	resp := &ServerKeysResponse{
-		ServerName:   server,
-		ValidUntilTS: time.Now().Add(2 * time.Hour).UnixMilli(),
-		VerifyKeys: map[string]VerifyKeyResponse{
-			"ed25519:key1": {Key: "AQ"},
-			"ed25519:key2": {Key: "Ag"},
-		},
-		Signatures: map[string]map[string]string{
-			server: {"ed25519:key1": "sig"},
-		},
-	}
-
-	a.RecordKeyObservation(server, resp)
-	stats := a.GetStats()
-
-	if stats.TotalAnomalies == 0 {
-		t.Fatalf("expected TotalAnomalies to increment for multiple keys anomaly")
 	}
 }

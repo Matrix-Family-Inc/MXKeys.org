@@ -26,14 +26,9 @@ Use PostgreSQL as persistent cache/storage for verified federation key responses
 
 ## Consequences
 
-Positive:
-
 - persistence across restarts and deploys,
 - lower repeated upstream fetch load,
 - improved operational introspection through SQL-backed data.
-
-Trade-offs:
-
 - database availability becomes part of readiness semantics,
 - requires backup/restore and schema lifecycle operations.
 
@@ -45,7 +40,7 @@ Trade-offs:
 
 ## References
 
-- `internal/server/storage.go`
+- `internal/keys/storage.go`
+- `internal/keys/notary_query.go`
 - `internal/server/handlers.go`
-- `internal/keys/notary.go`
 - `docs/deployment.md`

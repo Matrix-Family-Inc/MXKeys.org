@@ -15,25 +15,88 @@ package server
 
 import (
 	"database/sql"
+	"net"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	_ "github.com/lib/pq"
+	"mxkeys/internal/config"
 )
 
-func TestGracefulShutdownCompletesWithoutError(t *testing.T) {
+func TestGracefulShutdownStopsServerAndClosesDB(t *testing.T) {
+	db, err := sql.Open("postgres", "postgres://mxkeys:mxkeys@127.0.0.1:1/mxkeys?sslmode=disable")
+	if err != nil {
+		t.Fatalf("failed to open db handle: %v", err)
+	}
+	rl := NewRateLimiter(DefaultRateLimitConfig())
+
+	s := &Server{db: db, rateLimiter: rl}
+	srv := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(20 * time.Millisecond)
+			w.WriteHeader(http.StatusOK)
+		}),
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	defer ln.Close()
+	go func() {
+		_ = srv.Serve(ln)
+	}()
+
+	if err := s.gracefulShutdown(srv); err != nil {
+		t.Fatalf("gracefulShutdown returned error: %v", err)
+	}
+
+	if err := db.Ping(); err == nil {
+		t.Fatalf("database should be closed after gracefulShutdown")
+	} else if !strings.Contains(strings.ToLower(err.Error()), "closed") {
+		t.Fatalf("expected closed-db error after shutdown, got: %v", err)
+	}
+
+	// Must be idempotent after gracefulShutdown.
+	rl.Stop()
+}
+
+func TestCloseHandlesNilComponentsAndIsIdempotentForRateLimiter(t *testing.T) {
 	db, err := sql.Open("postgres", "postgres://mxkeys:mxkeys@127.0.0.1:1/mxkeys?sslmode=disable")
 	if err != nil {
 		t.Fatalf("failed to open db handle: %v", err)
 	}
 
-	s := &Server{db: db}
-	srv := &http.Server{}
+	s := &Server{
+		db:          db,
+		rateLimiter: NewRateLimiter(DefaultRateLimitConfig()),
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("Close() returned error: %v", err)
+	}
+	s.rateLimiter.Stop()
+	s.rateLimiter.Stop()
+}
 
-	if err := s.gracefulShutdown(srv); err != nil {
-		t.Fatalf("gracefulShutdown returned error: %v", err)
+func TestNewHTTPServerAppliesHeaderHardening(t *testing.T) {
+	rl := NewRateLimiter(DefaultRateLimitConfig())
+	defer rl.Stop()
+
+	s := &Server{
+		config:      &config.Config{},
+		mux:         http.NewServeMux(),
+		rateLimiter: rl,
+	}
+
+	srv := s.newHTTPServer("127.0.0.1:8448")
+	if srv.ReadHeaderTimeout != 10*time.Second {
+		t.Fatalf("ReadHeaderTimeout = %v, want 10s", srv.ReadHeaderTimeout)
+	}
+	if srv.MaxHeaderBytes != 1<<16 {
+		t.Fatalf("MaxHeaderBytes = %d, want %d", srv.MaxHeaderBytes, 1<<16)
 	}
 }
 
@@ -47,6 +110,8 @@ func TestDeploymentGuideContainsRestartPolicy(t *testing.T) {
 	required := []string{
 		"Restart=always",
 		"RestartSec=5",
+		"NoNewPrivileges=true",
+		"X-Request-ID $request_id",
 	}
 	for _, needle := range required {
 		if !strings.Contains(content, needle) {

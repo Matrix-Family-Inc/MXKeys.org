@@ -18,7 +18,7 @@ Accepted
 ## Context
 
 MXKeys aims to minimize supply-chain and runtime risk while keeping deterministic behavior for critical federation trust logic.
-Core utility layers (metrics, config helpers, canonical JSON, Merkle primitives, router helpers, Raft implementation) are used across security-sensitive paths.
+Some infrastructure layers are security-sensitive and small enough to maintain in-tree: metrics, config helpers, canonical JSON, Merkle primitives, router helpers, and raft internals.
 
 ## Decision
 
@@ -26,14 +26,9 @@ Maintain internal `internal/zero/*` packages for core cross-cutting functionalit
 
 ## Consequences
 
-Positive:
-
 - reduced dependency attack surface,
 - simpler dependency auditing and update control,
 - predictable behavior for critical code paths.
-
-Trade-offs:
-
 - higher maintenance burden for internal packages,
 - fewer ready-made ecosystem integrations.
 

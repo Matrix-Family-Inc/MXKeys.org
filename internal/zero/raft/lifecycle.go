@@ -1,0 +1,150 @@
+/*
+ * Project: MXKeys
+ * Company: Matrix Family Inc. (https://matrix.family)
+ * Owner: Matrix Family Inc.
+ * Maintainer: Brabus
+ * Role: Lead Architect
+ * Contact: dev@matrix.family
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
+ * Date: Fri 03 Apr 2026 UTC
+ * Status: Created
+ */
+
+package raft
+
+import (
+	"context"
+	"fmt"
+	"net"
+)
+
+// Start starts the Raft node.
+func (n *Node) Start(ctx context.Context) error {
+	if n.config.SharedSecret == "" {
+		return fmt.Errorf("raft shared secret is required")
+	}
+	addr := fmt.Sprintf("%s:%d", n.config.BindAddress, n.config.BindPort)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("failed to listen: %w", err)
+	}
+	n.listener = listener
+
+	// Accept connections.
+	n.wg.Add(1)
+	go n.acceptLoop()
+
+	// Connect to peers.
+	n.wg.Add(1)
+	go n.connectPeers()
+
+	// Run election timer.
+	n.wg.Add(1)
+	go n.runElectionTimer()
+
+	// Apply committed entries.
+	n.wg.Add(1)
+	go n.applyLoop()
+
+	go func() {
+		<-ctx.Done()
+		_ = n.Stop()
+	}()
+
+	return nil
+}
+
+// Stop stops the Raft node.
+func (n *Node) Stop() error {
+	n.stopOnce.Do(func() {
+		close(n.stopCh)
+
+		if n.listener != nil {
+			_ = n.listener.Close()
+		}
+
+		n.mu.Lock()
+		for _, conn := range n.peers {
+			_ = conn.Close()
+		}
+		n.mu.Unlock()
+	})
+
+	n.wg.Wait()
+	return nil
+}
+
+// Submit submits a command to the Raft cluster.
+func (n *Node) Submit(ctx context.Context, command []byte) error {
+	n.mu.Lock()
+	if n.state != Leader {
+		n.mu.Unlock()
+		return ErrNotLeader
+	}
+
+	entry := LogEntry{
+		Index:   uint64(len(n.log)) + 1,
+		Term:    n.currentTerm,
+		Command: command,
+	}
+	n.log = append(n.log, entry)
+	n.updateCommitIndex()
+	n.mu.Unlock()
+
+	// Replicate to peers.
+	return n.replicateEntry(ctx, entry)
+}
+
+// State returns the current node state.
+func (n *Node) State() State {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.state
+}
+
+// IsLeader returns true if this node is the leader.
+func (n *Node) IsLeader() bool {
+	return n.State() == Leader
+}
+
+// LeaderID returns the current leader ID.
+func (n *Node) LeaderID() string {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.leaderId
+}
+
+// Term returns the current term.
+func (n *Node) Term() uint64 {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.currentTerm
+}
+
+// SetOnStateChange sets callback for state changes.
+func (n *Node) SetOnStateChange(fn func(State)) {
+	n.onStateChange = fn
+}
+
+// SetOnApply sets callback for applied entries.
+func (n *Node) SetOnApply(fn func(LogEntry)) {
+	n.onApply = fn
+}
+
+// Stats returns node statistics.
+func (n *Node) Stats() map[string]interface{} {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	return map[string]interface{}{
+		"node_id":      n.config.NodeID,
+		"state":        n.state.String(),
+		"term":         n.currentTerm,
+		"leader":       n.leaderId,
+		"log_length":   len(n.log),
+		"commit_index": n.commitIndex,
+		"last_applied": n.lastApplied,
+		"peers":        len(n.config.Peers),
+	}
+}

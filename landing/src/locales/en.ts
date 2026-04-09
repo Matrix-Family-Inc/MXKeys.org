@@ -18,16 +18,24 @@ export const en = {
     howItWorks: 'How It Works',
     api: 'API',
     ecosystem: 'Ecosystem',
+    homeAria: 'MXKeys home',
+    github: 'MXKeys GitHub repository',
+    language: 'Language',
+    openMenu: 'Open navigation menu',
+    closeMenu: 'Close navigation menu',
   },
 
   hero: {
     title: 'MXKeys',
     subtitle: 'Federation Trust Infrastructure',
     tagline: 'Trust. Verify. Federate.',
-    description: 'Comprehensive federation key trust layer: key verification, transparency logging, anomaly detection, and distributed cluster coordination. Any Matrix server can use MXKeys as a trusted key server.',
-    trust: 'Production-deployed core notary service. Security-hardened. Tested under load and failure scenarios.',
+    description: 'Federation key trust layer for Matrix: key verification, transparency logging, anomaly detection, and authenticated cluster coordination.',
+    trust: 'Go service with PostgreSQL caching, Matrix-spec discovery, and operational endpoints.',
     learnMore: 'Learn More',
     viewAPI: 'View API',
+    github: 'GitHub',
+    matrixFamilyBadge: 'Matrix Family',
+    hushmeBadge: 'HushMe',
   },
 
   status: {
@@ -45,7 +53,7 @@ export const en = {
     
     solution: {
       title: 'The Solution',
-      description: 'MXKeys provides a comprehensive trust infrastructure: key verification with perspective signatures, append-only transparency log with Merkle proofs, anomaly detection, configurable trust policies, and distributed notary cluster modes.',
+      description: 'MXKeys provides key verification with perspective signatures, a hash-chained transparency log with Merkle proofs, anomaly detection, configurable trust policies, and authenticated cluster modes.',
     },
   },
 
@@ -67,15 +75,15 @@ export const en = {
     },
     discovery: {
       title: 'Server Discovery',
-      description: 'Full Matrix spec compliance: .well-known delegation, SRV records (_matrix-fed._tcp), IP literals, port fallback. Resolves any server correctly.',
+      description: 'Matrix discovery support for .well-known delegation, SRV records (_matrix-fed._tcp), IP literals, and port fallback within the MXKeys key-notary scope.',
     },
     fallback: {
       title: 'Fallback Support',
-      description: 'If direct fetch fails, queries fallback notaries as a last resort. No single point of trust.',
+      description: 'If direct fetch fails, MXKeys can query configured fallback notaries as an explicit operational trust path.',
     },
     performance: {
       title: 'High Performance',
-      description: 'Written in Go. Memory caching, connection pooling, efficient cleanup. Single binary deployment with minimal dependencies.',
+      description: 'Written in Go. Memory caching, connection pooling, efficient cleanup, and single-binary deployment.',
     },
     opensource: {
       title: 'Open Source',
@@ -137,7 +145,7 @@ export const en = {
     },
     health: {
       title: 'GET /_mxkeys/health',
-      description: 'Liveness endpoint. Returns healthy when process is running.',
+      description: 'Health endpoint. Returns service health metadata.',
     },
     ready: {
       title: 'GET /_mxkeys/ready',
@@ -149,10 +157,16 @@ export const en = {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'Detailed service status: uptime, cache metrics, and database connection stats.',
+      description: 'Detailed service status: uptime, cache metrics, database stats, and optional enterprise feature status.',
+    },
+    metrics: {
+      title: 'GET /_mxkeys/metrics',
+      description: 'Prometheus metrics exposition for service and runtime telemetry.',
     },
     errorsTitle: 'Error model',
-    errorsDescription: 'Request validation follows Matrix-compatible error codes: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE.',
+    errorsDescription: 'Request validation and abuse controls use Matrix-compatible error codes: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE, and M_LIMIT_EXCEEDED.',
+    protectedTitle: 'Protected operational routes',
+    protectedDescription: 'Transparency, analytics, cluster, and policy routes require an enterprise access token and are documented separately from the stable public federation API.',
   },
 
   integration: {
@@ -207,6 +221,7 @@ export const en = {
     
     support: '@support',
     developer: '@dev',
+    devChat: '#dev',
     
     protocol: 'Protocol',
     matrixSpec: 'Matrix Spec',

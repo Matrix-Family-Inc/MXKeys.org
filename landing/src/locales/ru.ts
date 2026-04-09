@@ -18,20 +18,28 @@ export const ru = {
     howItWorks: 'Как работает',
     api: 'API',
     ecosystem: 'Экосистема',
+    homeAria: 'MXKeys: на главную',
+    github: 'Репозиторий MXKeys на GitHub',
+    language: 'Язык',
+    openMenu: 'Открыть меню навигации',
+    closeMenu: 'Закрыть меню навигации',
   },
 
   hero: {
     title: 'MXKeys',
-    subtitle: 'Federation Trust Infrastructure',
-    tagline: 'Trust. Verify. Federate.',
-    description: 'Комплексная инфраструктура доверия для федерации Matrix: верификация ключей, transparency log, обнаружение аномалий и распределённая координация кластеров. Любой Matrix-сервер может использовать MXKeys как trusted key server.',
-    trust: 'Core notary service is production-deployed. Security-hardened. Tested under load and failure scenarios.',
+    subtitle: 'Инфраструктура доверия федерации',
+    tagline: 'Доверяй. Проверяй. Федерализуй.',
+    description: 'Инфраструктура доверия для федерации Matrix: проверка ключей, transparency log, обнаружение аномалий и аутентифицированная координация кластеров.',
+    trust: 'Сервис на Go с PostgreSQL-кэшем, Matrix-spec discovery и operational endpoints.',
     learnMore: 'Подробнее',
     viewAPI: 'Смотреть API',
+    github: 'GitHub',
+    matrixFamilyBadge: 'Matrix Family',
+    hushmeBadge: 'HushMe',
   },
 
   status: {
-    online: 'Infrastructure Online',
+    online: 'Инфраструктура доступна',
   },
 
   about: {
@@ -45,7 +53,7 @@ export const ru = {
     
     solution: {
       title: 'Решение',
-      description: 'MXKeys предоставляет комплексную инфраструктуру доверия: верификация ключей с perspective signatures, append-only transparency log с Merkle proofs, обнаружение аномалий, настраиваемые политики доверия и распределённые режимы notary cluster.',
+      description: 'MXKeys предоставляет проверку ключей с perspective signatures, hash-chained transparency log с Merkle proofs, обнаружение аномалий, настраиваемые политики доверия и аутентифицированные режимы кластера.',
     },
   },
 
@@ -54,31 +62,31 @@ export const ru = {
     description: 'Функции проверки ключей для федерации Matrix.',
     
     caching: {
-      title: 'Key Caching',
+      title: 'Кэширование ключей',
       description: 'Хранит проверенные ключи в PostgreSQL. Снижает задержки и нагрузку на серверы-источники.',
     },
     verification: {
-      title: 'Signature Verification',
+      title: 'Проверка подписей',
       description: 'Валидирует все полученные ключи по подписям серверов перед кэшированием.',
     },
     perspective: {
-      title: 'Perspective Signing',
+      title: 'Perspective-подпись',
       description: 'Добавляет notary co-signature (ed25519:mxkeys) к проверенным ключам — независимое подтверждение.',
     },
     discovery: {
-      title: 'Server Discovery',
-      description: 'Полная поддержка спецификации: .well-known делегирование, SRV записи (_matrix-fed._tcp), IP литералы, автоматический fallback порта.',
+      title: 'Поиск сервера',
+      description: 'Поддержка Matrix discovery в пределах key-notary scope: .well-known делегирование, SRV записи (_matrix-fed._tcp), IP литералы и fallback порта.',
     },
     fallback: {
-      title: 'Fallback Support',
-      description: 'Если прямой запрос не удался, обращается к fallback notary. Никакой единой точки доверия.',
+      title: 'Fallback-режим',
+      description: 'Если прямой запрос не удался, MXKeys может обратиться к явно заданным fallback notary как к отдельному operational trust path.',
     },
     performance: {
-      title: 'High Performance',
-      description: 'Написан на Go. Кэширование в памяти, пул соединений, эффективная очистка. Один бинарник с минимальными зависимостями.',
+      title: 'Производительность',
+      description: 'Написан на Go. Кэширование в памяти, пул соединений, эффективная очистка и один бинарник для развёртывания.',
     },
     opensource: {
-      title: 'Open Source',
+      title: 'Открытый код',
       description: 'Аудируемый код. Никакой скрытой логики, никаких проприетарных зависимостей.',
     },
   },
@@ -89,34 +97,34 @@ export const ru = {
     
     steps: {
       request: {
-        title: '1. Request',
+        title: '1. Запрос',
         description: 'Matrix-сервер запрашивает у MXKeys ключи другого сервера через POST /_matrix/key/v2/query',
       },
       cache: {
-        title: '2. Cache Check',
+        title: '2. Проверка кэша',
         description: 'MXKeys проверяет кэш в памяти, затем PostgreSQL. Если есть валидный кэш — возвращает сразу.',
       },
       fetch: {
-        title: '3. Server Discovery',
+        title: '3. Поиск сервера',
         description: 'При cache miss MXKeys определяет адрес сервера через .well-known, SRV записи и fallback порта — затем запрашивает ключи через /_matrix/key/v2/server',
       },
       verify: {
-        title: '4. Verify',
+        title: '4. Проверка',
         description: 'MXKeys проверяет self-signature сервера с помощью Ed25519. Невалидные подписи отклоняются.',
       },
       sign: {
-        title: '5. Co-Sign',
+        title: '5. Co-sign',
         description: 'MXKeys добавляет свою perspective signature (ed25519:mxkeys) — подтверждение проверки ключей.',
       },
       respond: {
-        title: '6. Respond',
+        title: '6. Ответ',
         description: 'Ключи с original и notary signature возвращаются запрашивающему серверу.',
       },
     },
   },
 
   api: {
-    title: 'API Endpoints',
+    title: 'API-маршруты',
     description: 'MXKeys реализует Matrix Key Server API и operational probes.',
     
     serverKeys: {
@@ -133,11 +141,11 @@ export const ru = {
     },
     version: {
       title: 'GET /_matrix/federation/v1/version',
-      description: 'Server version.',
+      description: 'Версия сервера.',
     },
     health: {
       title: 'GET /_mxkeys/health',
-      description: 'Liveness endpoint. Возвращает healthy, если процесс работает.',
+      description: 'Health endpoint. Возвращает метаданные о состоянии сервиса.',
     },
     ready: {
       title: 'GET /_mxkeys/ready',
@@ -149,10 +157,16 @@ export const ru = {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'Детальный статус сервиса: uptime, cache metrics и статистика подключений к БД.',
+      description: 'Детальный статус сервиса: uptime, cache metrics, статистика БД и состояние дополнительных подсистем.',
     },
-    errorsTitle: 'Error model',
-    errorsDescription: 'Валидация запросов использует Matrix-compatible коды ошибок: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE.',
+    metrics: {
+      title: 'GET /_mxkeys/metrics',
+      description: 'Prometheus-выгрузка метрик сервиса и runtime-телеметрии.',
+    },
+    errorsTitle: 'Модель ошибок',
+    errorsDescription: 'Валидация запросов и abuse controls используют Matrix-compatible коды ошибок: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE и M_LIMIT_EXCEEDED.',
+    protectedTitle: 'Защищённые operational routes',
+    protectedDescription: 'Маршруты transparency, analytics, cluster и policy требуют enterprise access token и документируются отдельно от стабильного public federation API.',
   },
 
   integration: {
@@ -207,6 +221,7 @@ export const ru = {
     
     support: '@support',
     developer: '@dev',
+    devChat: '#dev',
     
     protocol: 'Протокол',
     matrixSpec: 'Matrix Spec',

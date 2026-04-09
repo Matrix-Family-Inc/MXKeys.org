@@ -16,6 +16,8 @@ Status: Created
 This document specifies deterministic federation-key behavior for MXKeys.
 It defines request/response semantics, validation rules, resolution order, and failure behavior.
 
+This specification covers the stable public contract only. Protected operational routes are intentionally out of scope except where noted.
+
 ## Supported Endpoints
 
 ### Matrix key API
@@ -33,19 +35,38 @@ It defines request/response semantics, validation rules, resolution order, and f
 - `GET /_mxkeys/status`
 - `GET /_mxkeys/metrics`
 
+### Protected operational routes (non-core contract)
+
+These routes are available only when `security.enterprise_access_token` is configured and the corresponding runtime surface is registered:
+
+- `GET /_mxkeys/transparency/log`
+- `GET /_mxkeys/transparency/verify`
+- `GET /_mxkeys/transparency/stats`
+- `GET /_mxkeys/transparency/proof`
+- `GET /_mxkeys/analytics/summary`
+- `GET /_mxkeys/analytics/servers`
+- `GET /_mxkeys/analytics/anomalies`
+- `GET /_mxkeys/analytics/rotators`
+- `GET /_mxkeys/cluster/status`
+- `GET /_mxkeys/cluster/nodes`
+- `GET /_mxkeys/policy/status`
+- `GET /_mxkeys/policy/check`
+
 ## Endpoint Status and Error Codes
 
 | Endpoint | Success Codes | Failure Codes / Behavior |
 |---|---|---|
 | `GET /_matrix/key/v2/server` | `200` | internal failures may produce `5xx` |
 | `GET /_matrix/key/v2/server/{keyID}` | `200` | `400` (`M_INVALID_PARAM`) for invalid `keyID`, `404` (`M_NOT_FOUND`) for unknown key |
-| `POST /_matrix/key/v2/query` | `200` | `400` (`M_BAD_JSON`, `M_INVALID_PARAM`), `413` (`M_TOO_LARGE`) |
+| `POST /_matrix/key/v2/query` | `200` | `400` (`M_BAD_JSON`, `M_INVALID_PARAM`), `413` (`M_TOO_LARGE`), `429` (`M_LIMIT_EXCEEDED`) |
 | `GET /_matrix/federation/v1/version` | `200` | internal failures may produce `5xx` |
 | `GET /_mxkeys/health` | `200` | internal failures may produce `5xx` |
 | `GET /_mxkeys/live` | `200` | internal failures may produce `5xx` |
 | `GET /_mxkeys/ready` | `200` | `503` when DB or signing-key readiness checks fail |
 | `GET /_mxkeys/status` | `200` | internal failures may produce `5xx` |
 | `GET /_mxkeys/metrics` | `200` | internal failures may produce `5xx` |
+
+Protected operational routes return `401` (`M_UNAUTHORIZED`) when the enterprise access token is missing or invalid, and `404` when a route is not registered for the current feature set.
 
 ## Deterministic Request Handling
 
@@ -110,6 +131,7 @@ Cache behavior requirements:
 - `failures` MUST be a map keyed by requested server name.
 - A server MUST NOT appear in both `server_keys` and `failures` for the same request.
 - If all requested servers fail, response remains `200` with `server_keys: []` and populated `failures`.
+- Failure messages exposed to clients MUST remain generic and MUST NOT include internal network, TLS, or storage diagnostics.
 
 ### Error codes
 
@@ -118,7 +140,8 @@ Common matrix-compatible codes:
 - `M_BAD_JSON` for malformed/invalid JSON envelope,
 - `M_INVALID_PARAM` for invalid parameter semantics,
 - `M_NOT_FOUND` for missing key ID on own-key endpoint,
-- `M_TOO_LARGE` for oversized request body.
+- `M_TOO_LARGE` for oversized request body,
+- `M_LIMIT_EXCEEDED` for rate-limited requests.
 
 ## Operational Endpoint Semantics
 
@@ -135,7 +158,8 @@ MXKeys MUST enforce:
 - rate limiting,
 - request size limits,
 - max server-count per query,
-- concurrency limits for upstream fetch paths.
+- concurrency limits for upstream fetch paths,
+- bounded message size for cluster and raft transport.
 
 ## Timeout and Retry Policy
 
@@ -145,7 +169,7 @@ For remote key fetch behavior:
 - direct fetch retries are attempted for transient/network errors,
 - retry backoff is exponential (base 200ms in current implementation),
 - non-retryable/permanent validation errors MUST fail fast,
-- retry attempts are bounded and configuration-driven (`RetryAttempts`, default 3).
+- retry attempts are bounded by implementation defaults unless explicitly wired through runtime configuration.
 
 ## Compatibility Contract
 

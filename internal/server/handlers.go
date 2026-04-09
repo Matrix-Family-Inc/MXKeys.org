@@ -40,18 +40,6 @@ func writeMatrixError(w http.ResponseWriter, status int, errCode, message string
 	})
 }
 
-func decodeStrictJSON(r io.Reader, dst interface{}) error {
-	dec := json.NewDecoder(r)
-	if err := dec.Decode(dst); err != nil {
-		return err
-	}
-	var trailing interface{}
-	if err := dec.Decode(&trailing); err != io.EOF {
-		return fmt.Errorf("trailing JSON data")
-	}
-	return nil
-}
-
 func validateKeyQueryServerKeys(serverKeys map[string]map[string]keys.KeyCriteria, maxNameLen int) error {
 	for serverName, keyMap := range serverKeys {
 		if err := ValidateServerName(serverName, maxNameLen); err != nil {
@@ -134,9 +122,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	// Get DB cache count
 	var dbCacheCount int
 	row := s.db.QueryRow("SELECT COUNT(*) FROM server_keys")
-	row.Scan(&dbCacheCount)
+	dbCacheErr := row.Scan(&dbCacheCount)
 
-	writeJSON(w, map[string]interface{}{
+	status := map[string]interface{}{
 		"status":  "ok",
 		"version": version.Version,
 		"server":  s.config.Server.Name,
@@ -151,7 +139,23 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 			"idle":             dbStats.Idle,
 			"max_open":         dbStats.MaxOpenConnections,
 		},
-	})
+	}
+	if dbCacheErr != nil {
+		status["database_entries_error"] = dbCacheErr.Error()
+	}
+	if s.cluster != nil {
+		status["cluster"] = s.cluster.Stats()
+	}
+	if s.transparency != nil {
+		if stats, err := s.transparency.Stats(r.Context()); err == nil {
+			status["transparency"] = stats
+		}
+	}
+	if s.trustPolicy != nil {
+		status["trust_policy"] = s.trustPolicy.Stats()
+	}
+
+	writeJSON(w, status)
 }
 
 // handleVersion handles /_matrix/federation/v1/version
@@ -216,7 +220,7 @@ func (s *Server) handleKeyQuery(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
 
 	var request keys.KeyQueryRequest
-	if err := decodeStrictJSON(r.Body, &request); err != nil {
+	if err := decodeStrictJSON(r.Body, &request, s.config.Security.MaxJSONDepth); err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
 			RecordRequestRejection(RejectReasonBodyTooLarge)

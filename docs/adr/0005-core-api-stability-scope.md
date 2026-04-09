@@ -36,14 +36,9 @@ Operational endpoints remain documented but are not part of the same strict comp
 
 ## Consequences
 
-Positive:
-
 - clear compatibility boundary for integrators,
 - safer evolution of operational/admin surfaces,
 - explicit change-discipline for contract-impacting modifications.
-
-Trade-offs:
-
 - requires changelog and conformance updates when core API semantics change.
 
 ## Alternatives Considered
@@ -55,4 +50,3 @@ Trade-offs:
 
 - `docs/federation-behavior.md`
 - `docs/matrix-v1.16-conformance-matrix.md`
-- `docs/matrix-v1.16-clause-map.md`

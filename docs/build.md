@@ -1,157 +1,122 @@
 # Building MXKeys
 
+## Scope
+
+This document covers:
+
+- local development builds,
+- reproducible production builds,
+- verification commands used by CI parity,
+- frontend build/test commands for `landing/`.
+
+For deployment and operations, see `docs/deployment.md`.
+
 ## Requirements
 
 - Go 1.22+
-- PostgreSQL 14+ (for running)
+- PostgreSQL 14+ for runtime
+- Bun 1.x for `landing/`
 
-## Development Build
+## Required Configuration
+
+- `database.url` must be set explicitly.
+- `cluster.shared_secret` is required when cluster mode is enabled.
+- `security.enterprise_access_token` is required only when protected operational routes are intended to be exposed.
+
+## Build Commands
+
+Development build:
 
 ```bash
 go build -o mxkeys ./cmd/mxkeys
 ```
 
-## Production Build
+Production build:
 
 ```bash
 CGO_ENABLED=0 go build \
-    -trimpath \
-    -ldflags="-s -w" \
-    -buildvcs=false \
-    -o mxkeys \
-    ./cmd/mxkeys
+  -trimpath \
+  -ldflags="-s -w" \
+  -buildvcs=false \
+  -o mxkeys \
+  ./cmd/mxkeys
 ```
 
-Flags:
-- `CGO_ENABLED=0` — Static binary, no C dependencies
-- `-trimpath` — Remove build paths for reproducibility
-- `-ldflags="-s -w"` — Strip debug info, reduce size
+Landing build:
 
-## Cross Compilation
-
-### Linux AMD64
 ```bash
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
-    go build -trimpath -ldflags="-s -w" -buildvcs=false \
-    -o mxkeys-linux-amd64 ./cmd/mxkeys
+cd landing
+bun install --frozen-lockfile
+bun run build
 ```
 
-### Linux ARM64
-```bash
-GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
-    go build -trimpath -ldflags="-s -w" -buildvcs=false \
-    -o mxkeys-linux-arm64 ./cmd/mxkeys
-```
-
-### macOS AMD64
-```bash
-GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 \
-    go build -trimpath -ldflags="-s -w" -buildvcs=false \
-    -o mxkeys-darwin-amd64 ./cmd/mxkeys
-```
-
-### macOS ARM64 (Apple Silicon)
-```bash
-GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 \
-    go build -trimpath -ldflags="-s -w" -buildvcs=false \
-    -o mxkeys-darwin-arm64 ./cmd/mxkeys
-```
-
-## Reproducible Builds
-
-For verifiable builds:
+## Reproducible Build
 
 ```bash
-# Set build timestamp
 export SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
 
-# Build with deterministic flags
 CGO_ENABLED=0 go build \
-    -trimpath \
-    -ldflags="-s -w -buildid=" \
-    -o mxkeys \
-    ./cmd/mxkeys
+  -trimpath \
+  -ldflags="-s -w -buildid=" \
+  -o mxkeys \
+  ./cmd/mxkeys
 
-# Verify
 sha256sum mxkeys
 ```
 
-## Docker Build
+## Verification
+
+Backend checks:
 
 ```bash
-docker build -t mxkeys:latest .
+packages="$(bash ./scripts/go-package-list.sh | tr '\n' ' ')"
+package_dirs="$(bash ./scripts/go-package-list.sh dirs | tr '\n' ' ')"
+
+go test -count=1 ${packages}
+go test -count=1 ./internal/server ./internal/keys ./internal/cluster ./internal/zero/canonical ./internal/zero/merkle ./internal/zero/raft
+go test -tags=integration ./tests/integration/...
+go test -race -count=1 ${packages}
+go vet ${packages}
 ```
 
-Multi-platform:
-```bash
-docker buildx build \
-    --platform linux/amd64,linux/arm64 \
-    -t ghcr.io/matrixfamily/mxkeys:latest \
-    --push .
-```
-
-## Binary Size
-
-Typical sizes (stripped):
-
-| Platform | Size |
-|----------|------|
-| Linux AMD64 | ~7.5 MB |
-| Linux ARM64 | ~7.3 MB |
-| macOS AMD64 | ~7.8 MB |
-| macOS ARM64 | ~7.6 MB |
-
-## Dependencies
-
-External dependencies (minimal):
-
-```
-github.com/lib/pq v1.10.9         # PostgreSQL driver
-golang.org/x/sync v0.10.0         # Singleflight
-golang.org/x/time v0.9.0          # Rate limiter
-```
-
-All other functionality implemented in `internal/zero/` packages.
-
-## Testing
+Frontend checks:
 
 ```bash
-# Unit tests
-go test ./...
-
-# With coverage
-go test -cover ./...
-
-# Verbose
-go test -v ./...
+cd landing
+bun run lint
+bun run test
+bun run typecheck
+bun run build
 ```
 
-## Linting
+Full parity with CI:
 
 ```bash
-# Install golangci-lint
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-
-# Run linter
-golangci-lint run
+./scripts/ci-parity-preflight.sh
 ```
 
 ## Security Scanning
 
 ```bash
-# Install govulncheck
-go install golang.org/x/vuln/cmd/govulncheck@latest
+packages="$(bash ./scripts/go-package-list.sh | tr '\n' ' ')"
+package_dirs="$(bash ./scripts/go-package-list.sh dirs | tr '\n' ' ')"
 
-# Scan for vulnerabilities
-govulncheck ./...
+go install golang.org/x/vuln/cmd/govulncheck@latest
+GOTOOLCHAIN=go1.26.2 govulncheck ${packages}
+
+go install github.com/securego/gosec/v2/cmd/gosec@latest
+gosec -severity high ${package_dirs}
 ```
 
-## SBOM Generation
+`GOTOOLCHAIN=go1.26.2` is used only for `govulncheck`, mirroring CI exactly. The project module remains pinned by `go.mod`; the patched toolchain is an isolated scanner requirement rather than the general local build requirement.
+
+## SBOM
+
+Example CycloneDX generation:
 
 ```bash
-# Install cyclonedx-gomod
 go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
-
-# Generate SBOM
 cyclonedx-gomod mod -json -output sbom.json
 ```
+
+Release traceability expectations are defined in `docs/release-process.md`.

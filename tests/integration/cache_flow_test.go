@@ -142,7 +142,7 @@ func TestCacheConcurrency(t *testing.T) {
 	cache.Set(serverName, "initial", time.Hour)
 
 	var wg sync.WaitGroup
-	errors := make(chan error, 100)
+	errCh := make(chan string, 100)
 
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
@@ -150,17 +150,20 @@ func TestCacheConcurrency(t *testing.T) {
 			defer wg.Done()
 			val, ok := cache.Get(serverName)
 			if !ok {
-				errors <- nil // cache miss is ok
 				return
 			}
 			if val != "initial" {
-				t.Errorf("unexpected value: %v", val)
+				errCh <- "unexpected value"
 			}
 		}()
 	}
 
 	wg.Wait()
-	close(errors)
+	close(errCh)
+
+	for errMsg := range errCh {
+		t.Error(errMsg)
+	}
 }
 
 func TestCacheUpdateOnRefetch(t *testing.T) {

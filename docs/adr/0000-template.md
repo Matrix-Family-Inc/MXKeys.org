@@ -17,25 +17,24 @@ Proposed
 
 ## Context
 
-Describe the engineering context and constraints that require a decision.
+Describe the concrete engineering constraint that requires a decision.
 
 ## Decision
 
-State the chosen approach precisely.
+State the chosen approach precisely and without marketing language.
 
 ## Consequences
 
-List expected effects:
+List concrete effects:
 
-- positive outcomes,
-- trade-offs/costs,
+- benefits,
+- trade-offs,
 - operational implications.
 
 ## Alternatives Considered
 
 - Option A
 - Option B
-- Option C
 
 ## References
 

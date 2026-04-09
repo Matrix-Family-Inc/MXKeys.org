@@ -15,7 +15,6 @@ package server
 
 import (
 	"encoding/json"
-	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -152,47 +151,6 @@ func (rl *RateLimiter) QueryMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-func extractIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if idx := len(xff) - 1; idx >= 0 {
-			for i := len(xff) - 1; i >= 0; i-- {
-				if xff[i] == ',' {
-					ip := xff[i+1:]
-					if parsed := net.ParseIP(trimSpace(ip)); parsed != nil {
-						return parsed.String()
-					}
-				}
-			}
-			if parsed := net.ParseIP(trimSpace(xff)); parsed != nil {
-				return parsed.String()
-			}
-		}
-	}
-
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		if parsed := net.ParseIP(trimSpace(xri)); parsed != nil {
-			return parsed.String()
-		}
-	}
-
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
-
-func trimSpace(s string) string {
-	start, end := 0, len(s)
-	for start < end && (s[start] == ' ' || s[start] == '\t') {
-		start++
-	}
-	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
-		end--
-	}
-	return s[start:end]
 }
 
 func writeRateLimitError(w http.ResponseWriter) {
