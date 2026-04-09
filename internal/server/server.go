@@ -14,35 +14,32 @@
 package server
 
 import (
-	"context"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"mxkeys/internal/cluster"
 	"mxkeys/internal/config"
 	"mxkeys/internal/keys"
 	"mxkeys/internal/zero/log"
-	"mxkeys/internal/zero/merkle"
-	"mxkeys/internal/zero/metrics"
 )
 
 // Server is the HTTP server
 type Server struct {
-	config       *config.Config
-	notary       *keys.Notary
-	mux          *http.ServeMux
-	db           *sql.DB
-	rateLimiter  *RateLimiter
-	startTime    time.Time
-	transparency *keys.TransparencyLog
-	analytics    *keys.Analytics
-	trustPolicy  *keys.TrustPolicy
-	cluster      *cluster.Cluster
-	merkleTree   *merkle.Tree
+	config                *config.Config
+	notary                *keys.Notary
+	mux                   *http.ServeMux
+	db                    *sql.DB
+	rateLimiter           *RateLimiter
+	startTime             time.Time
+	transparency          *keys.TransparencyLog
+	analytics             *keys.Analytics
+	trustPolicy           *keys.TrustPolicy
+	cluster               *cluster.Cluster
+	enterpriseAccessToken string
 }
 
 // New creates a new server
@@ -82,6 +79,7 @@ func New(cfg *config.Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create notary: %w", err)
 	}
+	notary.SetBlockPrivateIPs(cfg.TrustPolicy.BlockPrivateIPs)
 
 	// Configure rate limiter from config
 	rlConfig := RateLimitConfig{
@@ -94,14 +92,18 @@ func New(cfg *config.Config) (*Server, error) {
 		rlConfig = DefaultRateLimitConfig()
 	}
 	rateLimiter := NewRateLimiter(rlConfig)
+	if err := ConfigureClientIPPolicy(cfg.Security.TrustForwardedHeaders, cfg.Security.TrustedProxies); err != nil {
+		return nil, fmt.Errorf("failed to configure client IP policy: %w", err)
+	}
 
 	s := &Server{
-		config:      cfg,
-		notary:      notary,
-		mux:         http.NewServeMux(),
-		db:          db,
-		rateLimiter: rateLimiter,
-		startTime:   time.Now(),
+		config:                cfg,
+		notary:                notary,
+		mux:                   http.NewServeMux(),
+		db:                    db,
+		rateLimiter:           rateLimiter,
+		startTime:             time.Now(),
+		enterpriseAccessToken: cfg.Security.EnterpriseAccessToken,
 	}
 
 	// Initialize optional enterprise features
@@ -134,7 +136,6 @@ func New(cfg *config.Config) (*Server, error) {
 		} else {
 			s.transparency = transparencyLog
 			s.notary.SetTransparencyLog(transparencyLog)
-			s.merkleTree = merkle.New()
 			log.Info("Transparency log enabled")
 		}
 	}
@@ -146,164 +147,56 @@ func New(cfg *config.Config) (*Server, error) {
 	s.notary.SetAnalytics(s.analytics)
 
 	if cfg.Cluster.Enabled {
+		clusterNodeID := cfg.Cluster.NodeID
+		if clusterNodeID == "" {
+			clusterNodeID = cfg.Server.Name
+		}
 		clusterCfg := cluster.ClusterConfig{
-			NodeID:       cfg.Server.Name,
-			BindAddress:  cfg.Cluster.BindAddress,
-			BindPort:     cfg.Cluster.BindPort,
-			Seeds:        cfg.Cluster.Seeds,
-			SyncInterval: cfg.Cluster.SyncInterval,
+			Enabled:          cfg.Cluster.Enabled,
+			NodeID:           clusterNodeID,
+			BindAddress:      cfg.Cluster.BindAddress,
+			BindPort:         cfg.Cluster.BindPort,
+			AdvertiseAddress: cfg.Cluster.AdvertiseAddress,
+			AdvertisePort:    cfg.Cluster.AdvertisePort,
+			Seeds:            cfg.Cluster.Seeds,
+			ConsensusMode:    cfg.Cluster.ConsensusMode,
+			SyncInterval:     cfg.Cluster.SyncInterval,
+			SharedSecret:     cfg.Cluster.SharedSecret,
 		}
 		c, err := cluster.NewCluster(clusterCfg)
 		if err != nil {
 			log.Error("Failed to initialize cluster", "error", err)
 		} else {
 			s.cluster = c
-			log.Info("Cluster mode enabled", "node", cfg.Server.Name)
+			log.Info("Cluster mode enabled",
+				"node", clusterNodeID,
+				"consensus_mode", cfg.Cluster.ConsensusMode,
+			)
 		}
+	}
+
+	if s.cluster != nil {
+		s.notary.SetKeyBroadcastHook(func(serverName, keyID, keyData string, validUntilTS int64) {
+			s.cluster.BroadcastKeyUpdate(serverName, keyID, keyData, validUntilTS)
+		})
+		s.cluster.SetOnKeyReceived(func(serverName string, data []byte) {
+			var entry cluster.KeyEntry
+			if err := json.Unmarshal(data, &entry); err != nil {
+				log.Warn("Failed to decode replicated cluster entry", "error", err)
+				return
+			}
+			if entry.KeyID != keys.ClusterReplicatedResponseKeyID {
+				return
+			}
+			if err := s.notary.ApplyReplicatedServerResponse(serverName, entry.KeyData, entry.ValidUntilTS); err != nil {
+				log.Warn("Failed to apply replicated server response", "server", serverName, "error", err)
+			}
+		})
 	}
 
 	s.setupRoutes()
 
 	return s, nil
-}
-
-// setupRoutes sets up the HTTP routes
-func (s *Server) setupRoutes() {
-	// Health checks, status and metrics
-	s.mux.HandleFunc("GET /_mxkeys/health", s.handleHealth)
-	s.mux.HandleFunc("GET /_mxkeys/live", s.handleLiveness)
-	s.mux.HandleFunc("GET /_mxkeys/ready", s.handleReadiness)
-	s.mux.HandleFunc("GET /_mxkeys/status", s.handleStatus)
-	s.mux.Handle("GET /_mxkeys/metrics", metrics.Handler())
-
-	// Matrix Key Server API v2
-	// GET /_matrix/key/v2/server - own keys (no keyID)
-	s.mux.HandleFunc("GET /_matrix/key/v2/server", s.handleServerKeys)
-	// GET /_matrix/key/v2/server/{keyID} - own keys with keyID (Go 1.22+ path params)
-	s.mux.HandleFunc("GET /_matrix/key/v2/server/{keyID}", s.handleServerKeys)
-
-	// POST /_matrix/key/v2/query - notary query (stricter rate limit)
-	s.mux.HandleFunc("POST /_matrix/key/v2/query", s.withQueryRateLimit(s.handleKeyQuery))
-
-	// Version endpoint
-	s.mux.HandleFunc("GET /_matrix/federation/v1/version", s.handleVersion)
-
-	// Enterprise API endpoints
-	s.registerTransparencyRoutes()
-}
-
-// withQueryRateLimit wraps a handler with query-specific rate limiting
-func (s *Server) withQueryRateLimit(h http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ip := extractIP(r)
-		v := s.rateLimiter.getVisitor(ip)
-
-		if !v.queryLimiter.Allow() {
-			RecordRateLimited()
-			writeRateLimitError(w)
-			return
-		}
-
-		h(w, r)
-	}
-}
-
-// Handler returns the HTTP handler with all middleware applied
-func (s *Server) Handler() http.Handler {
-	// Chain middleware: request ID -> security headers -> logging -> rate limiting -> routes
-	handler := http.Handler(s.mux)
-	handler = s.rateLimiter.Middleware(handler)
-	handler = loggingMiddleware(handler)
-	handler = SecurityHeadersMiddleware(handler)
-	handler = RequestIDRequirementMiddleware(s.config.Security.RequireRequestID, handler)
-	handler = RequestIDMiddleware(handler)
-	return handler
-}
-
-// Run starts the server
-func (s *Server) Run(ctx context.Context) error {
-	// Run initial cleanup
-	s.notary.RunCleanup()
-
-	// Start cleanup routine
-	cleanupInterval := time.Duration(s.config.Keys.CleanupHours) * time.Hour
-	s.notary.StartCleanupRoutine(ctx, cleanupInterval)
-
-	// Start cluster if enabled
-	if s.cluster != nil {
-		if err := s.cluster.Start(ctx); err != nil {
-			log.Error("Failed to start cluster", "error", err)
-		}
-	}
-
-	addr := fmt.Sprintf("%s:%d", s.config.Server.BindAddress, s.config.Server.Port)
-
-	srv := &http.Server{
-		Addr:         addr,
-		Handler:      s.Handler(),
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
-	}
-
-	log.Info("Starting MXKeys notary server", "address", addr, "server", s.config.Server.Name)
-
-	errChan := make(chan error, 1)
-	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			errChan <- err
-		}
-	}()
-
-	select {
-	case <-ctx.Done():
-		return s.gracefulShutdown(srv)
-	case err := <-errChan:
-		return err
-	}
-}
-
-// gracefulShutdown performs graceful shutdown
-func (s *Server) gracefulShutdown(srv *http.Server) error {
-	log.Info("Initiating graceful shutdown...")
-
-	// Create shutdown context with timeout
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Stop accepting new requests
-	log.Info("Stopping HTTP server...")
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Error("HTTP server shutdown error", "error", err)
-	}
-
-	// Flush any pending metrics
-	log.Info("Flushing metrics...")
-
-	if s.rateLimiter != nil {
-		s.rateLimiter.Stop()
-	}
-
-	// Close database connection
-	log.Info("Closing database connection...")
-	if err := s.db.Close(); err != nil {
-		log.Error("Database close error", "error", err)
-		return err
-	}
-
-	log.Info("Graceful shutdown complete")
-	return nil
-}
-
-// Close closes the server
-func (s *Server) Close() error {
-	if s.cluster != nil {
-		s.cluster.Stop()
-	}
-	if s.rateLimiter != nil {
-		s.rateLimiter.Stop()
-	}
-	return s.db.Close()
 }
 
 func decodeTrustedNotaries(configured []config.TrustedNotary) ([]keys.TrustedNotaryKey, error) {
@@ -326,39 +219,4 @@ func decodeTrustedNotaries(configured []config.TrustedNotary) ([]keys.TrustedNot
 		})
 	}
 	return out, nil
-}
-
-type responseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rw *responseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
-}
-
-func loggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		IncInFlightRequests()
-		defer DecInFlightRequests()
-
-		start := time.Now()
-
-		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-		next.ServeHTTP(rw, r)
-
-		duration := time.Since(start)
-		route := NormalizeRoute(r.URL.Path)
-
-		RecordHTTPRequest(r.Method, route, strconv.Itoa(rw.statusCode), duration.Seconds())
-
-		log.Debug("HTTP request",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"status", rw.statusCode,
-			"duration", duration,
-			"remote", r.RemoteAddr,
-		)
-	})
 }

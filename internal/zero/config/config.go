@@ -33,6 +33,8 @@ func Load(path string) (map[string]interface{}, error) {
 	scanner := bufio.NewScanner(file)
 	var currentPath []string
 	var indentStack []int
+	var activeListItem map[string]interface{}
+	activeListIndent := -1
 
 	lineNum := 0
 	for scanner.Scan() {
@@ -64,6 +66,66 @@ func Load(path string) (map[string]interface{}, error) {
 				currentPath = currentPath[:len(currentPath)-1]
 			}
 		}
+		if activeListItem != nil && indent <= activeListIndent {
+			activeListItem = nil
+			activeListIndent = -1
+		}
+
+		if strings.HasPrefix(trimmed, "- ") {
+			item := strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))
+			listPath := strings.Join(currentPath, ".")
+			existing := getPath(result, listPath)
+			var list []interface{}
+			if existing != nil {
+				if l, ok := existing.([]interface{}); ok {
+					list = l
+				}
+			}
+
+			if item == "" {
+				itemMap := make(map[string]interface{})
+				list = append(list, itemMap)
+				setPath(result, listPath, list)
+				activeListItem = itemMap
+				activeListIndent = indent
+				continue
+			}
+
+			if strings.Contains(item, ": ") {
+				k, v, ok := parseKeyValue(item)
+				if !ok {
+					continue
+				}
+				itemMap := map[string]interface{}{
+					k: parseValue(v),
+				}
+				list = append(list, itemMap)
+				setPath(result, listPath, list)
+				activeListItem = itemMap
+				activeListIndent = indent
+				continue
+			}
+
+			list = append(list, parseValue(item))
+			setPath(result, listPath, list)
+			activeListItem = nil
+			activeListIndent = -1
+			continue
+		}
+
+		if activeListItem != nil && indent > activeListIndent {
+			k, v, ok := parseKeyValue(trimmed)
+			if !ok {
+				continue
+			}
+			if v == "" {
+				nested := make(map[string]interface{})
+				activeListItem[k] = nested
+				continue
+			}
+			activeListItem[k] = parseValue(v)
+			continue
+		}
 
 		// Parse key: value
 		parts := strings.SplitN(trimmed, ":", 2)
@@ -73,23 +135,6 @@ func Load(path string) (map[string]interface{}, error) {
 
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
-
-		// Handle list item
-		if strings.HasPrefix(key, "- ") {
-			key = strings.TrimPrefix(key, "- ")
-			// Add to list at current path
-			listPath := strings.Join(currentPath, ".")
-			existing := getPath(result, listPath)
-			var list []interface{}
-			if existing != nil {
-				if l, ok := existing.([]interface{}); ok {
-					list = l
-				}
-			}
-			list = append(list, key)
-			setPath(result, listPath, list)
-			continue
-		}
 
 		if value == "" {
 			// Nested object
@@ -130,6 +175,17 @@ func parseValue(s string) interface{} {
 	}
 
 	return s
+}
+
+func parseKeyValue(s string) (string, string, bool) {
+	parts := strings.SplitN(s, ":", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	key := strings.TrimSpace(parts[0])
+	value := strings.TrimSpace(parts[1])
+	value = strings.Trim(value, `"`)
+	return key, value, key != ""
 }
 
 func setPath(m map[string]interface{}, path string, value interface{}) {
@@ -228,6 +284,22 @@ func GetStringSlice(m map[string]interface{}, path string) []string {
 		return result
 	}
 	return nil
+}
+
+// GetMapSlice gets a slice of map objects from config.
+func GetMapSlice(m map[string]interface{}, path string) []map[string]interface{} {
+	v := getPath(m, path)
+	arr, ok := v.([]interface{})
+	if !ok {
+		return nil
+	}
+	result := make([]map[string]interface{}, 0, len(arr))
+	for _, item := range arr {
+		if mp, ok := item.(map[string]interface{}); ok {
+			result = append(result, mp)
+		}
+	}
+	return result
 }
 
 // Has reports whether a path exists in config map.

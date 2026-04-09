@@ -15,8 +15,11 @@ package keys
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -24,6 +27,11 @@ import (
 type Storage struct {
 	db *sql.DB
 }
+
+const (
+	storageWriteAttempts = 3
+	storageRetryBackoff  = 100 * time.Millisecond
+)
 
 // StoredKey represents a stored server key
 type StoredKey struct {
@@ -87,9 +95,43 @@ func (s *Storage) createTables() error {
 	return err
 }
 
+func isRetryableStorageError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, driver.ErrBadConn) {
+		return true
+	}
+
+	errText := strings.ToLower(err.Error())
+	return strings.Contains(errText, "timeout") ||
+		strings.Contains(errText, "temporarily unavailable") ||
+		strings.Contains(errText, "connection reset") ||
+		strings.Contains(errText, "connection refused") ||
+		strings.Contains(errText, "broken pipe") ||
+		strings.Contains(errText, "driver: bad connection")
+}
+
+func (s *Storage) execWrite(query string, args ...interface{}) error {
+	var lastErr error
+	for attempt := 0; attempt < storageWriteAttempts; attempt++ {
+		if _, err := s.db.Exec(query, args...); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+
+		if !isRetryableStorageError(lastErr) || attempt == storageWriteAttempts-1 {
+			break
+		}
+		time.Sleep(storageRetryBackoff * time.Duration(1<<attempt))
+	}
+	return lastErr
+}
+
 // StoreKey stores a server key
 func (s *Storage) StoreKey(serverName, keyID string, publicKey []byte, validUntil time.Time) error {
-	_, err := s.db.Exec(`
+	return s.execWrite(`
 		INSERT INTO server_keys (server_name, key_id, public_key, valid_until, fetched_at)
 		VALUES ($1, $2, $3, $4, NOW())
 		ON CONFLICT (server_name, key_id) DO UPDATE SET
@@ -97,7 +139,6 @@ func (s *Storage) StoreKey(serverName, keyID string, publicKey []byte, validUnti
 			valid_until = $4,
 			fetched_at = NOW()
 	`, serverName, keyID, publicKey, validUntil)
-	return err
 }
 
 // StoreServerResponse stores full server key response
@@ -107,7 +148,7 @@ func (s *Storage) StoreServerResponse(serverName string, response *ServerKeysRes
 		return err
 	}
 
-	_, err = s.db.Exec(`
+	return s.execWrite(`
 		INSERT INTO server_key_responses (server_name, response, valid_until, fetched_at)
 		VALUES ($1, $2, $3, NOW())
 		ON CONFLICT (server_name) DO UPDATE SET
@@ -115,7 +156,6 @@ func (s *Storage) StoreServerResponse(serverName string, response *ServerKeysRes
 			valid_until = $3,
 			fetched_at = NOW()
 	`, serverName, responseJSON, validUntil)
-	return err
 }
 
 // GetServerResponse retrieves cached server key response

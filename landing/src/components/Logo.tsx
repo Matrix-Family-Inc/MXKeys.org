@@ -26,6 +26,8 @@ export function Logo({ size = 40, animated = false }: LogoProps) {
       xmlns="http://www.w3.org/2000/svg"
       className={animated ? 'animate-spin-slow' : ''}
       style={animated ? { animationDuration: '20s' } : undefined}
+      aria-hidden="true"
+      focusable="false"
     >
       {/* Federation ring */}
       <circle

@@ -38,6 +38,15 @@ security:
   max_json_depth: 10
   max_signatures_per_key: 10
   require_request_id: false
+  trust_forwarded_headers: false # enable only behind proxies that overwrite X-Forwarded-For / X-Real-IP
+  trusted_proxies: []
+  enterprise_access_token: ""
+  # trusted_proxies:
+  #   Configure every trusted hop so MXKeys can derive the rightmost untrusted client IP.
+  #   Upstream proxies must scrub/append forwarded headers instead of passing client-supplied chains through unchanged.
+  #   - 127.0.0.1/32
+  #   - 10.0.0.0/8
+  # enterprise_access_token: "replace-with-long-random-token"
 
 # Optional: Pin trusted notary keys for fallback servers
 trusted_notaries:
@@ -70,6 +79,9 @@ cluster:
   node_id: ""
   bind_address: "0.0.0.0"
   bind_port: 7946
+  advertise_address: "mxkeys-node-a.internal"
+  advertise_port: 7946
   seeds: []
   consensus_mode: crdt # crdt | raft
   sync_interval: 5
+  shared_secret: "replace-with-long-random-secret"

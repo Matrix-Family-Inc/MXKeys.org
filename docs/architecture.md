@@ -1,226 +1,107 @@
 # MXKeys Architecture
 
-## Overview
+## Scope
 
-MXKeys is a Matrix key notary server that verifies and caches server signing keys.
+This document describes the current runtime shape of MXKeys:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         MXKeys                                  │
-│                                                                 │
-│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐      │
-│  │  HTTP    │   │  Rate    │   │  Request │   │  Security│      │
-│  │  Server  │──▶│  Limiter │──▶│  ID MW   │──▶│  Headers │      │
-│  └──────────┘   └──────────┘   └──────────┘   └──────────┘      │
-│                                      │                          │
-│                                      ▼                          │
-│                            ┌──────────────┐                     │
-│                            │   Handlers   │                     │
-│                            └──────┬───────┘                     │
-│                                   │                             │
-│          ┌────────────────────────┼────────────────────────┐    │
-│          │                        │                        │    │
-│          ▼                        ▼                        ▼    │
-│  ┌──────────────┐        ┌──────────────┐        ┌────────────┐ │
-│  │   /health    │        │   /query     │        │  /server   │ │
-│  │   /ready     │        │              │        │            │ │
-│  │   /status    │        │              │        │            │ │
-│  └──────────────┘        └──────┬───────┘        └────────────┘ │
-│                                 │                               │
-│                                 ▼                               │
-│                        ┌──────────────┐                         │
-│                        │    Notary    │                         │
-│                        └──────┬───────┘                         │
-│                               │                                 │
-│            ┌──────────────────┼──────────────────┐              │
-│            │                  │                  │              │
-│            ▼                  ▼                  ▼              │
-│    ┌──────────────┐   ┌──────────────┐   ┌──────────────┐       │
-│    │ Memory Cache │   │   Storage    │   │   Fetcher    │       │
-│    │  (in-proc)   │   │  (Postgres)  │   │  (remote)    │       │
-│    └──────────────┘   └──────────────┘   └──────┬───────┘       │
-│                                                  │              │
-│                              ┌───────────────────┼──────┐       │
-│                              │                   │      │       │
-│                              ▼                   ▼      ▼       │
-│                      ┌────────────┐      ┌────────┐ ┌────────┐  │
-│                      │  Resolver  │      │Fallback│ │Circuit │  │
-│                      │(well-known,│      │Notaries│ │Breaker │  │
-│                      │ SRV, IP)   │      │        │ │        │  │
-│                      └────────────┘      └────────┘ └────────┘  │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+- HTTP request flow,
+- cache and fetch path,
+- transparency and analytics subsystems,
+- authenticated cluster transport.
 
-## Components
+The normative API contract lives in `docs/federation-behavior.md`.
 
-### HTTP Layer
+## Request Pipeline
 
-| Component | Purpose |
-|-----------|---------|
-| Server | net/http with Go 1.22+ routing |
-| Rate Limiter | Per-IP token bucket (golang.org/x/time) |
-| Request ID | UUID generation, X-Request-ID header |
-| Security Headers | X-Content-Type-Options, X-Frame-Options |
+Public request flow in `internal/server`:
 
-### Notary
+1. `RequestIDMiddleware`
+2. optional `RequestIDRequirementMiddleware`
+3. `SecurityHeadersMiddleware`
+4. request logging middleware
+5. rate limiting middleware
+6. route handler on `http.ServeMux`
 
-Core key verification service:
-- Signs responses with own Ed25519 key
-- Adds perspective (notary) signature
-- Manages cache lifecycle
+Stable public routes:
 
-### Storage
+- `GET /_matrix/key/v2/server`
+- `GET /_matrix/key/v2/server/{keyID}`
+- `POST /_matrix/key/v2/query`
+- `GET /_matrix/federation/v1/version`
+- `GET /_mxkeys/health`
+- `GET /_mxkeys/live`
+- `GET /_mxkeys/ready`
+- `GET /_mxkeys/status`
+- `GET /_mxkeys/metrics`
 
-PostgreSQL-backed persistent storage:
-- Server key responses (JSON)
-- Individual keys (binary)
-- Automatic expiry cleanup
+Protected operational routes:
 
-### Fetcher
+- `/_mxkeys/transparency/*`
+- `/_mxkeys/analytics/*`
+- `/_mxkeys/cluster/*`
+- `/_mxkeys/policy/*`
 
-Remote key fetching:
-- Direct fetch with server discovery
-- Fallback to trusted notaries
-- Circuit breaker for failing hosts
-- Retry with exponential backoff
-- Concurrent fetch semaphore
+These routes are registered only when their feature is available and the enterprise access token is configured.
 
-### Resolver
+## Core Components
 
-Matrix server name resolution:
-1. `.well-known/matrix/server`
-2. SRV records (`_matrix._tcp.`)
-3. Direct connection (port 8448)
-4. IP literal support
+| Component | Responsibility |
+|-----------|----------------|
+| `internal/server` | HTTP routing, middleware, status, protected operational endpoints |
+| `internal/keys/notary*` | query orchestration, signing, cache selection, storage writes |
+| `internal/keys/fetcher*` | remote fetch, fallback notaries, retry, signature verification, SSRF checks |
+| `internal/keys/resolver*` | `.well-known`, SRV, legacy SRV, host/port resolution |
+| `internal/keys/storage.go` | PostgreSQL persistence for responses and individual keys |
+| `internal/keys/transparency*` | append-only transparency log, Merkle proofs, verification |
+| `internal/keys/analytics*` | runtime key statistics and anomaly tracking |
+| `internal/cluster/*` | authenticated CRDT or Raft-backed replication |
+| `internal/zero/*` | internal infrastructure packages (config, canonical JSON, metrics, raft, logging) |
 
-## Data Flow
+## Key Query Flow
 
-### Key Query
-
-```
-Client                    MXKeys                     Remote Server
-   │                        │                              │
-   │  POST /query           │                              │
-   │  {server_keys: {...}}  │                              │
-   │───────────────────────▶│                              │
-   │                        │                              │
-   │                        │  1. Check memory cache       │
-   │                        │  2. Check DB cache           │
-   │                        │                              │
-   │                        │  3. If miss, resolve server  │
-   │                        │─────────────────────────────▶│
-   │                        │                              │
-   │                        │  GET /_matrix/key/v2/server  │
-   │                        │◀─────────────────────────────│
-   │                        │                              │
-   │                        │  4. Verify signature         │
-   │                        │  5. Add notary signature     │
-   │                        │  6. Cache response           │
-   │                        │                              │
-   │  {server_keys: [...]}  │                              │
-   │◀───────────────────────│                              │
-   │                        │                              │
+```text
+Client
+  -> POST /_matrix/key/v2/query
+  -> validate body, limits, server names, key IDs
+  -> memory cache
+  -> PostgreSQL cache
+  -> resolver (.well-known -> SRV -> fallback)
+  -> upstream fetch and signature verification
+  -> perspective signature
+  -> storage/cache update
+  -> response with server_keys + failures
 ```
 
-### Cache Hierarchy
+## Cache and Persistence
 
-```
-┌─────────────────────────────────────────┐
-│           Memory Cache (fast)           │
-│         TTL: cache_ttl_hours            │
-│         Size: unlimited                 │
-└─────────────────┬───────────────────────┘
-                  │ miss
-                  ▼
-┌─────────────────────────────────────────┐
-│         PostgreSQL Cache (durable)      │
-│         TTL: valid_until_ts             │
-│         Cleanup: cleanup_hours          │
-└─────────────────┬───────────────────────┘
-                  │ miss
-                  ▼
-┌─────────────────────────────────────────┐
-│            Remote Fetch                 │
-│         Timeout: fetch_timeout_s        │
-│         Retries: 3 with backoff         │
-└─────────────────────────────────────────┘
-```
+- memory cache stores short-lived `ServerKeysResponse` objects,
+- PostgreSQL stores full responses and per-key rows,
+- expired entries are cleaned periodically,
+- stale fallback responses are returned only under explicit logic in the notary path.
 
-## Zero-Dependency Design
+## Cluster Model
 
-Internal packages replace external dependencies:
+Cluster mode supports:
 
-| Package | Replaces | Purpose |
-|---------|----------|---------|
-| zero/metrics | prometheus/client_golang | Prometheus text format |
-| zero/log | sirupsen/logrus | slog wrapper |
-| zero/config | spf13/viper | YAML + env config |
-| zero/canonical | mautrix canonical JSON | Matrix canonical JSON |
+- `crdt` for eventually consistent replication,
+- `raft` for replicated command flow.
 
-Only 3 external dependencies:
-- `github.com/lib/pq` — PostgreSQL driver
-- `golang.org/x/sync` — Singleflight
-- `golang.org/x/time` — Rate limiter
+Cluster invariants:
 
-## Security Model
+- transport uses shared-secret HMAC authentication,
+- wire messages are bounded in size and time-limited,
+- wildcard bind addresses require explicit advertise address,
+- replicated server responses are treated as trusted cluster data and written into cache/storage on peers.
 
-### Signature Verification
+## Security Notes
 
-1. Parse JSON response
-2. Remove `signatures` and `unsigned` fields
-3. Convert to canonical JSON (sorted keys, no whitespace)
-4. Verify Ed25519 signature
-5. Check key length (32 bytes public, 64 bytes signature)
-
-### Trust Model
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Trust Hierarchy                         │
-│                                                             │
-│  ┌─────────────────────────────────────────────-────────┐   │
-│  │              MXKeys (this server)                    │   │
-│  │                                                      │   │
-│  │  - Generates own Ed25519 keypair                     │   │
-│  │  - Signs all responses                               │   │
-│  │  - Verifies all upstream responses                   │   │
-│  └───────────────────────────────────────────────-──────┘   │
-│                           │                                 │
-│                           │ queries                         │
-│                           ▼                                 │
-│  ┌────────────────────────────────────────────────-─────┐   │
-│  │              Remote Servers                          │   │
-│  │                                                      │   │
-│  │  - Verified via TLS + signature                      │   │
-│  │  - Self-signed server_name must match request        │   │
-│  └─────────────────────────────────────────────────-────┘   │
-│                           │                                 │
-│                           │ fallback                        │
-│                           ▼                                 │
-│  ┌──────────────────────────────────────────────────-───┐   │
-│  │              Fallback Notaries                       │   │
-│  │                                                      │   │
-│  │  - Trusted via TLS (default)                         │   │
-│  │  - Optional: pinned key verification                 │   │
-│  └───────────────────────────────────────────────────-──┘   │
-│                                                             │
-└───────────────────────────────────────────────────────-─────┘
-```
+- upstream key material is verified cryptographically before first local acceptance,
+- request decoding enforces size and JSON depth limits,
+- SSRF checks reject resolved private IPs when enabled,
+- enterprise operational routes require token-based access.
 
 ## Metrics
 
-All metrics prefixed with `mxkeys_`:
-
-| Metric | Type | Description |
-|--------|------|-------------|
-| http_requests_total | Counter | HTTP requests by method/route/status |
-| http_request_duration_seconds | Histogram | Request latency |
-| in_flight_requests | Gauge | Current in-flight requests |
-| keys_cache_hits_total | Counter | Cache hits by type |
-| keys_cache_misses_total | Counter | Cache misses by type |
-| keys_fetch_attempts_total | Counter | Fetch attempts by status/source |
-| rate_limited_requests_total | Counter | Rate limited requests |
-| request_rejections_total | Counter | Rejected requests by reason |
-| go_goroutines | Gauge | Current goroutines |
-| go_memstats_heap_* | Gauge | Memory statistics |
+The metrics endpoint is `GET /_mxkeys/metrics`.
+Alert definitions live in `docs/prometheus-alerts.yaml`.
+Grafana dashboard assets live in `docs/grafana/`.

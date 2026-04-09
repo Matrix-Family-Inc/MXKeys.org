@@ -15,6 +15,10 @@ set -euo pipefail
 repo="${GITHUB_REPOSITORY:-}"
 branch="${GITHUB_BRANCH:-main}"
 token="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+profile="${GITHUB_CHECK_PROFILE:-pr}"
+
+# Keep these required check names aligned with .github/workflows/pr-gate.yml
+# and .github/workflows/release-live-interop-gate.yml.
 
 if [[ -z "${repo}" ]]; then
   echo "ERROR: set GITHUB_REPOSITORY=owner/repo"
@@ -32,17 +36,32 @@ resp="$(curl -fsSL \
   -H "Accept: application/vnd.github+json" \
   "${api}")"
 
-required_checks=(
-  "unit"
-  "integration-with-fixtures"
-  "race"
-  "vet"
-  "lint"
-  "frontend-build"
-  "live-federation-strictness"
-  "live-query-compatibility"
-  "live-notary-interop"
-)
+case "${profile}" in
+  pr)
+    required_checks=(
+      "unit"
+      "integration-with-fixtures"
+      "integration-tagged"
+      "race"
+      "vet"
+      "lint"
+      "frontend-quality"
+      "security-vuln"
+      "security-sast"
+    )
+    ;;
+  release)
+    required_checks=(
+      "live-federation-strictness"
+      "live-query-compatibility"
+      "live-notary-interop"
+    )
+    ;;
+  *)
+    echo "ERROR: unsupported GITHUB_CHECK_PROFILE=${profile} (expected pr or release)"
+    exit 2
+    ;;
+esac
 
 contexts="$(jq -r '.required_status_checks.contexts[]?' <<<"${resp}")"
 
@@ -64,4 +83,4 @@ if [[ "${missing}" -ne 0 ]]; then
   exit 1
 fi
 
-echo "Branch protection verification passed for ${repo}:${branch}"
+echo "Branch protection verification passed for ${repo}:${branch} (${profile})"

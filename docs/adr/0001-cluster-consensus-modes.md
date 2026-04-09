@@ -18,45 +18,24 @@ Accepted
 ## Context
 
 MXKeys supports distributed notary operation where nodes share key-related state.
-The system requires:
-
-- deterministic behavior for critical flows,
-- practical operability for multi-node deployments,
-- resilience under partial node/network failures.
-
-Two models exist in code:
-
-- CRDT-based state synchronization,
-- Raft-based strong-consistency consensus.
+The cluster layer must support both low-complexity cache propagation and stronger replicated coordination for deployments that explicitly need it.
 
 ## Decision
 
 Use CRDT synchronization as the default cluster mode, with optional Raft mode for deployments that require stronger consistency semantics.
 
-Decision details:
-
-- default mode: `crdt`,
-- alternative mode: `raft`,
-- cluster feature is opt-in via configuration (`cluster.enabled`).
+- default mode: `crdt`
+- optional mode: `raft`
+- cluster mode is opt-in via `cluster.enabled`
 
 ## Consequences
-
-Positive:
 
 - CRDT default lowers operational complexity for most deployments.
 - Eventual consistency is sufficient for non-transactional cache propagation.
 - Optional Raft provides stronger consistency when explicitly required.
-
-Trade-offs:
-
 - CRDT mode may expose temporary divergence between nodes.
 - Raft mode increases operational and network coordination complexity.
-
-Operational implications:
-
-- mode selection must be explicit in production configuration,
-- observability must include cluster sync/health metrics,
-- incident procedures should account for mode-specific failure behavior.
+- cluster transport requires explicit configuration, authentication, and monitoring.
 
 ## Alternatives Considered
 
@@ -66,6 +45,7 @@ Operational implications:
 
 ## References
 
-- `internal/cluster/cluster.go`
-- `internal/zero/raft/raft.go`
+- `internal/cluster/runtime.go`
+- `internal/cluster/network.go`
+- `internal/zero/raft/`
 - `internal/config/config.go`

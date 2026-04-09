@@ -35,6 +35,8 @@ type CircuitBreaker struct {
 	failureThreshold int
 	resetTimeout     time.Duration
 	halfOpenMax      int
+	serverTTL        time.Duration
+	maxTracked       int
 
 	// Per-server state
 	servers map[string]*serverCircuit
@@ -44,6 +46,7 @@ type serverCircuit struct {
 	state        CircuitState
 	failures     int
 	lastFailure  time.Time
+	lastTouched  time.Time
 	halfOpenReqs int
 }
 
@@ -59,6 +62,8 @@ func NewCircuitBreaker(failureThreshold int, resetTimeout time.Duration) *Circui
 		failureThreshold: failureThreshold,
 		resetTimeout:     resetTimeout,
 		halfOpenMax:      1,
+		serverTTL:        maxDuration(15*time.Minute, resetTimeout*10),
+		maxTracked:       4096,
 		servers:          make(map[string]*serverCircuit),
 	}
 }
@@ -74,6 +79,11 @@ func (cb *CircuitBreaker) Allow(serverName string) bool {
 	}
 
 	now := time.Now()
+	if cb.isExpiredLocked(sc, now) {
+		delete(cb.servers, serverName)
+		return true
+	}
+	sc.lastTouched = now
 
 	switch sc.state {
 	case CircuitClosed:
@@ -109,11 +119,13 @@ func (cb *CircuitBreaker) RecordSuccess(serverName string) {
 	if !exists {
 		return
 	}
+	sc.lastTouched = time.Now()
 
 	// Reset on success
 	if sc.state == CircuitHalfOpen {
 		sc.state = CircuitClosed
 		sc.failures = 0
+		sc.halfOpenReqs = 0
 	} else if sc.state == CircuitClosed {
 		sc.failures = 0
 	}
@@ -124,14 +136,23 @@ func (cb *CircuitBreaker) RecordFailure(serverName string) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
+	now := time.Now()
+	cb.cleanupLocked(now)
 	sc, exists := cb.servers[serverName]
 	if !exists {
-		sc = &serverCircuit{state: CircuitClosed}
+		if len(cb.servers) >= cb.maxTracked {
+			cb.evictOldestLocked()
+		}
+		sc = &serverCircuit{
+			state:       CircuitClosed,
+			lastTouched: now,
+		}
 		cb.servers[serverName] = sc
 	}
 
 	sc.failures++
-	sc.lastFailure = time.Now()
+	sc.lastFailure = now
+	sc.lastTouched = now
 
 	switch sc.state {
 	case CircuitClosed:
@@ -147,11 +168,15 @@ func (cb *CircuitBreaker) RecordFailure(serverName string) {
 
 // State returns the current state for a server
 func (cb *CircuitBreaker) State(serverName string) CircuitState {
-	cb.mu.RLock()
-	defer cb.mu.RUnlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 
 	sc, exists := cb.servers[serverName]
 	if !exists {
+		return CircuitClosed
+	}
+	if cb.isExpiredLocked(sc, time.Now()) {
+		delete(cb.servers, serverName)
 		return CircuitClosed
 	}
 	return sc.state
@@ -167,8 +192,10 @@ func (cb *CircuitBreaker) Reset(serverName string) {
 
 // Stats returns circuit breaker statistics
 func (cb *CircuitBreaker) Stats() map[string]interface{} {
-	cb.mu.RLock()
-	defer cb.mu.RUnlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	cb.cleanupLocked(time.Now())
 
 	open := 0
 	halfOpen := 0
@@ -186,4 +213,39 @@ func (cb *CircuitBreaker) Stats() map[string]interface{} {
 		"open":          open,
 		"half_open":     halfOpen,
 	}
+}
+
+func (cb *CircuitBreaker) cleanupLocked(now time.Time) {
+	for serverName, sc := range cb.servers {
+		if cb.isExpiredLocked(sc, now) {
+			delete(cb.servers, serverName)
+		}
+	}
+}
+
+func (cb *CircuitBreaker) isExpiredLocked(sc *serverCircuit, now time.Time) bool {
+	return sc == nil || now.Sub(sc.lastTouched) > cb.serverTTL
+}
+
+func (cb *CircuitBreaker) evictOldestLocked() {
+	var (
+		oldestName string
+		oldestTime time.Time
+	)
+	for serverName, sc := range cb.servers {
+		if oldestName == "" || sc.lastTouched.Before(oldestTime) {
+			oldestName = serverName
+			oldestTime = sc.lastTouched
+		}
+	}
+	if oldestName != "" {
+		delete(cb.servers, oldestName)
+	}
+}
+
+func maxDuration(a, b time.Duration) time.Duration {
+	if a > b {
+		return a
+	}
+	return b
 }

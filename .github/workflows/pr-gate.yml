@@ -24,6 +24,8 @@ permissions:
   contents: read
 
 jobs:
+  # Keep job names in sync with scripts/verify-github-branch-protection.sh
+  # and the repository's required status check configuration.
   unit:
     name: unit
     runs-on: ubuntu-latest
@@ -35,7 +37,11 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Run unit suite
-        run: go test -count=1 ./...
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages="$(bash ./scripts/go-package-list.sh | tr '\n' ' ')"
+          go test -count=1 ${packages}
 
   integration:
     name: integration-with-fixtures
@@ -47,8 +53,23 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # This targeted subset stays separate from the full unit suite so fixture-heavy
+      # backend packages remain visible as an explicit required check in branch protection.
       - name: Run integration-like package tests
         run: go test -count=1 ./internal/server ./internal/keys ./internal/cluster ./internal/zero/canonical ./internal/zero/merkle ./internal/zero/raft
+
+  integration-tagged:
+    name: integration-tagged
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run tagged integration tests
+        run: go test -tags=integration -race -count=1 ./tests/integration/...
 
   race:
     name: race
@@ -61,7 +82,11 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Run race detector
-        run: go test -race -count=1 ./...
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages="$(bash ./scripts/go-package-list.sh | tr '\n' ' ')"
+          go test -race -count=1 ${packages}
 
   vet:
     name: vet
@@ -74,7 +99,11 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Run go vet
-        run: go vet ./...
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages="$(bash ./scripts/go-package-list.sh | tr '\n' ' ')"
+          go vet ${packages}
 
   lint:
     name: lint
@@ -101,8 +130,8 @@ jobs:
             exit 1
           fi
 
-  frontend-build:
-    name: frontend-build
+  frontend-quality:
+    name: frontend-quality
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -114,6 +143,10 @@ jobs:
         uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: bun install --frozen-lockfile
+      - name: Lint landing
+        run: bun run lint
+      - name: Test landing
+        run: bun run test
       - name: Build landing
         run: bun run build
 
@@ -130,7 +163,11 @@ jobs:
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - name: Run govulncheck (patched toolchain)
-        run: GOTOOLCHAIN=go1.26.1 "$(go env GOPATH)/bin/govulncheck" ./...
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages="$(bash ./scripts/go-package-list.sh | tr '\n' ' ')"
+          GOTOOLCHAIN=go1.26.2 "$(go env GOPATH)/bin/govulncheck" ${packages}
 
   security-sast:
     name: security-sast
@@ -145,4 +182,8 @@ jobs:
       - name: Install gosec
         run: go install github.com/securego/gosec/v2/cmd/gosec@latest
       - name: Run gosec (high severity)
-        run: "$(go env GOPATH)/bin/gosec" -severity high ./...
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_dirs="$(bash ./scripts/go-package-list.sh dirs | tr '\n' ' ')"
+          "$(go env GOPATH)/bin/gosec" -severity high ${package_dirs}

@@ -17,7 +17,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"net"
 	"net/http"
 	"strings"
 
@@ -68,30 +67,6 @@ func RequestIDRequirementMiddleware(required bool, next http.Handler) http.Handl
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-// extractClientIP extracts the client IP from the request
-func extractClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header (for reverse proxy)
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first IP in the list
-		if idx := strings.Index(xff, ","); idx != -1 {
-			return strings.TrimSpace(xff[:idx])
-		}
-		return strings.TrimSpace(xff)
-	}
-
-	// Check X-Real-IP header
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
-	}
-
-	// Fall back to RemoteAddr
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return ip
 }
 
 // SecurityHeadersMiddleware adds security headers to responses

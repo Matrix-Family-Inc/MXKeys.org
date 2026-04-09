@@ -1,0 +1,65 @@
+/*
+ * Project: MXKeys
+ * Company: Matrix Family Inc. (https://matrix.family)
+ * Owner: Matrix Family Inc.
+ * Maintainer: Brabus
+ * Role: Lead Architect
+ * Contact: dev@matrix.family
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
+ * Date: Wed Apr 08 2026 UTC
+ * Status: Created
+ */
+
+package cluster
+
+import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"time"
+)
+
+const maxMessageSkew = 5 * time.Minute
+
+func (c *Cluster) signMessage(msg *ClusterMessage) error {
+	payload, err := c.messageMACPayload(msg)
+	if err != nil {
+		return err
+	}
+
+	mac := hmac.New(sha256.New, []byte(c.config.SharedSecret))
+	if _, err := mac.Write(payload); err != nil {
+		return err
+	}
+	msg.Signature = hex.EncodeToString(mac.Sum(nil))
+	return nil
+}
+
+func (c *Cluster) verifyMessage(msg *ClusterMessage) error {
+	if msg.Signature == "" {
+		return fmt.Errorf("cluster message signature is missing")
+	}
+	if skew := time.Since(msg.Timestamp); skew > maxMessageSkew || skew < -maxMessageSkew {
+		return fmt.Errorf("cluster message timestamp outside allowed skew")
+	}
+
+	expected := &ClusterMessage{
+		Type:      msg.Type,
+		From:      msg.From,
+		Timestamp: msg.Timestamp,
+		Payload:   msg.Payload,
+	}
+	if err := c.signMessage(expected); err != nil {
+		return err
+	}
+	if !hmac.Equal([]byte(expected.Signature), []byte(msg.Signature)) {
+		return fmt.Errorf("cluster message signature mismatch")
+	}
+	return nil
+}
+
+func (c *Cluster) messageMACPayload(msg *ClusterMessage) ([]byte, error) {
+	return []byte(fmt.Sprintf("%s|%s|%d|%x", msg.Type, msg.From, msg.Timestamp.UnixNano(), []byte(msg.Payload))), nil
+}
