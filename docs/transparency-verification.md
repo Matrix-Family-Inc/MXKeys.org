@@ -105,3 +105,68 @@ Returns `{"valid": true, "entries_checked": N}` if all entries have correct hash
 - Consistency proof verifies structure only — does not prove completeness of the log
 - No gossip protocol between verifiers (single-notary trust model)
 - Key rotation invalidates old STH signatures; archive before rotating
+
+## Monitoring Recommendations
+
+### Polling Interval
+
+Recommended STH polling frequency depends on operational requirements:
+
+| Environment | Interval | Rationale |
+|------------|----------|-----------|
+| Production | 5 minutes | Detect tampering within SLA window |
+| Staging | 1 hour | Sufficient for development verification |
+| Audit / compliance | 1 minute | Tighter detection window |
+
+### Snapshot Retention
+
+Keep STH snapshots for at least `transparency.retention_days` (default: 365 days) to maintain full audit trail. Recommended storage:
+
+- Local: `/var/lib/mxkeys/sth-history/` with date-stamped filenames
+- Remote: Object storage (S3/GCS) for durability
+
+### External Monitor Job (cron)
+
+```bash
+#!/bin/bash
+# /etc/cron.d/mxkeys-verify
+# Run every 5 minutes
+
+MXKEYS_URL="https://mxkeys.example.org"
+STH_DIR="/var/lib/mxkeys/sth-history"
+LATEST="$STH_DIR/sth-latest.json"
+ARCHIVE="$STH_DIR/sth-$(date +%Y%m%d-%H%M%S).json"
+
+mkdir -p "$STH_DIR"
+
+PREV_FLAG=""
+if [ -f "$LATEST" ]; then
+    PREV_FLAG="-prev $LATEST"
+fi
+
+OUTPUT=$(mxkeys-verify -url "$MXKEYS_URL" $PREV_FLAG -out "$LATEST" -json 2>&1)
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "$OUTPUT" | logger -t mxkeys-verify -p local0.err
+    # Alert via PagerDuty / Slack / etc
+    exit $EXIT_CODE
+fi
+
+# Archive periodic snapshots (hourly)
+MINUTE=$(date +%M)
+if [ "$MINUTE" = "00" ]; then
+    cp "$LATEST" "$ARCHIVE"
+fi
+```
+
+### Exit Codes Reference
+
+| Code | Meaning | Alert Severity |
+|------|---------|----------------|
+| 0 | All checks passed | — |
+| 1 | Usage error (bad arguments) | — |
+| 2 | Fetch error (network / HTTP) | Warning |
+| 3 | Signature invalid | Critical |
+| 4 | Consistency check failed | Critical |
+| 5 | I/O error (file read/write) | Warning |
