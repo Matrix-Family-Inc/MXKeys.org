@@ -54,6 +54,8 @@ type Notary struct {
 	transparency     *TransparencyLog
 	analytics        *Analytics
 	keyBroadcastHook func(serverName, keyID, keyData string, validUntilTS int64)
+
+	configMu sync.RWMutex // protects runtime configuration setters
 }
 
 type cachedResponse struct {
@@ -114,15 +116,22 @@ func (n *Notary) initSigningKey(keyStoragePath string) error {
 
 	// Try to load existing key
 	if data, err := os.ReadFile(keyPath); err == nil {
-		if len(data) == ed25519.PrivateKeySize {
+		switch len(data) {
+		case ed25519.PrivateKeySize:
 			n.serverKeyPair = ed25519.PrivateKey(data)
-			n.serverKeyID = "ed25519:mxkeys"
-			if err := os.Chmod(keyPath, 0600); err != nil {
-				return fmt.Errorf("failed to enforce key file permissions: %w", err)
-			}
-			log.Info("Loaded existing notary signing key", "key_id", n.serverKeyID)
-			return nil
+		case ed25519.SeedSize:
+			n.serverKeyPair = ed25519.NewKeyFromSeed(data)
+		default:
+			return fmt.Errorf("existing notary signing key has invalid length %d", len(data))
 		}
+		n.serverKeyID = "ed25519:mxkeys"
+		if err := os.Chmod(keyPath, 0600); err != nil {
+			return fmt.Errorf("failed to enforce key file permissions: %w", err)
+		}
+		log.Info("Loaded existing notary signing key", "key_id", n.serverKeyID)
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to read existing notary signing key: %w", err)
 	}
 
 	// Generate new key
@@ -147,7 +156,7 @@ func (n *Notary) initSigningKey(keyStoragePath string) error {
 }
 
 // GetOwnKeys returns this notary's own public keys
-func (n *Notary) GetOwnKeys() *ServerKeysResponse {
+func (n *Notary) GetOwnKeys() (*ServerKeysResponse, error) {
 	publicKey := n.serverKeyPair.Public().(ed25519.PublicKey)
 	publicKeyB64 := base64.RawStdEncoding.EncodeToString(publicKey)
 
@@ -162,15 +171,15 @@ func (n *Notary) GetOwnKeys() *ServerKeysResponse {
 		OldVerifyKeys: make(map[string]OldKeyResponse),
 	}
 
-	// Sign the response
-	n.signResponse(response)
+	if err := n.signResponse(response); err != nil {
+		return nil, fmt.Errorf("failed to sign own keys response: %w", err)
+	}
 
-	return response
+	return response, nil
 }
 
 // signResponse signs a response with this notary's key
-func (n *Notary) signResponse(response *ServerKeysResponse) {
-	// Create copy without signatures for signing
+func (n *Notary) signResponse(response *ServerKeysResponse) error {
 	toSign := map[string]interface{}{
 		"server_name":     response.ServerName,
 		"valid_until_ts":  response.ValidUntilTS,
@@ -180,8 +189,7 @@ func (n *Notary) signResponse(response *ServerKeysResponse) {
 
 	canonicalBytes, err := canonical.Marshal(toSign)
 	if err != nil {
-		log.Error("Failed to create canonical JSON for signing", "error", err)
-		return
+		return fmt.Errorf("canonical JSON marshaling failed: %w", err)
 	}
 
 	signature := ed25519.Sign(n.serverKeyPair, canonicalBytes)
@@ -193,11 +201,11 @@ func (n *Notary) signResponse(response *ServerKeysResponse) {
 	response.Signatures[n.serverName] = map[string]string{
 		n.serverKeyID: signatureB64,
 	}
+	return nil
 }
 
 // addNotarySignature adds notary's perspective signature to response
-func (n *Notary) addNotarySignature(response *ServerKeysResponse) {
-	// Create copy without our signature for signing
+func (n *Notary) addNotarySignature(response *ServerKeysResponse) error {
 	toSign := map[string]interface{}{
 		"server_name":     response.ServerName,
 		"valid_until_ts":  response.ValidUntilTS,
@@ -226,8 +234,7 @@ func (n *Notary) addNotarySignature(response *ServerKeysResponse) {
 
 	canonicalBytes, err := canonical.Marshal(toSign)
 	if err != nil {
-		log.Error("Failed to create canonical JSON for notary signing", "error", err)
-		return
+		return fmt.Errorf("canonical JSON marshaling failed: %w", err)
 	}
 
 	signature := ed25519.Sign(n.serverKeyPair, canonicalBytes)
@@ -240,4 +247,5 @@ func (n *Notary) addNotarySignature(response *ServerKeysResponse) {
 		response.Signatures[n.serverName] = make(map[string]string)
 	}
 	response.Signatures[n.serverName][n.serverKeyID] = signatureB64
+	return nil
 }

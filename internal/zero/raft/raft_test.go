@@ -102,6 +102,25 @@ func TestRPCSigning(t *testing.T) {
 	}
 }
 
+func TestVerifyRPCRejectsReplay(t *testing.T) {
+	node := NewNode(Config{NodeID: "n1", SharedSecret: testRaftSecret})
+	msg := &RPCMessage{
+		Type:      MsgRequestVote,
+		From:      "n1",
+		Timestamp: time.Now(),
+		Payload:   json.RawMessage(`{"term":1}`),
+	}
+	if err := node.signRPC(msg); err != nil {
+		t.Fatalf("signRPC() error = %v", err)
+	}
+	if err := node.verifyRPC(msg); err != nil {
+		t.Fatalf("verifyRPC() first pass error = %v", err)
+	}
+	if err := node.verifyRPC(msg); err == nil {
+		t.Fatal("expected replayed RPC to be rejected")
+	}
+}
+
 func TestVerifyRPCRejectsStaleTimestamp(t *testing.T) {
 	node := NewNode(Config{NodeID: "n1", SharedSecret: testRaftSecret})
 	msg := &RPCMessage{
@@ -175,6 +194,7 @@ func TestStartElectionWithPeerVote(t *testing.T) {
 		SharedSecret:    testRaftSecret,
 		ElectionTimeout: 100 * time.Millisecond,
 	})
+	defer func() { _ = node.Stop() }()
 
 	finished := make(chan struct{})
 	go func() {

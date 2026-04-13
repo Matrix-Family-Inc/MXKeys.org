@@ -17,6 +17,7 @@ import (
 	"crypto/tls"
 	"net"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/sync/semaphore"
@@ -46,7 +47,7 @@ type Fetcher struct {
 	trustedNotaries map[string]TrustedNotaryKey
 	retryAttempts   int
 	maxSignatures   int
-	blockPrivateIPs bool
+	blockPrivateIPs atomic.Bool
 }
 
 // FetcherConfig holds fetcher configuration
@@ -56,7 +57,7 @@ type FetcherConfig struct {
 	TrustedNotaries []TrustedNotaryKey
 	RetryAttempts   int
 	MaxSignatures   int
-	BlockPrivateIPs bool
+	BlockPrivateIPs *bool // nil = default (true), explicit false to disable SSRF protection
 }
 
 // NewFetcher creates a new remote key fetcher with server discovery support.
@@ -82,9 +83,12 @@ func NewFetcherWithConfig(cfg FetcherConfig) *Fetcher {
 		trustedMap[tn.ServerName] = tn
 	}
 
-	return &Fetcher{
+	f := &Fetcher{
 		client: &http.Client{
 			Timeout: cfg.Timeout,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
 					MinVersion:         tls.VersionTLS12,
@@ -110,6 +114,14 @@ func NewFetcherWithConfig(cfg FetcherConfig) *Fetcher {
 		trustedNotaries: trustedMap,
 		retryAttempts:   cfg.RetryAttempts,
 		maxSignatures:   cfg.MaxSignatures,
-		blockPrivateIPs: cfg.BlockPrivateIPs,
 	}
+
+	// SSRF protection: default to true for security
+	blockPrivate := true
+	if cfg.BlockPrivateIPs != nil {
+		blockPrivate = *cfg.BlockPrivateIPs
+	}
+	f.blockPrivateIPs.Store(blockPrivate)
+
+	return f
 }

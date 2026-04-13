@@ -44,13 +44,17 @@ func TestAddNotarySignatureIsStableAcrossResign(t *testing.T) {
 		},
 	}
 
-	n.addNotarySignature(resp)
+	if err := n.addNotarySignature(resp); err != nil {
+		t.Fatalf("addNotarySignature() first call failed: %v", err)
+	}
 	sigFirst := resp.Signatures[n.serverName][n.serverKeyID]
 	if sigFirst == "" {
 		t.Fatal("expected notary signature after first signing")
 	}
 
-	n.addNotarySignature(resp)
+	if err := n.addNotarySignature(resp); err != nil {
+		t.Fatalf("addNotarySignature() second call failed: %v", err)
+	}
 	sigSecond := resp.Signatures[n.serverName][n.serverKeyID]
 	if sigSecond == "" {
 		t.Fatal("expected notary signature after second signing")

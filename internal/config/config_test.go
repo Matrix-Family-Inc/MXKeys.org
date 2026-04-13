@@ -404,7 +404,9 @@ func TestApplyEnvOverridesTrustedNotaries(t *testing.T) {
 	setDefaults(cfg)
 
 	t.Setenv("MXKEYS_TRUSTED_NOTARIES", "matrix.org|ed25519:auto|cHVibGljX2tleQ;example.org|ed25519:ex|ZXhhbXBsZQ")
-	applyEnvOverrides(cfg)
+	if err := applyEnvOverrides(cfg); err != nil {
+		t.Fatal(err)
+	}
 
 	if len(cfg.Security.TrustedNotaries) != 2 {
 		t.Fatalf("expected 2 trusted notaries from env, got %d", len(cfg.Security.TrustedNotaries))

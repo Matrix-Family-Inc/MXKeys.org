@@ -153,6 +153,8 @@ func (n *Notary) GetCacheSize() int {
 
 // SetTrustPolicy sets runtime trust policy checks for query flow.
 func (n *Notary) SetTrustPolicy(tp *TrustPolicy) {
+	n.configMu.Lock()
+	defer n.configMu.Unlock()
 	n.trustPolicy = tp
 }
 
@@ -165,17 +167,51 @@ func (n *Notary) SetBlockPrivateIPs(enabled bool) {
 
 // SetTransparencyLog enables transparency logging for query-path events.
 func (n *Notary) SetTransparencyLog(tl *TransparencyLog) {
+	n.configMu.Lock()
+	defer n.configMu.Unlock()
 	n.transparency = tl
 }
 
 // SetAnalytics enables runtime analytics aggregation for query-path events.
 func (n *Notary) SetAnalytics(a *Analytics) {
+	n.configMu.Lock()
+	defer n.configMu.Unlock()
 	n.analytics = a
 }
 
 // SetKeyBroadcastHook configures callback used to broadcast key updates to cluster peers.
 func (n *Notary) SetKeyBroadcastHook(fn func(serverName, keyID, keyData string, validUntilTS int64)) {
+	n.configMu.Lock()
+	defer n.configMu.Unlock()
 	n.keyBroadcastHook = fn
+}
+
+// getTrustPolicy returns the trust policy with read lock.
+func (n *Notary) getTrustPolicy() *TrustPolicy {
+	n.configMu.RLock()
+	defer n.configMu.RUnlock()
+	return n.trustPolicy
+}
+
+// getTransparency returns the transparency log with read lock.
+func (n *Notary) getTransparency() *TransparencyLog {
+	n.configMu.RLock()
+	defer n.configMu.RUnlock()
+	return n.transparency
+}
+
+// getAnalytics returns the analytics with read lock.
+func (n *Notary) getAnalytics() *Analytics {
+	n.configMu.RLock()
+	defer n.configMu.RUnlock()
+	return n.analytics
+}
+
+// getKeyBroadcastHook returns the broadcast hook with read lock.
+func (n *Notary) getKeyBroadcastHook() func(serverName, keyID, keyData string, validUntilTS int64) {
+	n.configMu.RLock()
+	defer n.configMu.RUnlock()
+	return n.keyBroadcastHook
 }
 
 // ApplyReplicatedServerResponse applies server response received from cluster replication.

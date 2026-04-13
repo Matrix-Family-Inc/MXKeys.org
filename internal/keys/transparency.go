@@ -19,6 +19,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"regexp"
 	"sync"
 	"time"
 
@@ -26,6 +27,8 @@ import (
 	"mxkeys/internal/zero/merkle"
 	"mxkeys/internal/zero/metrics"
 )
+
+var safeSQLIdentifier = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 // LogEventType describes the type of transparency log event
 type LogEventType string
@@ -123,6 +126,10 @@ func NewTransparencyLog(db *sql.DB, cfg TransparencyConfig) (*TransparencyLog, e
 
 	if cfg.TableName == "" {
 		tl.tableName = "key_transparency_log"
+	}
+
+	if !safeSQLIdentifier.MatchString(tl.tableName) {
+		return nil, fmt.Errorf("transparency table name %q is not a safe SQL identifier", tl.tableName)
 	}
 
 	if cfg.Enabled {

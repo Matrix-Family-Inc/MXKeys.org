@@ -82,7 +82,10 @@ func (c *Cluster) GetCachedKey(serverName, keyID string) *KeyEntry {
 	defer c.state.mu.RUnlock()
 
 	if keys, ok := c.state.keys[serverName]; ok {
-		return keys[keyID]
+		if entry := keys[keyID]; entry != nil {
+			copied := *entry
+			return &copied
+		}
 	}
 	return nil
 }
@@ -140,13 +143,13 @@ func (c *Cluster) Stats() map[string]interface{} {
 	c.state.mu.RUnlock()
 
 	return map[string]interface{}{
-		"enabled":        c.config.Enabled,
-		"node_id":        c.nodeID,
-		"consensus_mode": c.consensusMode(),
-		"total_nodes":    nodeCount,
-		"healthy_nodes":  healthyCount,
-		"cached_servers": serverCount,
-		"cached_keys":    keyCount,
+		"enabled":           c.config.Enabled,
+		"node_id":           c.nodeID,
+		"consensus_mode":    c.consensusMode(),
+		"total_nodes":       nodeCount,
+		"healthy_nodes":     healthyCount,
+		"cached_servers":    serverCount,
+		"cached_keys":       keyCount,
 		"advertise_address": c.advertiseAddress(),
 		"advertise_port":    c.advertisePort(),
 	}

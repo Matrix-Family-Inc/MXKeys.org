@@ -74,6 +74,7 @@ func (c *Cluster) stopCRDT() error {
 }
 
 func (c *Cluster) startRaft(ctx context.Context) error {
+	log.Warn("Raft consensus mode is experimental: no persistent log storage, no snapshots; use CRDT for production workloads")
 	node := raft.NewNode(raft.Config{
 		NodeID:            c.nodeID,
 		BindAddress:       c.config.BindAddress,

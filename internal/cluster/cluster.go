@@ -81,6 +81,8 @@ type Cluster struct {
 	wg       sync.WaitGroup
 	stopOnce sync.Once
 	raftNode *raft.Node
+	replayMu sync.Mutex
+	seenMACs map[string]time.Time
 
 	// Callbacks
 	onKeyReceived func(serverName string, data []byte)
@@ -95,12 +97,8 @@ type Cluster struct {
 type CRDTState struct {
 	mu sync.RWMutex
 
-	// LWW-Element-Set for key cache
-	// map[serverName]map[keyID]KeyEntry
+	// LWW key cache state: map[serverName]map[keyID]KeyEntry.
 	keys map[string]map[string]*KeyEntry
-
-	// Vector clock for causality
-	vectorClock map[string]int64
 }
 
 // KeyEntry represents a cached key in CRDT state
@@ -150,10 +148,10 @@ func NewCluster(cfg ClusterConfig) (*Cluster, error) {
 		nodeID: cfg.NodeID,
 		nodes:  make(map[string]*Node),
 		state: &CRDTState{
-			keys:        make(map[string]map[string]*KeyEntry),
-			vectorClock: make(map[string]int64),
+			keys: make(map[string]map[string]*KeyEntry),
 		},
-		stopCh: make(chan struct{}),
+		stopCh:   make(chan struct{}),
+		seenMACs: make(map[string]time.Time),
 		nodesTotal: metrics.NewGauge(metrics.GaugeOpts{
 			Namespace: "mxkeys",
 			Subsystem: "cluster",

@@ -19,35 +19,32 @@ import (
 	"time"
 )
 
+type appendEntriesSnapshot struct {
+	term         uint64
+	nextIdx      uint64
+	prevLogIndex uint64
+	prevLogTerm  uint64
+	leaderCommit uint64
+	entries      []LogEntry
+}
+
 // sendAppendEntries sends append entries to a peer.
 func (n *Node) sendAppendEntries(peer string) {
-	n.mu.RLock()
-	if n.state != Leader {
-		n.mu.RUnlock()
+	defer n.wg.Done()
+
+	snapshot, ok := n.appendEntriesSnapshot(peer)
+	if !ok {
 		return
 	}
 
-	nextIdx := n.nextIndex[peer]
-	prevLogIndex := nextIdx - 1
-	var prevLogTerm uint64
-	if prevLogIndex > 0 && prevLogIndex <= uint64(len(n.log)) {
-		prevLogTerm = n.log[prevLogIndex-1].Term
-	}
-
-	var entries []LogEntry
-	if nextIdx <= uint64(len(n.log)) {
-		entries = n.log[nextIdx-1:]
-	}
-
 	req := AppendEntriesRequest{
-		Term:         n.currentTerm,
+		Term:         snapshot.term,
 		LeaderId:     n.config.NodeID,
-		PrevLogIndex: prevLogIndex,
-		PrevLogTerm:  prevLogTerm,
-		Entries:      entries,
-		LeaderCommit: n.commitIndex,
+		PrevLogIndex: snapshot.prevLogIndex,
+		PrevLogTerm:  snapshot.prevLogTerm,
+		Entries:      snapshot.entries,
+		LeaderCommit: snapshot.leaderCommit,
 	}
-	n.mu.RUnlock()
 
 	resp, err := n.sendRPC(peer, MsgAppendEntries, req)
 	if err != nil {
@@ -68,9 +65,12 @@ func (n *Node) sendAppendEntries(peer string) {
 		n.votedFor = ""
 		return
 	}
+	if n.state != Leader || n.currentTerm != snapshot.term || n.nextIndex[peer] != snapshot.nextIdx {
+		return
+	}
 
 	if appendResp.Success {
-		n.nextIndex[peer] = nextIdx + uint64(len(entries))
+		n.nextIndex[peer] = snapshot.nextIdx + uint64(len(snapshot.entries))
 		n.matchIndex[peer] = n.nextIndex[peer] - 1
 		n.updateCommitIndex()
 	} else {
@@ -78,6 +78,48 @@ func (n *Node) sendAppendEntries(peer string) {
 			n.nextIndex[peer]--
 		}
 	}
+}
+
+func (n *Node) appendEntriesSnapshot(peer string) (appendEntriesSnapshot, bool) {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	if n.state != Leader {
+		return appendEntriesSnapshot{}, false
+	}
+
+	nextIdx := n.nextIndex[peer]
+	snapshot := appendEntriesSnapshot{
+		term:         n.currentTerm,
+		nextIdx:      nextIdx,
+		prevLogIndex: nextIdx - 1,
+		leaderCommit: n.commitIndex,
+	}
+	if snapshot.prevLogIndex > 0 && snapshot.prevLogIndex <= uint64(len(n.log)) {
+		snapshot.prevLogTerm = n.log[snapshot.prevLogIndex-1].Term
+	}
+	if nextIdx <= uint64(len(n.log)) {
+		snapshot.entries = cloneLogEntries(n.log[nextIdx-1:])
+	}
+	return snapshot, true
+}
+
+func cloneLogEntries(entries []LogEntry) []LogEntry {
+	if len(entries) == 0 {
+		return nil
+	}
+
+	cloned := make([]LogEntry, len(entries))
+	for i, entry := range entries {
+		cloned[i] = LogEntry{
+			Index: entry.Index,
+			Term:  entry.Term,
+		}
+		if len(entry.Command) > 0 {
+			cloned[i].Command = append(json.RawMessage(nil), entry.Command...)
+		}
+	}
+	return cloned
 }
 
 // updateCommitIndex updates commit index based on matchIndex.
@@ -138,6 +180,7 @@ func (n *Node) applyLoop() {
 func (n *Node) replicateEntry(ctx context.Context, entry LogEntry) error {
 	// Send to all peers.
 	for _, peer := range n.config.Peers {
+		n.wg.Add(1)
 		go n.sendAppendEntries(peer)
 	}
 

@@ -39,6 +39,17 @@ func (s *Server) handleTransparencyLog(w http.ResponseWriter, r *http.Request) {
 	sinceStr := r.URL.Query().Get("since")
 	limitStr := r.URL.Query().Get("limit")
 
+	if serverName != "" {
+		if err := ValidateServerName(serverName, s.serverNameValidationLimit()); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			writeJSON(w, map[string]string{
+				"errcode": "M_INVALID_PARAM",
+				"error":   "Invalid server parameter: " + err.Error(),
+			})
+			return
+		}
+	}
+
 	var since time.Time
 	if sinceStr != "" {
 		var err error
@@ -122,7 +133,7 @@ func (s *Server) handleTransparencyVerify(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	valid, err := s.transparency.VerifyChain(r.Context(), limit)
+	valid, checked, err := s.transparency.VerifyChain(r.Context(), limit)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		writeJSON(w, map[string]string{
@@ -134,7 +145,7 @@ func (s *Server) handleTransparencyVerify(w http.ResponseWriter, r *http.Request
 
 	writeJSON(w, map[string]interface{}{
 		"valid":           valid,
-		"entries_checked": limit,
+		"entries_checked": checked,
 		"verified_at":     time.Now().Format(time.RFC3339),
 	})
 }

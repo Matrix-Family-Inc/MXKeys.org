@@ -86,6 +86,14 @@ func (s *Server) handleTrustPolicyCheck(w http.ResponseWriter, r *http.Request) 
 		})
 		return
 	}
+	if err := ValidateServerName(serverName, s.serverNameValidationLimit()); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]string{
+			"errcode": "M_INVALID_PARAM",
+			"error":   "Invalid server parameter: " + err.Error(),
+		})
+		return
+	}
 
 	violation := s.trustPolicy.CheckServer(serverName)
 	if violation != nil {

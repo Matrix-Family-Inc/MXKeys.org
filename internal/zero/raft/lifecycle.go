@@ -35,10 +35,6 @@ func (n *Node) Start(ctx context.Context) error {
 	n.wg.Add(1)
 	go n.acceptLoop()
 
-	// Connect to peers.
-	n.wg.Add(1)
-	go n.connectPeers()
-
 	// Run election timer.
 	n.wg.Add(1)
 	go n.runElectionTimer()
@@ -63,12 +59,6 @@ func (n *Node) Stop() error {
 		if n.listener != nil {
 			_ = n.listener.Close()
 		}
-
-		n.mu.Lock()
-		for _, conn := range n.peers {
-			_ = conn.Close()
-		}
-		n.mu.Unlock()
 	})
 
 	n.wg.Wait()

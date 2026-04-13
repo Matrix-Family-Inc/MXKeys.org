@@ -16,6 +16,7 @@ package keys
 import (
 	"context"
 	"database/sql"
+	"sort"
 	"sync"
 	"time"
 
@@ -179,20 +180,18 @@ func (a *Analytics) GetTopRotators(limit int) []*ServerAnalytics {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	// Collect all servers
+	if limit <= 0 {
+		return nil
+	}
+
 	servers := make([]*ServerAnalytics, 0, len(a.stats.ServerStats))
 	for _, stats := range a.stats.ServerStats {
 		servers = append(servers, stats)
 	}
 
-	// Sort by rotation count (simple bubble sort for small lists)
-	for i := 0; i < len(servers)-1; i++ {
-		for j := 0; j < len(servers)-i-1; j++ {
-			if servers[j].RotationCount < servers[j+1].RotationCount {
-				servers[j], servers[j+1] = servers[j+1], servers[j]
-			}
-		}
-	}
+	sort.Slice(servers, func(i, j int) bool {
+		return servers[i].RotationCount > servers[j].RotationCount
+	})
 
 	if limit > len(servers) {
 		limit = len(servers)

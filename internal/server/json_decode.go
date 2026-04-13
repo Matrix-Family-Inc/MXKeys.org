@@ -41,9 +41,11 @@ func decodeStrictJSON(r io.Reader, dst interface{}, maxDepth int) error {
 	return nil
 }
 
+const defaultMaxJSONDepth = 64
+
 func validateJSONDepth(body []byte, maxDepth int) error {
 	if maxDepth <= 0 {
-		return nil
+		maxDepth = defaultMaxJSONDepth
 	}
 
 	dec := json.NewDecoder(bytes.NewReader(body))

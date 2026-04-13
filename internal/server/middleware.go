@@ -17,7 +17,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"mxkeys/internal/zero/log"
@@ -26,14 +28,17 @@ import (
 type contextKey string
 
 const (
-	requestIDKey contextKey = "request_id"
+	requestIDKey       contextKey = "request_id"
+	maxRequestIDLength            = 128
 )
+
+var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:/-]{1,128}$`)
 
 // RequestIDMiddleware adds X-Request-ID header and logging context
 func RequestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID := r.Header.Get("X-Request-ID")
-		if requestID == "" {
+		requestID, err := normalizeRequestID(r.Header.Get("X-Request-ID"))
+		if err != nil || requestID == "" {
 			requestID = generateRequestID()
 		}
 
@@ -59,10 +64,14 @@ func RequestIDRequirementMiddleware(required bool, next http.Handler) http.Handl
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.TrimSpace(r.Header.Get("X-Request-ID")) == "" {
-			RecordRequestRejection(RejectReasonMissingRequestID)
+		if _, err := normalizeRequestID(r.Header.Get("X-Request-ID")); err != nil {
+			reason := RejectReasonInvalidRequestID
+			if strings.TrimSpace(r.Header.Get("X-Request-ID")) == "" {
+				reason = RejectReasonMissingRequestID
+			}
+			RecordRequestRejection(reason)
 			w.Header().Set("Content-Type", "application/json")
-			writeMatrixError(w, http.StatusBadRequest, "M_INVALID_PARAM", "X-Request-ID header is required")
+			writeMatrixError(w, http.StatusBadRequest, "M_INVALID_PARAM", err.Error())
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -108,6 +117,20 @@ func generateRequestID() string {
 		return "unknown"
 	}
 	return hex.EncodeToString(b)
+}
+
+func normalizeRequestID(raw string) (string, error) {
+	requestID := strings.TrimSpace(raw)
+	if requestID == "" {
+		return "", fmt.Errorf("X-Request-ID header is required")
+	}
+	if len(requestID) > maxRequestIDLength {
+		return "", fmt.Errorf("X-Request-ID header is too long")
+	}
+	if !requestIDPattern.MatchString(requestID) {
+		return "", fmt.Errorf("X-Request-ID header contains invalid characters")
+	}
+	return requestID, nil
 }
 
 func isAPIPath(path string) bool {

@@ -85,3 +85,50 @@ func TestEnterpriseRoutesAcceptCaseInsensitiveBearerToken(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rr.Code)
 	}
 }
+
+func TestOperationalAccessMiddlewareRequiresToken(t *testing.T) {
+	s := newEnterpriseRouteTestServer("secret-token")
+	handler := s.withOperationalAccess(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/_mxkeys/status", nil)
+	rr := httptest.NewRecorder()
+	handler(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rr.Code)
+	}
+}
+
+func TestOperationalAccessMiddlewareAcceptsBearerToken(t *testing.T) {
+	s := newEnterpriseRouteTestServer("secret-token")
+	handler := s.withOperationalAccess(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/_mxkeys/status", nil)
+	req.Header.Set("Authorization", "Bearer secret-token")
+	rr := httptest.NewRecorder()
+	handler(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+}
+
+func TestOperationalAccessHandlerProtectsMetricsStyleHandlers(t *testing.T) {
+	s := newEnterpriseRouteTestServer("secret-token")
+	handler := s.withOperationalAccessHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/_mxkeys/metrics", nil)
+	req.Header.Set("X-MXKeys-Enterprise-Token", "secret-token")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+}

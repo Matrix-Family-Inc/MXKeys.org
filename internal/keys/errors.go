@@ -100,7 +100,8 @@ func IsPermanentError(err error) bool {
 	if errors.As(err, &keyErr) {
 		return errors.Is(keyErr.Err, ErrSignatureInvalid) ||
 			errors.Is(keyErr.Err, ErrServerNameMismatch) ||
-			errors.Is(keyErr.Err, ErrInvalidResponse)
+			errors.Is(keyErr.Err, ErrInvalidResponse) ||
+			errors.Is(keyErr.Err, ErrNotaryKeyMismatch)
 	}
 	return false
 }

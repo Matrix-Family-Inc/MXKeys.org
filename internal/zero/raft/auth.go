@@ -52,5 +52,27 @@ func (n *Node) verifyRPC(msg *RPCMessage) error {
 	if !hmac.Equal([]byte(expected.Signature), []byte(msg.Signature)) {
 		return fmt.Errorf("raft rpc signature mismatch")
 	}
+	if !n.trackRPCSignature(msg.Signature, msg.Timestamp) {
+		return fmt.Errorf("raft rpc replay detected")
+	}
 	return nil
+}
+
+func (n *Node) trackRPCSignature(signature string, timestamp time.Time) bool {
+	n.replayMu.Lock()
+	defer n.replayMu.Unlock()
+
+	cutoff := time.Now().Add(-maxRPCSkew)
+	for seenSignature, seenAt := range n.seenRPCs {
+		if seenAt.Before(cutoff) {
+			delete(n.seenRPCs, seenSignature)
+		}
+	}
+
+	if seenAt, exists := n.seenRPCs[signature]; exists && !seenAt.Before(cutoff) {
+		return false
+	}
+
+	n.seenRPCs[signature] = timestamp
+	return true
 }

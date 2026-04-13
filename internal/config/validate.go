@@ -36,6 +36,16 @@ func (c *Config) Validate() error {
 	if c.Database.URL == "" {
 		return fmt.Errorf("database.url is required")
 	}
+	switch c.Logging.Level {
+	case "debug", "info", "warn", "error":
+	default:
+		return fmt.Errorf("logging.level must be one of: debug, info, warn, error")
+	}
+	switch c.Logging.Format {
+	case "text", "json":
+	default:
+		return fmt.Errorf("logging.format must be one of: text, json")
+	}
 	if c.Keys.StoragePath == "" {
 		return fmt.Errorf("keys.storage_path is required")
 	}

@@ -17,6 +17,8 @@ import (
 	"encoding/json"
 	"net"
 	"time"
+
+	"mxkeys/internal/zero/log"
 )
 
 // acceptLoop accepts incoming connections.
@@ -40,19 +42,23 @@ func (n *Node) acceptLoop() {
 			}
 		}
 
+		n.wg.Add(1)
 		go n.handleConnection(conn)
 	}
 }
 
 // handleConnection handles an incoming connection.
 func (n *Node) handleConnection(conn net.Conn) {
+	defer n.wg.Done()
 	defer conn.Close()
 
 	msg, err := n.readRPC(conn)
 	if err != nil {
+		log.Debug("Failed to read RPC", "remote", conn.RemoteAddr(), "error", err)
 		return
 	}
 	if err := n.verifyRPC(msg); err != nil {
+		log.Debug("RPC verification failed", "remote", conn.RemoteAddr(), "error", err)
 		return
 	}
 
@@ -64,22 +70,6 @@ func (n *Node) handleConnection(conn net.Conn) {
 		return
 	}
 	_ = n.writeRPC(conn, response)
-}
-
-// connectPeers connects to peer nodes.
-func (n *Node) connectPeers() {
-	defer n.wg.Done()
-
-	for _, peer := range n.config.Peers {
-		conn, err := net.DialTimeout("tcp", peer, 5*time.Second)
-		if err != nil {
-			continue
-		}
-
-		n.mu.Lock()
-		n.peers[peer] = conn
-		n.mu.Unlock()
-	}
 }
 
 // sendRPC sends an RPC message to a peer.

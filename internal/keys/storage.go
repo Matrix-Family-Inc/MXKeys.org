@@ -263,12 +263,15 @@ func (s *Storage) DeleteExpiredKeys() (int64, error) {
 		return 0, err
 	}
 
-	// Also clean up expired responses
-	if _, err := s.db.Exec(`DELETE FROM server_key_responses WHERE valid_until < NOW()`); err != nil {
-		return 0, fmt.Errorf("failed to delete expired responses: %w", err)
+	keysDeleted, _ := result.RowsAffected()
+
+	result2, err := s.db.Exec(`DELETE FROM server_key_responses WHERE valid_until < NOW()`)
+	if err != nil {
+		return keysDeleted, fmt.Errorf("failed to delete expired responses: %w", err)
 	}
 
-	return result.RowsAffected()
+	responsesDeleted, _ := result2.RowsAffected()
+	return keysDeleted + responsesDeleted, nil
 }
 
 // GetKnownServers returns list of all known servers

@@ -159,7 +159,9 @@ func Load() (*Config, error) {
 	}
 
 	// Apply environment variable overrides
-	applyEnvOverrides(config)
+	if err := applyEnvOverrides(config); err != nil {
+		return nil, fmt.Errorf("environment overrides: %w", err)
+	}
 
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("configuration validation failed: %w", err)
@@ -170,7 +172,7 @@ func Load() (*Config, error) {
 
 func setDefaults(c *Config) {
 	c.Server.Port = 8448
-	c.Server.Name = "mxkeys.org"
+	c.Server.Name = ""
 	c.Server.BindAddress = "0.0.0.0"
 
 	c.Database.URL = ""

@@ -18,10 +18,7 @@ func TestWriteJSON(t *testing.T) {
 	rr := httptest.NewRecorder()
 	data := map[string]string{"key": "<value>&ok"}
 
-	err := writeJSON(rr, data)
-	if err != nil {
-		t.Fatalf("writeJSON failed: %v", err)
-	}
+	writeJSON(rr, data)
 
 	var result map[string]string
 	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {

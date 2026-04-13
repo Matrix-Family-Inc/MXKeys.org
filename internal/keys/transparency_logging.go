@@ -18,6 +18,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"sort"
 	"time"
 
 	"mxkeys/internal/zero/log"
@@ -32,7 +33,14 @@ func (tl *TransparencyLog) LogKey(ctx context.Context, serverName string, resp *
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
 
-	for keyID, verifyKey := range resp.VerifyKeys {
+	sortedKeys := make([]string, 0, len(resp.VerifyKeys))
+	for keyID := range resp.VerifyKeys {
+		sortedKeys = append(sortedKeys, keyID)
+	}
+	sort.Strings(sortedKeys)
+
+	for _, keyID := range sortedKeys {
+		verifyKey := resp.VerifyKeys[keyID]
 		keyHash := hashKey(verifyKey.Key)
 
 		history, exists := tl.keyHistory[serverName]
@@ -144,13 +152,15 @@ func (tl *TransparencyLog) checkAnomalies(ctx context.Context, serverName, keyID
 	// Rapid rotation: more than 3 rotations in 24 hours
 	if history.rotationCount > 3 && now.Sub(history.firstSeen) < 24*time.Hour {
 		tl.anomaliesTotal.Inc()
-		tl.appendEntry(ctx, &TransparencyLogEntry{
+		if err := tl.appendEntry(ctx, &TransparencyLogEntry{
 			Timestamp:  now,
 			ServerName: serverName,
 			KeyID:      keyID,
 			EventType:  EventAnomalyRapid,
 			Details:    fmt.Sprintf("rotations=%d in %v", history.rotationCount, now.Sub(history.firstSeen)),
-		})
+		}); err != nil {
+			log.Warn("Failed to append anomaly entry", "server", serverName, "error", err)
+		}
 	}
 }
 

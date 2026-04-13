@@ -175,14 +175,38 @@ func VerifyProof(proof *Proof) (bool, error) {
 		return false, ErrInvalidProof
 	}
 
+	// Validate proof structure
+	if len(proof.AuditPath) != len(proof.Directions) {
+		return false, ErrInvalidProof
+	}
+
+	if proof.LeafIndex < 0 || proof.TreeSize <= 0 || proof.LeafIndex >= proof.TreeSize {
+		return false, ErrInvalidProof
+	}
+
 	leafHash, err := hex.DecodeString(proof.LeafHash)
 	if err != nil {
-		return false, err
+		return false, ErrInvalidProof
+	}
+
+	if len(leafHash) != sha256.Size {
+		return false, ErrInvalidProof
 	}
 
 	expectedRoot, err := hex.DecodeString(proof.RootHash)
 	if err != nil {
-		return false, err
+		return false, ErrInvalidProof
+	}
+
+	if len(expectedRoot) != sha256.Size {
+		return false, ErrInvalidProof
+	}
+
+	// Validate directions values (must be 0 or 1)
+	for _, dir := range proof.Directions {
+		if dir != 0 && dir != 1 {
+			return false, ErrInvalidProof
+		}
 	}
 
 	// Compute root from leaf and audit path
@@ -190,30 +214,31 @@ func VerifyProof(proof *Proof) (bool, error) {
 	for i, siblingHex := range proof.AuditPath {
 		sibling, err := hex.DecodeString(siblingHex)
 		if err != nil {
-			return false, err
+			return false, ErrInvalidProof
+		}
+
+		if len(sibling) != sha256.Size {
+			return false, ErrInvalidProof
 		}
 
 		if proof.Directions[i] == 0 {
-			// Sibling is on the left
 			currentHash = hashNode(sibling, currentHash)
 		} else {
-			// Sibling is on the right
 			currentHash = hashNode(currentHash, sibling)
 		}
 	}
 
-	// Compare computed root with expected root
+	// Constant-time comparison
 	if len(currentHash) != len(expectedRoot) {
 		return false, nil
 	}
 
+	var diff byte
 	for i := range currentHash {
-		if currentHash[i] != expectedRoot[i] {
-			return false, nil
-		}
+		diff |= currentHash[i] ^ expectedRoot[i]
 	}
 
-	return true, nil
+	return diff == 0, nil
 }
 
 // rebuild reconstructs the tree from leaves
