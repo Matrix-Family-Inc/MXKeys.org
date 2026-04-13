@@ -45,6 +45,9 @@ func (s *Server) setupRoutes() {
 	// Signed tree head (public, verifiable)
 	s.mux.HandleFunc("GET /_mxkeys/transparency/signed-head", s.handleSignedTreeHead)
 
+	// Public key discovery (required for external STH verification)
+	s.mux.HandleFunc("GET /_mxkeys/notary/key", s.handleNotaryPublicKey)
+
 	// Protected operational API endpoints
 	s.registerEnterpriseRoutes()
 }

@@ -16,7 +16,9 @@ package keys
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -155,6 +157,22 @@ func (n *Notary) GetCacheSize() int {
 // GetCircuitBreakerStats returns per-destination circuit breaker statistics.
 func (n *Notary) GetCircuitBreakerStats() map[string]interface{} {
 	return n.fetcher.circuitBreaker.Stats()
+}
+
+// GetPublicKeyInfo returns notary public key information for external verification.
+func (n *Notary) GetPublicKeyInfo() map[string]interface{} {
+	publicKey := n.serverKeyPair.Public().(ed25519.PublicKey)
+	pubB64 := base64.RawStdEncoding.EncodeToString(publicKey)
+	fingerprint := sha256.Sum256(publicKey)
+	fpHex := hex.EncodeToString(fingerprint[:])
+
+	return map[string]interface{}{
+		"server_name": n.serverName,
+		"key_id":      n.serverKeyID,
+		"algorithm":   "ed25519",
+		"public_key":  pubB64,
+		"fingerprint": fpHex,
+	}
 }
 
 // SetTrustPolicy sets runtime trust policy checks for query flow.
