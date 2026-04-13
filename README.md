@@ -127,6 +127,16 @@ Apache License 2.0. See `LICENSE` and `SECURITY.md`.
 
 ---
 
+## Landing Page
+
+The landing page at [mxkeys.org](https://mxkeys.org) supports automatic language detection based on browser preferences.
+
+Supported languages: English, Russian, German, French, Spanish, Chinese (Simplified), Japanese, Portuguese, Korean, Ukrainian, Hindi, Arabic, Hebrew, Urdu, Bengali, Turkish, Indonesian, Vietnamese, Thai, Polish, Italian, Dutch.
+
+RTL languages (Arabic, Hebrew, Urdu) are fully supported with automatic layout direction.
+
+---
+
 ## Project
 
 MXKeys is part of Matrix Family Inc. infrastructure.
