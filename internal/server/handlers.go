@@ -14,6 +14,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,18 +27,28 @@ import (
 	"mxkeys/internal/zero/log"
 )
 
-func writeJSON(w io.Writer, v interface{}) error {
+func writeJSON(w io.Writer, v interface{}) {
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
-	return enc.Encode(v)
+	if err := enc.Encode(v); err != nil {
+		log.Debug("Failed to write JSON response", "error", err)
+	}
 }
 
 func writeMatrixError(w http.ResponseWriter, status int, errCode, message string) {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = writeJSON(w, map[string]string{
+	writeJSON(w, map[string]string{
 		"errcode": errCode,
 		"error":   message,
 	})
+}
+
+func (s *Server) serverNameValidationLimit() int {
+	if s == nil || s.config == nil || s.config.Security.MaxServerNameLength <= 0 {
+		return maxServerNameLength
+	}
+	return s.config.Security.MaxServerNameLength
 }
 
 func validateKeyQueryServerKeys(serverKeys map[string]map[string]keys.KeyCriteria, maxNameLen int) error {
@@ -81,8 +92,10 @@ func (s *Server) handleLiveness(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// Check database connectivity
-	if err := s.db.Ping(); err != nil {
+	pingCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+
+	if err := s.db.PingContext(pingCtx); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		writeJSON(w, map[string]interface{}{
 			"status": "not_ready",
@@ -121,7 +134,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Get DB cache count
 	var dbCacheCount int
-	row := s.db.QueryRow("SELECT COUNT(*) FROM server_keys")
+	row := s.db.QueryRowContext(r.Context(), "SELECT COUNT(*) FROM server_keys")
 	dbCacheErr := row.Scan(&dbCacheCount)
 
 	status := map[string]interface{}{
@@ -141,7 +154,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	if dbCacheErr != nil {
-		status["database_entries_error"] = dbCacheErr.Error()
+		status["database_entries_error"] = "query failed"
 	}
 	if s.cluster != nil {
 		status["cluster"] = s.cluster.Stats()
@@ -193,7 +206,12 @@ func (s *Server) handleServerKeys(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	response := s.notary.GetOwnKeys()
+	response, err := s.notary.GetOwnKeys()
+	if err != nil {
+		log.Error("Failed to get own keys", "error", err)
+		writeMatrixError(w, http.StatusInternalServerError, "M_UNKNOWN", "Internal server error")
+		return
+	}
 
 	log.Debug("Serving own server keys",
 		"key_id", s.notary.GetServerKeyID(),
@@ -230,7 +248,7 @@ func (s *Server) handleKeyQuery(w http.ResponseWriter, r *http.Request) {
 		}
 		RecordRequestRejection(RejectReasonInvalidJSON)
 		RecordKeyQuery(QueryStatusFailure, 0)
-		writeMatrixError(w, http.StatusBadRequest, "M_BAD_JSON", "Invalid JSON: "+err.Error())
+		writeMatrixError(w, http.StatusBadRequest, "M_BAD_JSON", "Invalid or malformed JSON in request body")
 		return
 	}
 

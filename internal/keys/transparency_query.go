@@ -76,13 +76,17 @@ func (tl *TransparencyLog) GetProof(index int) (*merkle.Proof, error) {
 	if !tl.enabled {
 		return nil, fmt.Errorf("transparency log is disabled")
 	}
+
+	tl.mu.RLock()
+	defer tl.mu.RUnlock()
+
 	return tl.merkleTree.GetProof(index)
 }
 
-// VerifyChain verifies the hash chain integrity
-func (tl *TransparencyLog) VerifyChain(ctx context.Context, limit int) (bool, error) {
+// VerifyChain verifies the hash chain integrity and returns (valid, checked_count, error)
+func (tl *TransparencyLog) VerifyChain(ctx context.Context, limit int) (bool, int, error) {
 	if !tl.enabled {
-		return true, nil
+		return true, 0, nil
 	}
 
 	query := fmt.Sprintf(`
@@ -94,10 +98,11 @@ func (tl *TransparencyLog) VerifyChain(ctx context.Context, limit int) (bool, er
 
 	rows, err := tl.db.QueryContext(ctx, query, limit)
 	if err != nil {
-		return false, err
+		return false, 0, err
 	}
 	defer rows.Close()
 
+	checked := 0
 	expectedPrevHash := "genesis"
 	for rows.Next() {
 		var e TransparencyLogEntry
@@ -109,7 +114,7 @@ func (tl *TransparencyLog) VerifyChain(ctx context.Context, limit int) (bool, er
 			&details, &keyHash, &validUntil, &prevHash, &e.EntryHash,
 		)
 		if err != nil {
-			return false, err
+			return false, checked, err
 		}
 
 		e.KeyID = keyID.String
@@ -117,31 +122,30 @@ func (tl *TransparencyLog) VerifyChain(ctx context.Context, limit int) (bool, er
 		e.KeyHash = keyHash.String
 		e.ValidUntilTS = validUntil.Int64
 		e.PreviousHash = prevHash.String
+		checked++
 
-		// Verify previous hash
 		if e.PreviousHash != expectedPrevHash {
 			log.Error("Chain verification failed",
 				"expected_prev", expectedPrevHash,
 				"got_prev", e.PreviousHash,
 				"entry_hash", e.EntryHash,
 			)
-			return false, nil
+			return false, checked, nil
 		}
 
-		// Verify entry hash
 		computedHash := tl.computeEntryHash(&e)
 		if computedHash != e.EntryHash {
 			log.Error("Entry hash verification failed",
 				"expected", computedHash,
 				"got", e.EntryHash,
 			)
-			return false, nil
+			return false, checked, nil
 		}
 
 		expectedPrevHash = e.EntryHash
 	}
 
-	return true, nil
+	return true, checked, nil
 }
 
 // Cleanup removes entries older than retention period
@@ -164,6 +168,20 @@ func (tl *TransparencyLog) Cleanup(ctx context.Context) (int64, error) {
 			"deleted", deleted,
 			"cutoff", cutoff,
 		)
+		tl.mu.Lock()
+		tl.merkleTree = merkle.New()
+		if err := tl.rebuildMerkleTree(ctx); err != nil {
+			log.Warn("Failed to rebuild merkle tree after cleanup", "error", err)
+		}
+		if err := tl.loadLastHash(); err != nil {
+			log.Warn("Failed to reload last hash after cleanup", "error", err)
+		}
+		for server, history := range tl.keyHistory {
+			if history.lastSeen.Before(cutoff) {
+				delete(tl.keyHistory, server)
+			}
+		}
+		tl.mu.Unlock()
 	}
 
 	return deleted, nil
@@ -204,6 +222,8 @@ func (tl *TransparencyLog) Stats(ctx context.Context) (map[string]interface{}, e
 	tl.mu.RLock()
 	lastHash := tl.lastHash
 	historySize := len(tl.keyHistory)
+	merkleRoot := tl.merkleTree.RootHex()
+	merkleSize := tl.merkleTree.Size()
 	tl.mu.RUnlock()
 
 	return map[string]interface{}{
@@ -214,8 +234,8 @@ func (tl *TransparencyLog) Stats(ctx context.Context) (map[string]interface{}, e
 		"newest_entry":    newestEntry,
 		"last_hash":       hashPreview(lastHash),
 		"tracked_servers": historySize,
-		"merkle_root":     tl.merkleTree.RootHex(),
-		"merkle_size":     tl.merkleTree.Size(),
+		"merkle_root":     merkleRoot,
+		"merkle_size":     merkleSize,
 	}, nil
 }
 

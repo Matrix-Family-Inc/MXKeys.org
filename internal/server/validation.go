@@ -16,7 +16,6 @@ package server
 import (
 	"fmt"
 	"net"
-	"regexp"
 	"strings"
 	"unicode/utf8"
 )
@@ -24,11 +23,6 @@ import (
 const (
 	maxServerNameLength = 255
 	maxKeyIDLength      = 128
-)
-
-var (
-	serverNameRegex = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?(\:[0-9]{1,5})?$`)
-	keyIDRegex      = regexp.MustCompile(`^ed25519:[a-zA-Z0-9_]+$`)
 )
 
 // ValidationConfig holds validation settings

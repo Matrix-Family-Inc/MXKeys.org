@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"mxkeys/internal/config"
 )
 
 func TestRequestIDMiddlewareGeneratesAndPropagatesID(t *testing.T) {
@@ -44,6 +46,25 @@ func TestRequestIDMiddlewarePreservesIncomingID(t *testing.T) {
 
 	if got := rr.Header().Get("X-Request-ID"); got != expected {
 		t.Fatalf("X-Request-ID should be passed through, got %q", got)
+	}
+}
+
+func TestRequestIDMiddlewareReplacesInvalidIncomingID(t *testing.T) {
+	handler := RequestIDMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("X-Request-ID", strings.Repeat("a", maxRequestIDLength+1))
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	got := rr.Header().Get("X-Request-ID")
+	if got == "" || got == req.Header.Get("X-Request-ID") {
+		t.Fatalf("expected invalid incoming request ID to be replaced, got %q", got)
+	}
+	if len(got) != 32 {
+		t.Fatalf("generated replacement request ID should be 32 hex chars, got %d", len(got))
 	}
 }
 
@@ -157,6 +178,7 @@ func TestRequestIDRequirementMiddleware(t *testing.T) {
 	}{
 		{name: "required and missing", required: true, headerValue: "", wantCode: http.StatusBadRequest},
 		{name: "required and whitespace", required: true, headerValue: "   ", wantCode: http.StatusBadRequest},
+		{name: "required and invalid", required: true, headerValue: strings.Repeat("a", maxRequestIDLength+1), wantCode: http.StatusBadRequest},
 		{name: "required and present", required: true, headerValue: "req-123", wantCode: http.StatusOK},
 		{name: "optional and missing", required: false, headerValue: "", wantCode: http.StatusOK},
 	}
@@ -194,5 +216,33 @@ func TestRequestIDRequirementMiddleware(t *testing.T) {
 				t.Fatalf("next handler should be called")
 			}
 		})
+	}
+}
+
+func TestHandlerAppliesSecurityHeadersBeforeRequestIDRejection(t *testing.T) {
+	s := &Server{
+		config: &config.Config{
+			Security: config.SecurityConfig{
+				RequireRequestID: true,
+			},
+		},
+		mux:         http.NewServeMux(),
+		rateLimiter: NewRateLimiter(DefaultRateLimitConfig()),
+	}
+	defer s.rateLimiter.Stop()
+
+	handler := s.Handler()
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rr.Code)
+	}
+	if got := rr.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("security headers should be present on full handler rejection path, got X-Content-Type-Options=%q", got)
+	}
+	if rr.Header().Get("X-Request-ID") == "" {
+		t.Fatal("request rejection should still include generated X-Request-ID")
 	}
 }

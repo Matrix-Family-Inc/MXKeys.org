@@ -156,6 +156,9 @@ func (c *Cluster) mergeState(remote map[string]map[string]*KeyEntry) {
 		}
 
 		for keyID, entry := range keys {
+			if entry == nil {
+				continue
+			}
 			existing := c.state.keys[serverName][keyID]
 			if existing == nil || entry.Timestamp.After(existing.Timestamp) {
 				c.state.keys[serverName][keyID] = entry

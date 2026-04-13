@@ -34,7 +34,7 @@ func (s *Server) Run(ctx context.Context) error {
 	// Start cluster if enabled
 	if s.cluster != nil {
 		if err := s.cluster.Start(ctx); err != nil {
-			log.Error("Failed to start cluster", "error", err)
+			return fmt.Errorf("failed to start cluster: %w", err)
 		}
 	}
 

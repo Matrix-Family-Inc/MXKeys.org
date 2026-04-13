@@ -14,7 +14,6 @@
 package server
 
 import (
-	"crypto/subtle"
 	"net/http"
 	"strings"
 )
@@ -26,7 +25,7 @@ func (s *Server) withEnterpriseAccess(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		token := enterpriseTokenFromRequest(r)
-		if subtle.ConstantTimeCompare([]byte(token), []byte(s.enterpriseAccessToken)) != 1 {
+		if !secureTokenCompare(token, s.enterpriseAccessToken) {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("WWW-Authenticate", `Bearer realm="mxkeys-enterprise"`)
 			writeMatrixError(w, http.StatusUnauthorized, "M_UNAUTHORIZED", "Enterprise access token required")

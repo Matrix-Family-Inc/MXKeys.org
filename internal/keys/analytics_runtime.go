@@ -15,6 +15,7 @@ package keys
 
 import (
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -50,9 +51,14 @@ func (a *Analytics) RecordKeyObservation(serverName string, resp *ServerKeysResp
 		elapsedSinceLastSeen = now.Sub(previousSeen)
 	}
 
-	// Analyze each key
-	for keyID, verifyKey := range resp.VerifyKeys {
-		_ = verifyKey // Used for key analysis
+	// Analyze each key (deterministic order)
+	keyIDs := make([]string, 0, len(resp.VerifyKeys))
+	for keyID := range resp.VerifyKeys {
+		keyIDs = append(keyIDs, keyID)
+	}
+	sort.Strings(keyIDs)
+
+	for _, keyID := range keyIDs {
 
 		// Check for key rotation
 		if serverStats.CurrentKeyID != "" && serverStats.CurrentKeyID != keyID {
@@ -140,7 +146,7 @@ func (a *Analytics) RecordKeyObservation(serverName string, resp *ServerKeysResp
 	}
 
 	// Check for self-signature
-	if _, hasSelfSig := resp.Signatures[serverName]; !hasSelfSig {
+	if resp.Signatures == nil || len(resp.Signatures[serverName]) == 0 {
 		anomaly := Anomaly{
 			Type:       AnomalySignatureMissing,
 			ServerName: serverName,
@@ -166,7 +172,7 @@ func (a *Analytics) RecordKeyObservation(serverName string, resp *ServerKeysResp
 }
 
 // RecordFetchFailure records a fetch failure
-func (a *Analytics) RecordFetchFailure(serverName string, reason string) {
+func (a *Analytics) RecordFetchFailure(serverName string) {
 	if !a.enabled {
 		return
 	}
@@ -184,5 +190,5 @@ func (a *Analytics) RecordFetchFailure(serverName string, reason string) {
 	}
 
 	serverStats.LastSeen = time.Now()
-	serverStats.LastFetchStatus = "failed: " + reason
+	serverStats.LastFetchStatus = "failed"
 }

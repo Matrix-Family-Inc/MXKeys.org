@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"mxkeys/internal/config"
 	"mxkeys/internal/zero/metrics"
@@ -61,7 +62,7 @@ func TestRateLimiterMiddlewareReturns429AndIncrementsCounter(t *testing.T) {
 	})
 
 	beforeBody := scrapeMetrics(t)
-	beforeRateLimited := metricValueOrZero(t, beforeBody, `(?m)^mxkeys_rate_limited_requests_total ([0-9]+(?:\.[0-9]+)?)$`)
+	beforeRateLimited := metricValueOrZero(t, beforeBody, `(?m)^mxkeys_rate_limited_requests_total\{limiter="global"\} ([0-9]+(?:\.[0-9]+)?)$`)
 
 	okHandler := rl.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -96,7 +97,7 @@ func TestRateLimiterMiddlewareReturns429AndIncrementsCounter(t *testing.T) {
 	}
 
 	afterBody := scrapeMetrics(t)
-	afterRateLimited := metricValueOrZero(t, afterBody, `(?m)^mxkeys_rate_limited_requests_total ([0-9]+(?:\.[0-9]+)?)$`)
+	afterRateLimited := metricValueOrZero(t, afterBody, `(?m)^mxkeys_rate_limited_requests_total\{limiter="global"\} ([0-9]+(?:\.[0-9]+)?)$`)
 	if afterRateLimited < beforeRateLimited+1 {
 		t.Fatalf("expected rate limited counter to increase by >=1, before=%v after=%v", beforeRateLimited, afterRateLimited)
 	}
@@ -154,5 +155,50 @@ func TestHandleKeyQueryRejectionReasonMetrics(t *testing.T) {
 	}
 	if afterInvalidName < beforeInvalidName+1 {
 		t.Fatalf("expected invalid_server_name rejection metric to increase, before=%v after=%v", beforeInvalidName, afterInvalidName)
+	}
+}
+
+func TestOldestVisitorIPsReturnsOldestEntriesFirst(t *testing.T) {
+	now := time.Now()
+	visitors := map[string]*visitor{
+		"newest": {lastSeen: now},
+		"middle": {lastSeen: now.Add(-time.Minute)},
+		"oldest": {lastSeen: now.Add(-2 * time.Minute)},
+	}
+
+	got := oldestVisitorIPs(visitors, 2)
+	if len(got) != 2 {
+		t.Fatalf("len(got) = %d, want 2", len(got))
+	}
+	if got[0] != "oldest" || got[1] != "middle" {
+		t.Fatalf("oldestVisitorIPs() = %v, want [oldest middle]", got)
+	}
+}
+
+func TestRateLimiterEvictsOldestVisitorsWhenForced(t *testing.T) {
+	rl := NewRateLimiter(DefaultRateLimitConfig())
+	defer rl.Stop()
+
+	base := time.Now().Add(-30 * time.Second)
+	for i := 0; i < maxVisitors; i++ {
+		ip := fmt.Sprintf("198.51.100.%d", i)
+		rl.visitors[ip] = &visitor{
+			limiter:      nil,
+			queryLimiter: nil,
+			lastSeen:     base.Add(time.Duration(i) * time.Microsecond),
+		}
+	}
+
+	rl.evictOldestLocked()
+
+	expectedRemaining := maxVisitors - maxVisitors/10
+	if len(rl.visitors) != expectedRemaining {
+		t.Fatalf("len(visitors) = %d, want %d after forced eviction", len(rl.visitors), expectedRemaining)
+	}
+	if _, exists := rl.visitors["198.51.100.0"]; exists {
+		t.Fatal("oldest visitor should have been evicted")
+	}
+	if _, exists := rl.visitors[fmt.Sprintf("198.51.100.%d", maxVisitors-1)]; !exists {
+		t.Fatal("newest visitor should remain after forced eviction")
 	}
 }

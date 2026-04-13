@@ -29,6 +29,7 @@ const (
 	RejectReasonInvalidServerName = "invalid_server_name"
 	RejectReasonInvalidKeyID      = "invalid_key_id"
 	RejectReasonMissingRequestID  = "missing_request_id"
+	RejectReasonInvalidRequestID  = "invalid_request_id"
 )
 
 // Query status
@@ -120,12 +121,13 @@ var (
 		[]string{"status", "source"},
 	)
 
-	rateLimitedRequestsTotal = metrics.NewCounter(
+	rateLimitedRequestsTotal = metrics.NewCounterVec(
 		metrics.CounterOpts{
 			Namespace: "mxkeys",
 			Name:      "rate_limited_requests_total",
 			Help:      "Total number of rate limited requests",
 		},
+		[]string{"limiter"},
 	)
 
 	cachedKeys = metrics.NewGaugeVec(
@@ -212,8 +214,8 @@ func RecordKeyFetch(status, source string, durationSeconds float64) {
 	keyFetchDurationSeconds.WithLabelValues(status, source).Observe(durationSeconds)
 }
 
-func RecordRateLimited() {
-	rateLimitedRequestsTotal.Inc()
+func RecordRateLimited(limiter string) {
+	rateLimitedRequestsTotal.WithLabelValues(limiter).Inc()
 }
 
 func SetCachedKeys(cacheType string, count int) {

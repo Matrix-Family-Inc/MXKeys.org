@@ -81,3 +81,35 @@ func TestTransparencyVerifyRejectsOversizedLimit(t *testing.T) {
 		t.Fatalf("expected M_INVALID_PARAM body, got %s", rr.Body.String())
 	}
 }
+
+func TestTransparencyLogRejectsInvalidServerParameter(t *testing.T) {
+	s := &Server{transparency: &keys.TransparencyLog{}}
+	req := httptest.NewRequest(http.MethodGet, "/_mxkeys/transparency/log?server=../etc/passwd", nil)
+	rr := httptest.NewRecorder()
+
+	s.handleTransparencyLog(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "M_INVALID_PARAM") {
+		t.Fatalf("expected M_INVALID_PARAM body, got %s", rr.Body.String())
+	}
+}
+
+func TestTrustPolicyCheckRejectsInvalidServerParameter(t *testing.T) {
+	s := &Server{
+		trustPolicy: keys.NewTrustPolicy(keys.TrustPolicyConfig{Enabled: true}),
+	}
+	req := httptest.NewRequest(http.MethodGet, "/_mxkeys/policy/check?server=../etc/passwd", nil)
+	rr := httptest.NewRecorder()
+
+	s.handleTrustPolicyCheck(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "M_INVALID_PARAM") {
+		t.Fatalf("expected M_INVALID_PARAM body, got %s", rr.Body.String())
+	}
+}

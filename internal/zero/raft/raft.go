@@ -93,10 +93,11 @@ type Node struct {
 	applyCh  chan LogEntry
 	stopCh   chan struct{}
 	stopOnce sync.Once
+	replayMu sync.Mutex
+	seenRPCs map[string]time.Time
 
 	// Network
 	listener net.Listener
-	peers    map[string]net.Conn
 
 	// Callbacks
 	onStateChange func(State)
@@ -178,7 +179,7 @@ func NewNode(cfg Config) *Node {
 		log:         make([]LogEntry, 0),
 		nextIndex:   make(map[string]uint64),
 		matchIndex:  make(map[string]uint64),
-		peers:       make(map[string]net.Conn),
+		seenRPCs:    make(map[string]time.Time),
 		applyCh:     make(chan LogEntry, 100),
 		stopCh:      make(chan struct{}),
 		lastContact: time.Now(),

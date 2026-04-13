@@ -14,6 +14,8 @@
 package server
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"net/http"
 
 	"mxkeys/internal/zero/metrics"
@@ -21,17 +23,17 @@ import (
 
 // setupRoutes sets up the HTTP routes
 func (s *Server) setupRoutes() {
-	// Health checks, status and metrics
+	// Public health probes (required for k8s/orchestration)
 	s.mux.HandleFunc("GET /_mxkeys/health", s.handleHealth)
 	s.mux.HandleFunc("GET /_mxkeys/live", s.handleLiveness)
 	s.mux.HandleFunc("GET /_mxkeys/ready", s.handleReadiness)
-	s.mux.HandleFunc("GET /_mxkeys/status", s.handleStatus)
-	s.mux.Handle("GET /_mxkeys/metrics", metrics.Handler())
+
+	// Protected operational endpoints (status and metrics expose internal details)
+	s.mux.HandleFunc("GET /_mxkeys/status", s.withOperationalAccess(s.handleStatus))
+	s.mux.Handle("GET /_mxkeys/metrics", s.withOperationalAccessHandler(metrics.Handler()))
 
 	// Matrix Key Server API v2
-	// GET /_matrix/key/v2/server - own keys (no keyID)
 	s.mux.HandleFunc("GET /_matrix/key/v2/server", s.handleServerKeys)
-	// GET /_matrix/key/v2/server/{keyID} - own keys with keyID (Go 1.22+ path params)
 	s.mux.HandleFunc("GET /_matrix/key/v2/server/{keyID}", s.handleServerKeys)
 
 	// POST /_matrix/key/v2/query - notary query (stricter rate limit)
@@ -51,7 +53,7 @@ func (s *Server) withQueryRateLimit(h http.HandlerFunc) http.HandlerFunc {
 		v := s.rateLimiter.getVisitor(ip)
 
 		if !v.queryLimiter.Allow() {
-			RecordRateLimited()
+			RecordRateLimited("query")
 			writeRateLimitError(w)
 			return
 		}
@@ -60,14 +62,51 @@ func (s *Server) withQueryRateLimit(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// withOperationalAccess protects operational endpoints with enterprise token when configured
+func (s *Server) withOperationalAccess(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.enterpriseAccessToken != "" {
+			token := enterpriseTokenFromRequest(r)
+			if !secureTokenCompare(token, s.enterpriseAccessToken) {
+				w.Header().Set("Content-Type", "application/json")
+				writeMatrixError(w, http.StatusUnauthorized, "M_UNAUTHORIZED", "Operational access token required")
+				return
+			}
+		}
+		h(w, r)
+	}
+}
+
+// withOperationalAccessHandler protects http.Handler with enterprise token when configured
+func (s *Server) withOperationalAccessHandler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.enterpriseAccessToken != "" {
+			token := enterpriseTokenFromRequest(r)
+			if !secureTokenCompare(token, s.enterpriseAccessToken) {
+				w.Header().Set("Content-Type", "application/json")
+				writeMatrixError(w, http.StatusUnauthorized, "M_UNAUTHORIZED", "Operational access token required")
+				return
+			}
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
+// secureTokenCompare compares fixed-size digests to avoid leaking token length.
+func secureTokenCompare(provided, expected string) bool {
+	providedDigest := sha256.Sum256([]byte(provided))
+	expectedDigest := sha256.Sum256([]byte(expected))
+	return subtle.ConstantTimeCompare(providedDigest[:], expectedDigest[:]) == 1
+}
+
 // Handler returns the HTTP handler with all middleware applied
 func (s *Server) Handler() http.Handler {
-	// Chain middleware: request ID -> security headers -> logging -> rate limiting -> routes
+	// Chain middleware: request ID -> security headers -> logging -> rate limiting -> request validation -> routes
 	handler := http.Handler(s.mux)
+	handler = RequestIDRequirementMiddleware(s.config.Security.RequireRequestID, handler)
 	handler = s.rateLimiter.Middleware(handler)
 	handler = loggingMiddleware(handler)
 	handler = SecurityHeadersMiddleware(handler)
-	handler = RequestIDRequirementMiddleware(s.config.Security.RequireRequestID, handler)
 	handler = RequestIDMiddleware(handler)
 	return handler
 }

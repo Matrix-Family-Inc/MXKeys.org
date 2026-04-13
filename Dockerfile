@@ -42,7 +42,7 @@ USER mxkeys
 
 EXPOSE 8448
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -q -O /dev/null http://localhost:8448/_mxkeys/health || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD wget -q -O /dev/null http://localhost:8448/_mxkeys/ready || exit 1
 
 ENTRYPOINT ["/usr/local/bin/mxkeys"]

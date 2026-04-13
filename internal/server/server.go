@@ -132,12 +132,11 @@ func New(cfg *config.Config) (*Server, error) {
 			TableName:     cfg.Transparency.TableName,
 		})
 		if err != nil {
-			log.Error("Failed to initialize transparency log", "error", err)
-		} else {
-			s.transparency = transparencyLog
-			s.notary.SetTransparencyLog(transparencyLog)
-			log.Info("Transparency log enabled")
+			return nil, fmt.Errorf("failed to initialize transparency log: %w", err)
 		}
+		s.transparency = transparencyLog
+		s.notary.SetTransparencyLog(transparencyLog)
+		log.Info("Transparency log enabled")
 	}
 
 	// Analytics is always available (lightweight)
@@ -165,14 +164,13 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		c, err := cluster.NewCluster(clusterCfg)
 		if err != nil {
-			log.Error("Failed to initialize cluster", "error", err)
-		} else {
-			s.cluster = c
-			log.Info("Cluster mode enabled",
-				"node", clusterNodeID,
-				"consensus_mode", cfg.Cluster.ConsensusMode,
-			)
+			return nil, fmt.Errorf("failed to initialize cluster: %w", err)
 		}
+		s.cluster = c
+		log.Info("Cluster mode enabled",
+			"node", clusterNodeID,
+			"consensus_mode", cfg.Cluster.ConsensusMode,
+		)
 	}
 
 	if s.cluster != nil {

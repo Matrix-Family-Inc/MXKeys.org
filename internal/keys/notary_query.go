@@ -48,11 +48,11 @@ func (n *Notary) QueryKeys(ctx context.Context, request *KeyQueryRequest) *KeyQu
 		keys, err := n.GetServerKeysWithCriteria(ctx, serverName, minValidUntil)
 		if err != nil {
 			log.Warn("Failed to get keys for server", "server", serverName, "error", err)
-			if n.analytics != nil {
-				n.analytics.RecordFetchFailure(serverName, err.Error())
+			if analytics := n.getAnalytics(); analytics != nil {
+				analytics.RecordFetchFailure(serverName)
 			}
-			if n.transparency != nil {
-				_ = n.transparency.LogFailure(ctx, serverName, err.Error())
+			if transparency := n.getTransparency(); transparency != nil {
+				_ = transparency.LogFailure(ctx, serverName, err.Error())
 			}
 			response.Failures[serverName] = sanitizeQueryFailure(err)
 			continue
@@ -60,11 +60,15 @@ func (n *Notary) QueryKeys(ctx context.Context, request *KeyQueryRequest) *KeyQu
 
 		// Work on a detached copy to avoid mutating cache/storage-backed objects.
 		keysForResponse := cloneServerKeysResponse(keys)
-		n.addNotarySignature(keysForResponse)
+		if err := n.addNotarySignature(keysForResponse); err != nil {
+			log.Error("Failed to add notary signature", "server", serverName, "error", err)
+			response.Failures[serverName] = matrixFailure("M_UNKNOWN", "Internal signing error")
+			continue
+		}
 
 		if violation := n.checkResponsePolicy(serverName, keysForResponse); violation != nil {
-			if n.transparency != nil {
-				_ = n.transparency.LogPolicyViolation(ctx, violation)
+			if transparency := n.getTransparency(); transparency != nil {
+				_ = transparency.LogPolicyViolation(ctx, violation)
 			}
 			response.Failures[serverName] = map[string]interface{}{
 				"errcode": "M_FORBIDDEN",
@@ -73,11 +77,11 @@ func (n *Notary) QueryKeys(ctx context.Context, request *KeyQueryRequest) *KeyQu
 			continue
 		}
 
-		if n.analytics != nil {
-			n.analytics.RecordKeyObservation(serverName, keysForResponse)
+		if analytics := n.getAnalytics(); analytics != nil {
+			analytics.RecordKeyObservation(serverName, keysForResponse)
 		}
-		if n.transparency != nil {
-			_ = n.transparency.LogKey(ctx, serverName, keysForResponse)
+		if transparency := n.getTransparency(); transparency != nil {
+			_ = transparency.LogKey(ctx, serverName, keysForResponse)
 		}
 
 		response.ServerKeys = append(response.ServerKeys, *keysForResponse)
@@ -121,12 +125,13 @@ func sortedServerNames(serverKeys map[string]map[string]KeyCriteria) []string {
 
 func (n *Notary) applyTrustPolicyToRequest(request *KeyQueryRequest) map[string]interface{} {
 	failures := make(map[string]interface{})
-	if request == nil || n.trustPolicy == nil {
+	trustPolicy := n.getTrustPolicy()
+	if request == nil || trustPolicy == nil {
 		return failures
 	}
 
 	for serverName := range request.ServerKeys {
-		if violation := n.trustPolicy.CheckServer(serverName); violation != nil {
+		if violation := trustPolicy.CheckServer(serverName); violation != nil {
 			failures[serverName] = map[string]interface{}{
 				"errcode": "M_FORBIDDEN",
 				"error":   fmt.Sprintf("Trust policy violation (%s): %s", violation.Rule, violation.Details),
@@ -139,10 +144,11 @@ func (n *Notary) applyTrustPolicyToRequest(request *KeyQueryRequest) map[string]
 }
 
 func (n *Notary) checkResponsePolicy(serverName string, resp *ServerKeysResponse) *PolicyViolation {
-	if n.trustPolicy == nil || resp == nil {
+	trustPolicy := n.getTrustPolicy()
+	if trustPolicy == nil || resp == nil {
 		return nil
 	}
-	return n.trustPolicy.CheckResponse(serverName, resp)
+	return trustPolicy.CheckResponse(serverName, resp)
 }
 
 // GetServerKeysWithCriteria gets keys for a server respecting minimum_valid_until_ts.
@@ -182,7 +188,7 @@ func (n *Notary) GetServerKeys(ctx context.Context, serverName string) (*ServerK
 	if ok && n.cacheEntryValid(cached, now) {
 		log.Debug("Returning keys from memory cache", "server", serverName)
 		recordMemoryCacheHit()
-		return cached.response, nil
+		return cloneServerKeysResponse(cached.response), nil
 	}
 	if ok {
 		n.cacheMu.Lock()
@@ -267,9 +273,9 @@ func (n *Notary) fetchAndStoreWithSource(ctx context.Context, serverName, source
 
 	n.storeInMemoryCache(serverName, keys)
 
-	if n.keyBroadcastHook != nil {
+	if broadcastHook := n.getKeyBroadcastHook(); broadcastHook != nil {
 		if responseJSON, err := json.Marshal(keys); err == nil {
-			n.keyBroadcastHook(serverName, ClusterReplicatedResponseKeyID, string(responseJSON), keys.ValidUntilTS)
+			broadcastHook(serverName, ClusterReplicatedResponseKeyID, string(responseJSON), keys.ValidUntilTS)
 		} else {
 			log.Warn("Failed to marshal key response for cluster broadcast", "server", serverName, "error", err)
 		}

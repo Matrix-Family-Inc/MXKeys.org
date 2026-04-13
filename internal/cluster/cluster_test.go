@@ -118,6 +118,38 @@ func TestClusterMessageSigning(t *testing.T) {
 	}
 }
 
+func TestClusterVerifyMessageRejectsReplay(t *testing.T) {
+	c, err := NewCluster(ClusterConfig{
+		Enabled:          true,
+		NodeID:           "node-a",
+		BindAddress:      "127.0.0.1",
+		BindPort:         freePort(t),
+		AdvertiseAddress: "127.0.0.1",
+		ConsensusMode:    "crdt",
+		SyncInterval:     1,
+		SharedSecret:     testClusterSecret,
+	})
+	if err != nil {
+		t.Fatalf("NewCluster() error = %v", err)
+	}
+
+	msg := &ClusterMessage{
+		Type:      MsgTypePing,
+		From:      "node-a",
+		Timestamp: time.Now(),
+		Payload:   json.RawMessage(`{"ok":true}`),
+	}
+	if err := c.signMessage(msg); err != nil {
+		t.Fatalf("signMessage() error = %v", err)
+	}
+	if err := c.verifyMessage(msg); err != nil {
+		t.Fatalf("verifyMessage() first pass error = %v", err)
+	}
+	if err := c.verifyMessage(msg); err == nil {
+		t.Fatal("expected replayed cluster message to be rejected")
+	}
+}
+
 func TestReadBoundedJSONRejectsOversizedClusterPayload(t *testing.T) {
 	oversized := bytes.Repeat([]byte("a"), maxClusterMessageSize+1)
 	if _, err := readBoundedJSON(bytes.NewReader(oversized), maxClusterMessageSize); err == nil {

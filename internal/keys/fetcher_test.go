@@ -88,6 +88,28 @@ func TestFetcherWithConfig(t *testing.T) {
 	}
 }
 
+func TestFetcherBlockPrivateIPsDefaultsToTrue(t *testing.T) {
+	f := NewFetcherWithConfig(FetcherConfig{
+		Timeout: time.Second,
+	})
+
+	if !f.blockPrivateIPs.Load() {
+		t.Fatal("blockPrivateIPs must default to true when config does not override it")
+	}
+}
+
+func TestFetcherBlockPrivateIPsCanBeDisabledExplicitly(t *testing.T) {
+	blockPrivate := false
+	f := NewFetcherWithConfig(FetcherConfig{
+		Timeout:         time.Second,
+		BlockPrivateIPs: &blockPrivate,
+	})
+
+	if f.blockPrivateIPs.Load() {
+		t.Fatal("blockPrivateIPs should respect explicit false override")
+	}
+}
+
 func TestServerKeysResponseParsing(t *testing.T) {
 	serverName := "test.matrix.org"
 	responseData, _ := createSignedKeysResponse(t, serverName)
@@ -247,6 +269,7 @@ func TestFallbackSuccessDoesNotOpenCircuitBreaker(t *testing.T) {
 		Timeout:         time.Second,
 		RetryAttempts:   1,
 	})
+	f.SetBlockPrivateIPs(false) // Allow localhost for testing
 	f.client = client
 
 	for i := 0; i < 6; i++ {
@@ -280,9 +303,10 @@ func TestFetchContextCancellation(t *testing.T) {
 }
 
 func TestRejectPrivateAddress(t *testing.T) {
+	blockPrivate := true
 	f := NewFetcherWithConfig(FetcherConfig{
 		Timeout:         time.Second,
-		BlockPrivateIPs: true,
+		BlockPrivateIPs: &blockPrivate,
 	})
 
 	tests := []struct {

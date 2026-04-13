@@ -42,6 +42,15 @@ func NewResolver() *Resolver {
 				if len(via) >= 5 {
 					return fmt.Errorf("too many redirects")
 				}
+				if req.URL.Scheme != "https" {
+					return fmt.Errorf("redirect to non-HTTPS URL blocked")
+				}
+				host := req.URL.Hostname()
+				if ip := net.ParseIP(host); ip != nil {
+					if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() {
+						return fmt.Errorf("redirect to private IP %s blocked", host)
+					}
+				}
 				return nil
 			},
 		},
@@ -55,6 +64,7 @@ type ResolvedServer struct {
 	Host       string // IP or hostname to connect to
 	Port       int    // port to connect to
 	ServerName string // original server name for Host header
+	PinnedIPs  []string
 }
 
 // URL returns the base HTTPS URL for the resolved server.
@@ -121,7 +131,7 @@ func parseServerName(name string) (hostname string, port int, isIPLiteral bool) 
 		rest := name[closeBracket+1:]
 		if strings.HasPrefix(rest, ":") {
 			p, err := strconv.Atoi(rest[1:])
-			if err == nil {
+			if err == nil && p > 0 && p <= 65535 {
 				port = p
 			}
 		}

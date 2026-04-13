@@ -167,3 +167,30 @@ func TestInitSigningKeyTightensExistingPermissions(t *testing.T) {
 		t.Fatalf("key file permissions must be tightened to 0600, got %04o", keyInfo.Mode().Perm())
 	}
 }
+
+func TestInitSigningKeyRejectsCorruptedExistingFile(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "mxkeys-key-corrupt-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	keyPath := filepath.Join(tmpDir, "mxkeys_ed25519.key")
+	original := []byte("corrupted-key-material")
+	if err := os.WriteFile(keyPath, original, 0o600); err != nil {
+		t.Fatalf("failed to seed corrupted key file: %v", err)
+	}
+
+	n := &Notary{}
+	if err := n.initSigningKey(tmpDir); err == nil {
+		t.Fatal("expected corrupted key file to be rejected")
+	}
+
+	got, err := os.ReadFile(keyPath)
+	if err != nil {
+		t.Fatalf("failed to re-read key file: %v", err)
+	}
+	if string(got) != string(original) {
+		t.Fatal("corrupted key file should not be overwritten on initialization failure")
+	}
+}

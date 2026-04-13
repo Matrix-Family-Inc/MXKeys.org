@@ -80,7 +80,9 @@ func (n *Node) startElection() {
 	}
 
 	for _, peer := range peers {
+		n.wg.Add(1)
 		go func(p string, term uint64, logIndex uint64, logTerm uint64) {
+			defer n.wg.Done()
 			granted := n.requestVote(p, term, logIndex, logTerm)
 			voteCh <- granted
 		}(peer, currentTerm, lastLogIndex, lastLogTerm)
@@ -125,11 +127,15 @@ func (n *Node) becomeLeader() {
 	}
 
 	// Start heartbeat.
-	go n.sendHeartbeats()
+	if len(n.config.Peers) > 0 {
+		n.wg.Add(1)
+		go n.sendHeartbeats()
+	}
 }
 
 // sendHeartbeats sends periodic heartbeats to all peers.
 func (n *Node) sendHeartbeats() {
+	defer n.wg.Done()
 	ticker := time.NewTicker(n.config.HeartbeatInterval)
 	defer ticker.Stop()
 
@@ -146,6 +152,7 @@ func (n *Node) sendHeartbeats() {
 			n.mu.RUnlock()
 
 			for _, peer := range n.config.Peers {
+				n.wg.Add(1)
 				go n.sendAppendEntries(peer)
 			}
 		}

@@ -21,6 +21,7 @@ import (
 	"io"
 	"math"
 	"math/big"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -108,14 +109,91 @@ func writeValue(buf *bytes.Buffer, v interface{}) error {
 			return err
 		}
 	default:
-		// Fallback for other types
-		b, err := json.Marshal(val)
-		if err != nil {
-			return err
+		// Handle typed maps and structs via reflection
+		rv := reflect.ValueOf(val)
+		switch rv.Kind() {
+		case reflect.Map:
+			if rv.Type().Key().Kind() == reflect.String {
+				converted := make(map[string]interface{}, rv.Len())
+				for _, k := range rv.MapKeys() {
+					converted[k.String()] = rv.MapIndex(k).Interface()
+				}
+				return writeObject(buf, converted)
+			}
+			return fmt.Errorf("unsupported map key type %s for canonical JSON marshaling", rv.Type().Key())
+		case reflect.Struct:
+			converted, err := structToMap(rv)
+			if err != nil {
+				return err
+			}
+			return writeObject(buf, converted)
+		case reflect.Ptr:
+			if rv.IsNil() {
+				buf.WriteString("null")
+				return nil
+			}
+			return writeValue(buf, rv.Elem().Interface())
+		case reflect.Slice:
+			arr := make([]interface{}, rv.Len())
+			for i := 0; i < rv.Len(); i++ {
+				arr[i] = rv.Index(i).Interface()
+			}
+			return writeArray(buf, arr)
+		default:
+			return fmt.Errorf("unsupported type %T for canonical JSON marshaling", val)
 		}
-		buf.Write(b)
 	}
 	return nil
+}
+
+func structToMap(rv reflect.Value) (map[string]interface{}, error) {
+	t := rv.Type()
+	result := make(map[string]interface{}, t.NumField())
+
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+
+		name := field.Name
+		if tag := field.Tag.Get("json"); tag != "" {
+			parts := strings.Split(tag, ",")
+			if parts[0] == "-" {
+				continue
+			}
+			if parts[0] != "" {
+				name = parts[0]
+			}
+			if len(parts) > 1 && parts[1] == "omitempty" {
+				if isEmptyValue(rv.Field(i)) {
+					continue
+				}
+			}
+		}
+
+		result[name] = rv.Field(i).Interface()
+	}
+
+	return result, nil
+}
+
+func isEmptyValue(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
+		return v.Len() == 0
+	case reflect.Bool:
+		return !v.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return v.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return v.Float() == 0
+	case reflect.Interface, reflect.Ptr:
+		return v.IsNil()
+	}
+	return false
 }
 
 func writeInteger(buf *bytes.Buffer, n int64) error {

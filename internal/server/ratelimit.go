@@ -14,13 +14,15 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
 )
+
+const maxVisitors = 100000 // Maximum unique IPs to track before aggressive eviction
 
 type RateLimiter struct {
 	visitors map[string]*visitor
@@ -39,6 +41,11 @@ type visitor struct {
 	limiter      *rate.Limiter
 	queryLimiter *rate.Limiter
 	lastSeen     time.Time
+}
+
+type visitorSnapshot struct {
+	ip       string
+	lastSeen time.Time
 }
 
 type RateLimitConfig struct {
@@ -82,6 +89,11 @@ func (rl *RateLimiter) getVisitor(ip string) *visitor {
 		return v
 	}
 
+	// Protect against memory exhaustion from too many unique IPs
+	if len(rl.visitors) >= maxVisitors {
+		rl.evictOldestLocked()
+	}
+
 	v := &visitor{
 		limiter:      rate.NewLimiter(rl.globalRate, rl.globalBurst),
 		queryLimiter: rate.NewLimiter(rl.queryRate, rl.queryBurst),
@@ -89,6 +101,67 @@ func (rl *RateLimiter) getVisitor(ip string) *visitor {
 	}
 	rl.visitors[ip] = v
 	return v
+}
+
+// evictOldestLocked removes oldest entries when map is full. Caller must hold lock.
+func (rl *RateLimiter) evictOldestLocked() {
+	threshold := time.Now().Add(-1 * time.Minute)
+	evicted := 0
+	targetEvictions := maxVisitors / 10
+	if targetEvictions < 1 {
+		targetEvictions = 1
+	}
+
+	// First pass: evict entries older than threshold
+	for ip, v := range rl.visitors {
+		if v.lastSeen.Before(threshold) {
+			delete(rl.visitors, ip)
+			evicted++
+			if evicted >= targetEvictions {
+				return
+			}
+		}
+	}
+
+	// If still at capacity, force evict oldest entries
+	if len(rl.visitors) >= maxVisitors {
+		// Partial sort to find N oldest (selection algorithm)
+		toEvict := targetEvictions - evicted
+		for _, ip := range oldestVisitorIPs(rl.visitors, toEvict) {
+			delete(rl.visitors, ip)
+		}
+	}
+}
+
+func oldestVisitorIPs(visitors map[string]*visitor, limit int) []string {
+	if limit <= 0 || len(visitors) == 0 {
+		return nil
+	}
+
+	entries := make([]visitorSnapshot, 0, len(visitors))
+	for ip, v := range visitors {
+		if v == nil {
+			continue
+		}
+		entries = append(entries, visitorSnapshot{
+			ip:       ip,
+			lastSeen: v.lastSeen,
+		})
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].lastSeen.Before(entries[j].lastSeen)
+	})
+
+	if limit > len(entries) {
+		limit = len(entries)
+	}
+
+	ips := make([]string, 0, limit)
+	for i := 0; i < limit; i++ {
+		ips = append(ips, entries[i].ip)
+	}
+	return ips
 }
 
 func (rl *RateLimiter) cleanupLoop() {
@@ -129,7 +202,7 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		v := rl.getVisitor(ip)
 
 		if !v.limiter.Allow() {
-			RecordRateLimited()
+			RecordRateLimited("global")
 			writeRateLimitError(w)
 			return
 		}
@@ -144,7 +217,7 @@ func (rl *RateLimiter) QueryMiddleware(next http.Handler) http.Handler {
 		v := rl.getVisitor(ip)
 
 		if !v.queryLimiter.Allow() {
-			RecordRateLimited()
+			RecordRateLimited("query")
 			writeRateLimitError(w)
 			return
 		}
@@ -158,9 +231,7 @@ func writeRateLimitError(w http.ResponseWriter) {
 	w.Header().Set("Retry-After", "1")
 	w.WriteHeader(http.StatusTooManyRequests)
 
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	enc.Encode(map[string]interface{}{
+	writeJSON(w, map[string]interface{}{
 		"errcode": "M_LIMIT_EXCEEDED",
 		"error":   "Rate limit exceeded",
 	})

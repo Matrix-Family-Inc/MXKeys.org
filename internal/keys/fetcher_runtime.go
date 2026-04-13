@@ -16,8 +16,10 @@ package keys
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -117,11 +119,26 @@ func (f *Fetcher) fetchDirectWithRetry(ctx context.Context, serverName string) (
 	return nil, lastErr
 }
 
-// isRetryableError checks if an error should trigger a retry
 func isRetryableError(err error) bool {
 	if err == nil {
 		return false
 	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return netErr.Timeout()
+	}
+
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return true
+	}
+
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return true
+	}
+
 	errStr := err.Error()
 	return strings.Contains(errStr, "timeout") ||
 		strings.Contains(errStr, "connection refused") ||
@@ -173,7 +190,7 @@ func (f *Fetcher) fetchDirect(ctx context.Context, serverName string) (*ServerKe
 	req.Header.Set("Accept", "application/json")
 	req.Host = resolved.ServerName
 
-	resp, err := f.client.Do(req)
+	resp, err := f.clientForResolved(resolved).Do(req)
 	if err != nil {
 		if strings.Contains(err.Error(), "tls") || strings.Contains(err.Error(), "certificate") {
 			recordUpstreamFailure(UpstreamFailureTLS)
@@ -257,7 +274,7 @@ func (f *Fetcher) fetchFromNotary(ctx context.Context, notary, serverName string
 	req.Header.Set("Accept", "application/json")
 	req.Host = resolved.ServerName
 
-	resp, err := f.client.Do(req)
+	resp, err := f.clientForResolved(resolved).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("notary query to %s failed: %w", url, err)
 	}

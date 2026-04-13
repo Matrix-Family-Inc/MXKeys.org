@@ -82,6 +82,6 @@ cluster:
   advertise_address: "mxkeys-node-a.internal"
   advertise_port: 7946
   seeds: []
-  consensus_mode: crdt # crdt | raft
+  consensus_mode: crdt # crdt | raft (raft is experimental: no persistent log, no snapshots)
   sync_interval: 5
   shared_secret: "replace-with-long-random-secret"

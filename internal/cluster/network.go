@@ -44,12 +44,14 @@ func (c *Cluster) acceptLoop() {
 			}
 		}
 
+		c.wg.Add(1)
 		go c.handleConnection(conn)
 	}
 }
 
 // handleConnection handles an incoming connection.
 func (c *Cluster) handleConnection(conn net.Conn) {
+	defer c.wg.Done()
 	defer conn.Close()
 
 	msg, err := c.readMessage(conn)
@@ -209,7 +211,9 @@ func (c *Cluster) broadcastMessage(msg *ClusterMessage) {
 
 	for _, peer := range peers {
 		address := fmt.Sprintf("%s:%d", peer.Address, peer.Port)
+		c.wg.Add(1)
 		go func(addr string) {
+			defer c.wg.Done()
 			conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 			if err != nil {
 				return

@@ -28,12 +28,12 @@ func TestNotarySetBlockPrivateIPs(t *testing.T) {
 	}
 
 	n.SetBlockPrivateIPs(true)
-	if !n.fetcher.blockPrivateIPs {
+	if !n.fetcher.blockPrivateIPs.Load() {
 		t.Fatal("expected blockPrivateIPs to be enabled")
 	}
 
 	n.SetBlockPrivateIPs(false)
-	if n.fetcher.blockPrivateIPs {
+	if n.fetcher.blockPrivateIPs.Load() {
 		t.Fatal("expected blockPrivateIPs to be disabled")
 	}
 }
