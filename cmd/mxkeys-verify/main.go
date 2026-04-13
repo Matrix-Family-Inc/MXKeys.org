@@ -66,6 +66,7 @@ type verifyResult struct {
 	ConsistencyValid *bool  `json:"consistency_valid,omitempty"`
 	PrevTreeSize     *int   `json:"prev_tree_size,omitempty"`
 	TrustLevel       int    `json:"trust_level"`
+	TrustLevelName   string `json:"trust_level_name"`
 	Error            string `json:"error,omitempty"`
 }
 
@@ -225,21 +226,36 @@ func main() {
 	}
 
 	result.OK = true
+	result.TrustLevelName = trustLevelName(result.TrustLevel)
 	if *jsonOutput {
 		outputJSON(result)
 	} else if !*quiet {
-		fmt.Printf("\nAll checks passed (trust level %d).\n", result.TrustLevel)
+		fmt.Printf("\nAll checks passed (trust level %d: %s).\n", result.TrustLevel, result.TrustLevelName)
 	}
 	os.Exit(ExitOK)
 }
 
 func finish(jsonMode bool, result verifyResult, code int) {
+	result.TrustLevelName = trustLevelName(result.TrustLevel)
 	if jsonMode {
 		outputJSON(result)
 	} else {
 		fmt.Fprintf(os.Stderr, "FAIL: %s\n", result.Error)
 	}
 	os.Exit(code)
+}
+
+func trustLevelName(level int) string {
+	switch level {
+	case 1:
+		return "transport_retrieval"
+	case 2:
+		return "self_consistency"
+	case 3:
+		return "origin_trust"
+	default:
+		return "unknown"
+	}
 }
 
 func outputJSON(v interface{}) {
