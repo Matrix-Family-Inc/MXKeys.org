@@ -221,3 +221,21 @@ func (s *Server) handleTransparencyProof(w http.ResponseWriter, r *http.Request)
 
 	writeJSON(w, proof)
 }
+
+// handleSignedTreeHead returns a signed Merkle tree head for external verification.
+// GET /_mxkeys/transparency/signed-head
+func (s *Server) handleSignedTreeHead(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	sth, err := s.notary.SignedTreeHead()
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		writeJSON(w, map[string]string{
+			"errcode": "M_NOT_FOUND",
+			"error":   "Signed tree head not available",
+		})
+		return
+	}
+
+	writeJSON(w, sth)
+}

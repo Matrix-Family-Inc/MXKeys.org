@@ -6,6 +6,15 @@ All notable changes to MXKeys are documented in this file.
 
 Production hardening release. Four-pass security audit with 47 verified fixes.
 
+### Added
+
+- Signed Tree Head endpoint (`GET /_mxkeys/transparency/signed-head`) with ed25519 signature for external verification
+- Consistency proof generation in Merkle tree (`GetConsistencyProof` + `VerifyConsistencyProof`)
+- Circuit breaker stats endpoint (`GET /_mxkeys/circuits`) for upstream health visibility
+- Request ID (`request_id`) included in all Matrix error JSON response bodies
+- Cluster SLA documentation in ADR-0001 with per-mode property table
+- Route normalization for operational endpoints in Prometheus metrics
+
 ### Security
 
 - Block HTTP redirects on federation key fetch client (SSRF mitigation)

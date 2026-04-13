@@ -259,6 +259,8 @@ func NormalizeRoute(path string) string {
 		return "/_mxkeys/ready"
 	case path == "/_mxkeys/metrics":
 		return "/_mxkeys/metrics"
+	case strings.HasPrefix(path, "/_mxkeys/"):
+		return "/_mxkeys/operational"
 	default:
 		return "/other"
 	}

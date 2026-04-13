@@ -113,3 +113,9 @@ func (s *Server) handleTrustPolicyCheck(w http.ResponseWriter, r *http.Request) 
 		"allowed": true,
 	})
 }
+
+// handleCircuitBreakerStats returns upstream circuit breaker states.
+func (s *Server) handleCircuitBreakerStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	writeJSON(w, s.notary.GetCircuitBreakerStats())
+}

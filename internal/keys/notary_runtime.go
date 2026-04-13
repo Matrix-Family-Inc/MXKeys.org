@@ -15,6 +15,7 @@ package keys
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -151,6 +152,11 @@ func (n *Notary) GetCacheSize() int {
 	return len(n.cache)
 }
 
+// GetCircuitBreakerStats returns per-destination circuit breaker statistics.
+func (n *Notary) GetCircuitBreakerStats() map[string]interface{} {
+	return n.fetcher.circuitBreaker.Stats()
+}
+
 // SetTrustPolicy sets runtime trust policy checks for query flow.
 func (n *Notary) SetTrustPolicy(tp *TrustPolicy) {
 	n.configMu.Lock()
@@ -269,6 +275,36 @@ func (n *Notary) validateReplicatedServerResponse(serverName string, rawResponse
 		return nil, fmt.Errorf("replicated response failed verification: %w", err)
 	}
 	return &response, nil
+}
+
+// SignedTreeHead returns a signed snapshot of the transparency log merkle tree.
+func (n *Notary) SignedTreeHead() (map[string]interface{}, error) {
+	tl := n.getTransparency()
+	if tl == nil {
+		return nil, fmt.Errorf("transparency log not enabled")
+	}
+
+	tl.mu.RLock()
+	treeSize := tl.merkleTree.Size()
+	rootHash := tl.merkleTree.RootHex()
+	tl.mu.RUnlock()
+
+	now := time.Now().UTC()
+	payload := fmt.Sprintf("%d|%s|%d", treeSize, rootHash, now.UnixMilli())
+
+	signature := ed25519.Sign(n.serverKeyPair, []byte(payload))
+	signatureB64 := base64.RawStdEncoding.EncodeToString(signature)
+
+	return map[string]interface{}{
+		"tree_size":    treeSize,
+		"root_hash":    rootHash,
+		"timestamp":    now.Format(time.RFC3339),
+		"timestamp_ms": now.UnixMilli(),
+		"signer":       n.serverName,
+		"key_id":       n.serverKeyID,
+		"signature":    signatureB64,
+		"sign_payload": payload,
+	}, nil
 }
 
 func decodeBase64(v string) ([]byte, error) {

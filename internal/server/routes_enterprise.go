@@ -37,6 +37,8 @@ func (s *Server) registerEnterpriseRoutes() {
 	register("GET /_mxkeys/analytics/anomalies", s.handleAnalyticsAnomalies)
 	register("GET /_mxkeys/analytics/rotators", s.handleAnalyticsTopRotators)
 
+	register("GET /_mxkeys/circuits", s.handleCircuitBreakerStats)
+
 	if s.cluster != nil {
 		register("GET /_mxkeys/cluster/status", s.handleClusterStatus)
 		register("GET /_mxkeys/cluster/nodes", s.handleClusterNodes)
