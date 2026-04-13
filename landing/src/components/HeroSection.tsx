@@ -65,6 +65,7 @@ export function HeroSection() {
               <span className="w-2 h-2 bg-[var(--color-primary)] rounded-full animate-pulse" />
               {t('status.online')}
             </span>
+            <span className="badge badge-primary">v0.2.0</span>
             <a
               href={URLS.matrixFamily}
               {...getLinkProps(URLS.matrixFamily)}

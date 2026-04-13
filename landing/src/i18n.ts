@@ -16,8 +16,33 @@ import { initReactI18next } from 'react-i18next';
 
 import { en } from './locales/en';
 import { ru } from './locales/ru';
+import { de } from './locales/de';
+import { fr } from './locales/fr';
+import { es } from './locales/es';
+import { zh } from './locales/zh';
+import { ja } from './locales/ja';
+import { pt } from './locales/pt';
+import { ko } from './locales/ko';
+import { uk } from './locales/uk';
+import { hi } from './locales/hi';
+import { ar } from './locales/ar';
+import { he } from './locales/he';
+import { ur } from './locales/ur';
+import { bn } from './locales/bn';
+import { tr } from './locales/tr';
+import { id } from './locales/id';
+import { vi } from './locales/vi';
+import { th } from './locales/th';
+import { pl } from './locales/pl';
+import { it } from './locales/it';
+import { nl } from './locales/nl';
 
-export const supportedLanguages = ['en', 'ru'] as const;
+export const supportedLanguages = [
+  'en', 'ru', 'de', 'fr', 'es', 'zh', 'ja', 'pt', 'ko', 'uk',
+  'hi', 'ar', 'he', 'ur', 'bn', 'tr', 'id', 'vi', 'th', 'pl', 'it', 'nl',
+] as const;
+
+const rtlLanguages = new Set(['ar', 'he', 'ur']);
 
 type SupportedLanguage = (typeof supportedLanguages)[number];
 
@@ -87,6 +112,7 @@ function detectInitialLanguage(): SupportedLanguage {
 function applyLanguageEffects(language: SupportedLanguage) {
   if (typeof document !== 'undefined') {
     document.documentElement.lang = language;
+    document.documentElement.dir = rtlLanguages.has(language) ? 'rtl' : 'ltr';
   }
 
   if (typeof window !== 'undefined') {
@@ -106,6 +132,26 @@ i18n.use(initReactI18next).init({
   resources: {
     en: { translation: en },
     ru: { translation: ru },
+    de: { translation: de },
+    fr: { translation: fr },
+    es: { translation: es },
+    zh: { translation: zh },
+    ja: { translation: ja },
+    pt: { translation: pt },
+    ko: { translation: ko },
+    uk: { translation: uk },
+    hi: { translation: hi },
+    ar: { translation: ar },
+    he: { translation: he },
+    ur: { translation: ur },
+    bn: { translation: bn },
+    tr: { translation: tr },
+    id: { translation: id },
+    vi: { translation: vi },
+    th: { translation: th },
+    pl: { translation: pl },
+    it: { translation: it },
+    nl: { translation: nl },
   },
   lng: detectInitialLanguage(),
   fallbackLng: defaultLanguage,

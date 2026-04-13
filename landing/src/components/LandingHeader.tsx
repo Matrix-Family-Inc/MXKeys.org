@@ -16,7 +16,6 @@ import { useTranslation } from 'react-i18next';
 import { Github, Menu, X } from 'lucide-react';
 import { Logo } from './Logo';
 import { EXTERNAL, getLinkProps } from '../config/urls';
-import { setPreferredLanguage, supportedLanguages } from '../i18n';
 
 const navLinks = [
   { href: '#about', key: 'about' },
@@ -25,41 +24,11 @@ const navLinks = [
   { href: '#ecosystem', key: 'ecosystem' },
 ] as const;
 
-type LanguageSwitchProps = {
-  currentLanguage: string;
-  label: string;
-  onChange: (language: string) => void;
-};
-
-function LanguageSwitch({ currentLanguage, label, onChange }: LanguageSwitchProps) {
-  return (
-    <div className="lang-switch" role="group" aria-label={label}>
-      {supportedLanguages.map((language) => (
-        <button
-          key={language}
-          type="button"
-          className={currentLanguage === language ? 'active' : undefined}
-          onClick={() => onChange(language)}
-          aria-pressed={currentLanguage === language}
-        >
-          {language.toUpperCase()}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export function LandingHeader() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const currentLanguage = i18n.resolvedLanguage === 'ru' ? 'ru' : 'en';
   const menuLabel = mobileNavOpen ? t('nav.closeMenu') : t('nav.openMenu');
-
-  const handleLanguageChange = (language: string) => {
-    setMobileNavOpen(false);
-    void setPreferredLanguage(language);
-  };
 
   return (
     <header className="sticky top-0 z-50 border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-sm">
@@ -78,12 +47,6 @@ export function LandingHeader() {
             ))}
           </nav>
 
-          <LanguageSwitch
-            currentLanguage={currentLanguage}
-            label={t('nav.language')}
-            onChange={handleLanguageChange}
-          />
-
           <a
             href={EXTERNAL.github}
             {...getLinkProps(EXTERNAL.github)}
@@ -95,12 +58,6 @@ export function LandingHeader() {
         </div>
 
         <div className="flex items-center gap-2 md:hidden">
-          <LanguageSwitch
-            currentLanguage={currentLanguage}
-            label={t('nav.language')}
-            onChange={handleLanguageChange}
-          />
-
           <a
             href={EXTERNAL.github}
             {...getLinkProps(EXTERNAL.github)}
