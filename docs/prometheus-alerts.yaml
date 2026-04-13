@@ -125,3 +125,44 @@ groups:
         annotations:
           summary: "MXKeys rejecting requests"
           description: "{{ $value | humanize }} requests/sec rejected for {{ $labels.reason }}"
+
+      # Circuit breaker trips
+      - alert: MXKeysCircuitBreakerTrips
+        expr: |
+          rate(mxkeys_circuit_breaker_trips_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MXKeys circuit breakers tripping"
+          description: "{{ $value | humanize }} circuit breaker trips/sec in the last 5 minutes"
+
+      # Many open circuit breakers
+      - alert: MXKeysCircuitBreakersOpen
+        expr: |
+          mxkeys_circuit_breaker_servers{state="open"} > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MXKeys has many open circuit breakers"
+          description: "{{ $value }} upstream servers are circuit-broken"
+
+      # Transparency log STH monitoring (requires external verifier pushing metrics)
+      # Use with mxkeys-verify -json piped to a Prometheus pushgateway or textfile collector:
+      #
+      #   mxkeys_sth_tree_size        — gauge of latest tree size
+      #   mxkeys_sth_verify_success   — 1 if last verification passed, 0 otherwise
+      #
+      # Alert rules for STH (add when external metrics are available):
+      #
+      #   - alert: MXKeysSTHVerificationFailed
+      #     expr: mxkeys_sth_verify_success == 0
+      #     for: 10m
+      #     labels:
+      #       severity: critical
+      #
+      #   - alert: MXKeysSTHTreeSizeDecreased
+      #     expr: delta(mxkeys_sth_tree_size[1h]) < 0
+      #     labels:
+      #       severity: critical

@@ -160,18 +160,25 @@ func (n *Notary) GetCircuitBreakerStats() map[string]interface{} {
 }
 
 // GetPublicKeyInfo returns notary public key information for external verification.
+// The response is self-signed: the notary signs the key metadata payload with its own key.
 func (n *Notary) GetPublicKeyInfo() map[string]interface{} {
 	publicKey := n.serverKeyPair.Public().(ed25519.PublicKey)
 	pubB64 := base64.RawStdEncoding.EncodeToString(publicKey)
 	fingerprint := sha256.Sum256(publicKey)
 	fpHex := hex.EncodeToString(fingerprint[:])
 
+	payload := fmt.Sprintf("%s|%s|%s|%s", n.serverName, n.serverKeyID, pubB64, fpHex)
+	signature := ed25519.Sign(n.serverKeyPair, []byte(payload))
+	sigB64 := base64.RawStdEncoding.EncodeToString(signature)
+
 	return map[string]interface{}{
-		"server_name": n.serverName,
-		"key_id":      n.serverKeyID,
-		"algorithm":   "ed25519",
-		"public_key":  pubB64,
-		"fingerprint": fpHex,
+		"server_name":    n.serverName,
+		"key_id":         n.serverKeyID,
+		"algorithm":      "ed25519",
+		"public_key":     pubB64,
+		"fingerprint":    fpHex,
+		"self_signature": sigB64,
+		"sign_payload":   payload,
 	}
 }
 
