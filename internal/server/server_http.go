@@ -42,6 +42,9 @@ func (s *Server) setupRoutes() {
 	// Version endpoint
 	s.mux.HandleFunc("GET /_matrix/federation/v1/version", s.handleVersion)
 
+	// Signed tree head (public, verifiable)
+	s.mux.HandleFunc("GET /_mxkeys/transparency/signed-head", s.handleSignedTreeHead)
+
 	// Protected operational API endpoints
 	s.registerEnterpriseRoutes()
 }

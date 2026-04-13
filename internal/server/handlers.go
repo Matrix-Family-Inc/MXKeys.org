@@ -38,10 +38,14 @@ func writeJSON(w io.Writer, v interface{}) {
 func writeMatrixError(w http.ResponseWriter, status int, errCode, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	writeJSON(w, map[string]string{
+	resp := map[string]string{
 		"errcode": errCode,
 		"error":   message,
-	})
+	}
+	if reqID := w.Header().Get("X-Request-ID"); reqID != "" {
+		resp["request_id"] = reqID
+	}
+	writeJSON(w, resp)
 }
 
 func (s *Server) serverNameValidationLimit() int {
