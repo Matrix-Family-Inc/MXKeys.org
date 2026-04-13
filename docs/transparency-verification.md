@@ -46,6 +46,42 @@ The same key is published via the Matrix Key Server API at `GET /_matrix/key/v2/
 - After rotation, old STH signatures can no longer be verified with the new key
 - Operators should archive STH snapshots before rotation for audit continuity
 
+### Trust Levels
+
+Verification of the transparency log operates at three distinct trust levels. Understanding which level applies determines what guarantees you actually have.
+
+**Level 1 — Transport Retrieval**
+
+You fetched key metadata and STH over HTTPS from the notary. You trust the TLS certificate chain and DNS resolution. This confirms the data came from the expected server, but does not prove the server is honest.
+
+*Provides:* data authenticity in transit.
+*Assumes:* TLS infrastructure is not compromised.
+
+**Level 2 — Self-Consistency**
+
+The STH signature verifies against the public key fetched from the same server. The public key endpoint includes a self-signature over its metadata. This proves the key, STH, and tree state are internally consistent — they were produced by the same signing key.
+
+*Provides:* tamper detection for data at rest and in transit.
+*Does not provide:* proof that the signing key itself is legitimate.
+
+**Level 3 — Origin Trust**
+
+Trust in the first public key requires an external trust anchor. The notary cannot prove its own identity to a new verifier without at least one out-of-band verification step.
+
+Mechanisms for establishing Level 3 trust:
+
+- **Pinned fingerprint**: operator distributes the key fingerprint through a trusted channel (documentation, configuration management, signed release)
+- **Out-of-band verification**: compare fingerprint from `/_mxkeys/notary/key` with fingerprint obtained through a separate path (e.g. `/_matrix/key/v2/server`, DNS TXT record, published in repository)
+- **Trusted release channel**: fingerprint included in signed release artifacts or deployment manifests
+
+The CLI verifier supports `-expected-fingerprint` to enforce Level 3 trust:
+
+```bash
+mxkeys-verify -url https://mxkeys.org -expected-fingerprint abc123...
+```
+
+If the fetched fingerprint does not match, verification fails immediately (exit code 3).
+
 ## Verification Steps
 
 ### 1. Verify STH Signature
@@ -158,6 +194,41 @@ MINUTE=$(date +%M)
 if [ "$MINUTE" = "00" ]; then
     cp "$LATEST" "$ARCHIVE"
 fi
+```
+
+### External Monitor Job (systemd timer)
+
+```ini
+# /etc/systemd/system/mxkeys-verify.service
+[Unit]
+Description=MXKeys transparency verification
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mxkeys-verify \
+    -url https://mxkeys.example.org \
+    -prev /var/lib/mxkeys/sth-history/sth-latest.json \
+    -out /var/lib/mxkeys/sth-history/sth-latest.json \
+    -expected-fingerprint <pinned-fingerprint> \
+    -json -quiet
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mxkeys-verify
+```
+
+```ini
+# /etc/systemd/system/mxkeys-verify.timer
+[Unit]
+Description=MXKeys transparency verification timer
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=300
+AccuracySec=30
+
+[Install]
+WantedBy=timers.target
 ```
 
 ### Exit Codes Reference
