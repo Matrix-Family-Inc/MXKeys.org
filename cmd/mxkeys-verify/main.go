@@ -25,7 +25,6 @@ import (
 	"time"
 )
 
-// Exit codes for machine-readable integration
 const (
 	ExitOK                = 0
 	ExitUsageError        = 1
@@ -58,47 +57,54 @@ type notaryKey struct {
 
 type verifyResult struct {
 	OK               bool   `json:"ok"`
-	Server           string `json:"server"`
-	KeyFingerprint   string `json:"key_fingerprint"`
-	TreeSize         int    `json:"tree_size"`
-	RootHash         string `json:"root_hash"`
-	Timestamp        string `json:"timestamp"`
+	Server           string `json:"server,omitempty"`
+	KeyFingerprint   string `json:"key_fingerprint,omitempty"`
+	TreeSize         int    `json:"tree_size,omitempty"`
+	RootHash         string `json:"root_hash,omitempty"`
+	Timestamp        string `json:"timestamp,omitempty"`
 	SignatureValid   bool   `json:"signature_valid"`
 	ConsistencyValid *bool  `json:"consistency_valid,omitempty"`
 	PrevTreeSize     *int   `json:"prev_tree_size,omitempty"`
+	TrustLevel       int    `json:"trust_level"`
 	Error            string `json:"error,omitempty"`
 }
 
 func main() {
-	baseURL := flag.String("url", "", "MXKeys server base URL (e.g. https://mxkeys.org)")
-	prevFile := flag.String("prev", "", "Path to previous STH JSON for consistency check")
-	outFile := flag.String("out", "", "Save current STH to file for future consistency checks")
+	baseURL := flag.String("url", "", "MXKeys base URL (required)")
+	prevFile := flag.String("prev", "", "Previous STH JSON for consistency check")
+	outFile := flag.String("out", "", "Save current STH to file")
 	jsonOutput := flag.Bool("json", false, "Machine-readable JSON output")
+	quiet := flag.Bool("quiet", false, "Suppress non-error output (implies exit code only)")
+	timeout := flag.Duration("timeout", 10*time.Second, "HTTP request timeout")
+	expectedFP := flag.String("expected-fingerprint", "", "Pinned key fingerprint (Level 3 trust)")
 	flag.Parse()
 
 	if *baseURL == "" {
 		if *jsonOutput {
 			outputJSON(verifyResult{Error: "url parameter required"})
-		} else {
-			fmt.Fprintln(os.Stderr, "Usage: mxkeys-verify -url <base-url> [-prev <prev-sth.json>] [-out <sth.json>] [-json]")
+		} else if !*quiet {
+			fmt.Fprintln(os.Stderr, "Usage: mxkeys-verify -url <base-url> [flags]")
+			fmt.Fprintln(os.Stderr, "Flags:")
+			flag.PrintDefaults()
 		}
 		os.Exit(ExitUsageError)
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	result := verifyResult{}
+	client := &http.Client{Timeout: *timeout}
+	result := verifyResult{TrustLevel: 1}
 
 	logf := func(format string, args ...interface{}) {
-		if !*jsonOutput {
+		if !*jsonOutput && !*quiet {
 			fmt.Printf(format+"\n", args...)
 		}
 	}
 
+	// --- Fetch public key (Level 1: transport retrieval) ---
 	logf("Fetching notary public key...")
 	key, err := fetchJSON[notaryKey](client, *baseURL+"/_mxkeys/notary/key")
 	if err != nil {
 		result.Error = fmt.Sprintf("fetch public key: %v", err)
-		fail(*jsonOutput, result, ExitFetchError)
+		finish(*jsonOutput, result, ExitFetchError)
 	}
 	result.Server = key.ServerName
 	result.KeyFingerprint = key.Fingerprint
@@ -109,14 +115,36 @@ func main() {
 	pubKeyBytes, err := base64.RawStdEncoding.DecodeString(key.PublicKey)
 	if err != nil || len(pubKeyBytes) != ed25519.PublicKeySize {
 		result.Error = "invalid public key encoding or size"
-		fail(*jsonOutput, result, ExitFetchError)
+		finish(*jsonOutput, result, ExitFetchError)
 	}
 
+	// --- Verify self-signature (Level 2: self-consistency) ---
+	if key.SelfSignature != "" && key.SignPayload != "" {
+		selfSig, err := base64.RawStdEncoding.DecodeString(key.SelfSignature)
+		if err == nil && ed25519.Verify(ed25519.PublicKey(pubKeyBytes), []byte(key.SignPayload), selfSig) {
+			result.TrustLevel = 2
+			logf("  OK: Key self-signature valid (Level 2)")
+		} else {
+			logf("  WARN: Key self-signature verification failed")
+		}
+	}
+
+	// --- Check pinned fingerprint (Level 3: origin trust) ---
+	if *expectedFP != "" {
+		if key.Fingerprint != *expectedFP {
+			result.Error = fmt.Sprintf("fingerprint mismatch: got %s, expected %s", key.Fingerprint, *expectedFP)
+			finish(*jsonOutput, result, ExitSignatureInvalid)
+		}
+		result.TrustLevel = 3
+		logf("  OK: Fingerprint matches pinned value (Level 3)")
+	}
+
+	// --- Fetch and verify STH ---
 	logf("\nFetching signed tree head...")
 	sth, err := fetchJSON[signedTreeHead](client, *baseURL+"/_mxkeys/transparency/signed-head")
 	if err != nil {
 		result.Error = fmt.Sprintf("fetch STH: %v", err)
-		fail(*jsonOutput, result, ExitFetchError)
+		finish(*jsonOutput, result, ExitFetchError)
 	}
 	result.TreeSize = sth.TreeSize
 	result.RootHash = sth.RootHash
@@ -125,17 +153,17 @@ func main() {
 	logf("  Root hash:  %s", sth.RootHash)
 	logf("  Timestamp:  %s", sth.Timestamp)
 
-	logf("\nVerifying signature...")
+	logf("\nVerifying STH signature...")
 	sigBytes, err := base64.RawStdEncoding.DecodeString(sth.Signature)
 	if err != nil {
 		result.Error = "invalid signature encoding"
-		fail(*jsonOutput, result, ExitSignatureInvalid)
+		finish(*jsonOutput, result, ExitSignatureInvalid)
 	}
 
 	if !ed25519.Verify(ed25519.PublicKey(pubKeyBytes), []byte(sth.SignPayload), sigBytes) {
 		result.SignatureValid = false
 		result.Error = "STH signature verification failed"
-		fail(*jsonOutput, result, ExitSignatureInvalid)
+		finish(*jsonOutput, result, ExitSignatureInvalid)
 	}
 	result.SignatureValid = true
 	logf("  OK: Signature is valid")
@@ -144,17 +172,18 @@ func main() {
 		logf("  WARN: Signer mismatch: STH says %s, key says %s", sth.Signer, key.ServerName)
 	}
 
+	// --- Consistency check ---
 	if *prevFile != "" {
 		logf("\nChecking consistency with previous STH...")
 		prevData, err := os.ReadFile(*prevFile)
 		if err != nil {
 			result.Error = fmt.Sprintf("read previous STH: %v", err)
-			fail(*jsonOutput, result, ExitIOError)
+			finish(*jsonOutput, result, ExitIOError)
 		}
 		var prev signedTreeHead
 		if err := json.Unmarshal(prevData, &prev); err != nil {
 			result.Error = fmt.Sprintf("parse previous STH: %v", err)
-			fail(*jsonOutput, result, ExitIOError)
+			finish(*jsonOutput, result, ExitIOError)
 		}
 
 		prevSize := prev.TreeSize
@@ -176,20 +205,21 @@ func main() {
 		result.ConsistencyValid = &consistent
 
 		if !consistent {
-			fail(*jsonOutput, result, ExitConsistencyFailed)
+			finish(*jsonOutput, result, ExitConsistencyFailed)
 		}
 		if sth.TreeSize > prev.TreeSize {
-			logf("  OK: Tree grew from %d to %d entries (append-only)", prev.TreeSize, sth.TreeSize)
+			logf("  OK: Tree grew from %d to %d entries", prev.TreeSize, sth.TreeSize)
 		} else {
 			logf("  OK: Tree unchanged since last check")
 		}
 	}
 
+	// --- Save snapshot ---
 	if *outFile != "" {
 		data, _ := json.MarshalIndent(sth, "", "  ")
 		if err := os.WriteFile(*outFile, data, 0644); err != nil {
 			result.Error = fmt.Sprintf("save STH: %v", err)
-			fail(*jsonOutput, result, ExitIOError)
+			finish(*jsonOutput, result, ExitIOError)
 		}
 		logf("\nSTH saved to %s", *outFile)
 	}
@@ -197,13 +227,13 @@ func main() {
 	result.OK = true
 	if *jsonOutput {
 		outputJSON(result)
-	} else {
-		fmt.Println("\nAll checks passed.")
+	} else if !*quiet {
+		fmt.Printf("\nAll checks passed (trust level %d).\n", result.TrustLevel)
 	}
 	os.Exit(ExitOK)
 }
 
-func fail(jsonMode bool, result verifyResult, code int) {
+func finish(jsonMode bool, result verifyResult, code int) {
 	if jsonMode {
 		outputJSON(result)
 	} else {
