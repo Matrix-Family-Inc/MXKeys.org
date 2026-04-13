@@ -188,6 +188,15 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleNotaryPublicKey returns the notary's public key for external STH verification.
+// GET /_mxkeys/notary/key
+func (s *Server) handleNotaryPublicKey(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+
+	writeJSON(w, s.notary.GetPublicKeyInfo())
+}
+
 // handleServerKeys handles GET /_matrix/key/v2/server and GET /_matrix/key/v2/server/{keyID}
 func (s *Server) handleServerKeys(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

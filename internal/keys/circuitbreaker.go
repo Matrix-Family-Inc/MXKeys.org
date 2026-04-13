@@ -16,6 +16,8 @@ package keys
 import (
 	"sync"
 	"time"
+
+	"mxkeys/internal/zero/metrics"
 )
 
 // CircuitState represents the circuit breaker state
@@ -25,6 +27,34 @@ const (
 	CircuitClosed CircuitState = iota
 	CircuitOpen
 	CircuitHalfOpen
+)
+
+var (
+	circuitStateGauge = metrics.NewGaugeVec(
+		metrics.GaugeOpts{
+			Namespace: "mxkeys",
+			Subsystem: "circuit_breaker",
+			Name:      "servers",
+			Help:      "Number of tracked upstream servers by circuit state",
+		},
+		[]string{"state"},
+	)
+	circuitTripsTotal = metrics.NewCounter(
+		metrics.CounterOpts{
+			Namespace: "mxkeys",
+			Subsystem: "circuit_breaker",
+			Name:      "trips_total",
+			Help:      "Total number of circuit breaker trips (closed -> open)",
+		},
+	)
+	circuitRecoveriesTotal = metrics.NewCounter(
+		metrics.CounterOpts{
+			Namespace: "mxkeys",
+			Subsystem: "circuit_breaker",
+			Name:      "recoveries_total",
+			Help:      "Total number of circuit breaker recoveries (half-open -> closed)",
+		},
+	)
 )
 
 // CircuitBreaker prevents repeated calls to failing upstreams
@@ -121,14 +151,16 @@ func (cb *CircuitBreaker) RecordSuccess(serverName string) {
 	}
 	sc.lastTouched = time.Now()
 
-	// Reset on success
 	if sc.state == CircuitHalfOpen {
 		sc.state = CircuitClosed
 		sc.failures = 0
 		sc.halfOpenReqs = 0
+		circuitRecoveriesTotal.Inc()
 	} else if sc.state == CircuitClosed {
 		sc.failures = 0
 	}
+
+	cb.updateMetricsLocked()
 }
 
 // RecordFailure records a failed request
@@ -158,12 +190,15 @@ func (cb *CircuitBreaker) RecordFailure(serverName string) {
 	case CircuitClosed:
 		if sc.failures >= cb.failureThreshold {
 			sc.state = CircuitOpen
+			circuitTripsTotal.Inc()
 		}
 
 	case CircuitHalfOpen:
-		// Failure in half-open state → back to open
 		sc.state = CircuitOpen
+		circuitTripsTotal.Inc()
 	}
+
+	cb.updateMetricsLocked()
 }
 
 // State returns the current state for a server
@@ -213,6 +248,23 @@ func (cb *CircuitBreaker) Stats() map[string]interface{} {
 		"open":          open,
 		"half_open":     halfOpen,
 	}
+}
+
+func (cb *CircuitBreaker) updateMetricsLocked() {
+	var closed, open, halfOpen int
+	for _, sc := range cb.servers {
+		switch sc.state {
+		case CircuitClosed:
+			closed++
+		case CircuitOpen:
+			open++
+		case CircuitHalfOpen:
+			halfOpen++
+		}
+	}
+	circuitStateGauge.WithLabelValues("closed").Set(float64(closed))
+	circuitStateGauge.WithLabelValues("open").Set(float64(open))
+	circuitStateGauge.WithLabelValues("half_open").Set(float64(halfOpen))
 }
 
 func (cb *CircuitBreaker) cleanupLocked(now time.Time) {

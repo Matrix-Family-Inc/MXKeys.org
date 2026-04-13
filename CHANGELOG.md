@@ -9,11 +9,15 @@ Production hardening release. Four-pass security audit with 47 verified fixes.
 ### Added
 
 - Signed Tree Head endpoint (`GET /_mxkeys/transparency/signed-head`) with ed25519 signature for external verification
+- Public key discovery endpoint (`GET /_mxkeys/notary/key`) with fingerprint for external STH verification
+- CLI verifier tool (`cmd/mxkeys-verify`) for STH signature and consistency monitoring
 - Consistency proof generation in Merkle tree (`GetConsistencyProof` + `VerifyConsistencyProof`)
 - Circuit breaker stats endpoint (`GET /_mxkeys/circuits`) for upstream health visibility
+- Circuit breaker Prometheus metrics (`mxkeys_circuit_breaker_servers`, `trips_total`, `recoveries_total`)
 - Request ID (`request_id`) included in all Matrix error JSON response bodies
 - Cluster SLA documentation in ADR-0001 with per-mode property table
 - Route normalization for operational endpoints in Prometheus metrics
+- Transparency verification guide (`docs/transparency-verification.md`)
 
 ### Security
 
