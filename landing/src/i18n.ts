@@ -14,32 +14,32 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
-import { en } from './locales/en';
-import { ru } from './locales/ru';
-import { de } from './locales/de';
-import { fr } from './locales/fr';
-import { es } from './locales/es';
-import { zh } from './locales/zh';
-import { ja } from './locales/ja';
-import { pt } from './locales/pt';
-import { ko } from './locales/ko';
-import { uk } from './locales/uk';
-import { hi } from './locales/hi';
 import { ar } from './locales/ar';
-import { he } from './locales/he';
-import { ur } from './locales/ur';
 import { bn } from './locales/bn';
-import { tr } from './locales/tr';
+import { de } from './locales/de';
+import { en } from './locales/en';
+import { es } from './locales/es';
+import { fr } from './locales/fr';
+import { he } from './locales/he';
+import { hi } from './locales/hi';
 import { id } from './locales/id';
-import { vi } from './locales/vi';
-import { th } from './locales/th';
-import { pl } from './locales/pl';
 import { it } from './locales/it';
+import { ja } from './locales/ja';
+import { ko } from './locales/ko';
 import { nl } from './locales/nl';
+import { pl } from './locales/pl';
+import { pt } from './locales/pt';
+import { ru } from './locales/ru';
+import { th } from './locales/th';
+import { tr } from './locales/tr';
+import { uk } from './locales/uk';
+import { ur } from './locales/ur';
+import { vi } from './locales/vi';
+import { zh } from './locales/zh';
 
 export const supportedLanguages = [
-  'en', 'ru', 'de', 'fr', 'es', 'zh', 'ja', 'pt', 'ko', 'uk',
-  'hi', 'ar', 'he', 'ur', 'bn', 'tr', 'id', 'vi', 'th', 'pl', 'it', 'nl',
+  'ar', 'bn', 'de', 'en', 'es', 'fr', 'he', 'hi', 'id', 'it', 'ja',
+  'ko', 'nl', 'pl', 'pt', 'ru', 'th', 'tr', 'uk', 'ur', 'vi', 'zh',
 ] as const;
 
 const rtlLanguages = new Set(['ar', 'he', 'ur']);
@@ -130,28 +130,28 @@ function applyLanguageEffects(language: SupportedLanguage) {
 
 i18n.use(initReactI18next).init({
   resources: {
-    en: { translation: en },
-    ru: { translation: ru },
-    de: { translation: de },
-    fr: { translation: fr },
-    es: { translation: es },
-    zh: { translation: zh },
-    ja: { translation: ja },
-    pt: { translation: pt },
-    ko: { translation: ko },
-    uk: { translation: uk },
-    hi: { translation: hi },
     ar: { translation: ar },
-    he: { translation: he },
-    ur: { translation: ur },
     bn: { translation: bn },
-    tr: { translation: tr },
+    de: { translation: de },
+    en: { translation: en },
+    es: { translation: es },
+    fr: { translation: fr },
+    he: { translation: he },
+    hi: { translation: hi },
     id: { translation: id },
-    vi: { translation: vi },
-    th: { translation: th },
-    pl: { translation: pl },
     it: { translation: it },
+    ja: { translation: ja },
+    ko: { translation: ko },
     nl: { translation: nl },
+    pl: { translation: pl },
+    pt: { translation: pt },
+    ru: { translation: ru },
+    th: { translation: th },
+    tr: { translation: tr },
+    uk: { translation: uk },
+    ur: { translation: ur },
+    vi: { translation: vi },
+    zh: { translation: zh },
   },
   lng: detectInitialLanguage(),
   fallbackLng: defaultLanguage,
