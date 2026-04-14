@@ -131,7 +131,7 @@ Apache License 2.0. See `LICENSE` and `SECURITY.md`.
 
 The landing page at [mxkeys.org](https://mxkeys.org) supports automatic language detection based on browser preferences.
 
-Supported languages: English, Russian, German, French, Spanish, Chinese (Simplified), Japanese, Portuguese, Korean, Ukrainian, Hindi, Arabic, Hebrew, Urdu, Bengali, Turkish, Indonesian, Vietnamese, Thai, Polish, Italian, Dutch.
+Supported languages: Arabic, Bengali, Chinese (Simplified), Dutch, English, French, German, Hebrew, Hindi, Indonesian, Italian, Japanese, Korean, Polish, Portuguese, Russian, Spanish, Thai, Turkish, Ukrainian, Urdu, Vietnamese.
 
 RTL languages (Arabic, Hebrew, Urdu) are fully supported with automatic layout direction.
 
