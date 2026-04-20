@@ -169,6 +169,8 @@ func New(cfg *config.Config) (*Server, error) {
 			ConsensusMode:    cfg.Cluster.ConsensusMode,
 			SyncInterval:     cfg.Cluster.SyncInterval,
 			SharedSecret:     cfg.Cluster.SharedSecret,
+			RaftStateDir:     cfg.Cluster.RaftStateDir,
+			RaftSyncOnAppend: cfg.Cluster.RaftSyncOnAppend,
 		}
 		c, err := cluster.NewCluster(clusterCfg)
 		if err != nil {

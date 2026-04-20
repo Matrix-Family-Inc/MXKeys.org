@@ -77,6 +77,12 @@ type Node struct {
 	commitIndex uint64
 	lastApplied uint64
 
+	// snapshotIndex is the highest Raft log index reflected in the latest
+	// persisted snapshot. Entries with Index <= snapshotIndex may be absent
+	// from n.log (compacted) and must be served from disk via InstallSnapshot.
+	snapshotIndex uint64
+	snapshotTerm  uint64
+
 	// Leader state
 	nextIndex  map[string]uint64
 	matchIndex map[string]uint64
@@ -95,9 +101,15 @@ type Node struct {
 	// Network
 	listener net.Listener
 
+	// Persistence
+	wal      *WAL
+	stateDir string
+
 	// Callbacks
-	onStateChange func(State)
-	onApply       func(LogEntry)
+	onStateChange     func(State)
+	onApply           func(LogEntry)
+	snapshotProvider  SnapshotProvider
+	snapshotInstaller SnapshotInstaller
 
 	wg sync.WaitGroup
 }

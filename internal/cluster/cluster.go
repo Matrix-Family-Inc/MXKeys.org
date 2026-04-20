@@ -48,6 +48,11 @@ type ClusterConfig struct {
 	ConsensusMode    string
 	SyncInterval     int
 	SharedSecret     string
+	// RaftStateDir is the directory holding the Raft WAL and snapshot.
+	// Required when ConsensusMode="raft" for crash-safe replication.
+	RaftStateDir string
+	// RaftSyncOnAppend fsyncs the Raft WAL after each append. Default true.
+	RaftSyncOnAppend bool
 }
 
 // Node represents a cluster node

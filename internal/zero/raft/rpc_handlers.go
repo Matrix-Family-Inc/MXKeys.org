@@ -21,6 +21,8 @@ func (n *Node) handleRPC(msg *RPCMessage) *RPCMessage {
 		return n.handleRequestVote(msg)
 	case MsgAppendEntries:
 		return n.handleAppendEntries(msg)
+	case MsgInstallSnapshot:
+		return n.handleInstallSnapshot(msg)
 	default:
 		return nil
 	}
@@ -116,15 +118,26 @@ func (n *Node) handleAppendEntries(msg *RPCMessage) *RPCMessage {
 		}
 	}
 
-	// Append new entries.
+	// Append new entries. On term conflict, truncate the local log and the
+	// WAL before accepting the leader's replacement. On each append the WAL
+	// is updated before the in-memory slice so a crash between the two
+	// cannot lose a record the follower has already acknowledged.
 	for i, entry := range req.Entries {
 		idx := req.PrevLogIndex + uint64(i) + 1
 		if idx <= uint64(len(n.log)) {
 			if n.log[idx-1].Term != entry.Term {
-				n.log = n.log[:idx-1]
+				if err := n.truncateLogAfter(idx - 1); err != nil {
+					return n.wrapResponse(MsgAppendRes, response)
+				}
+				if err := n.persistEntry(entry); err != nil {
+					return n.wrapResponse(MsgAppendRes, response)
+				}
 				n.log = append(n.log, entry)
 			}
 		} else {
+			if err := n.persistEntry(entry); err != nil {
+				return n.wrapResponse(MsgAppendRes, response)
+			}
 			n.log = append(n.log, entry)
 		}
 	}

@@ -79,9 +79,14 @@ cluster:
   node_id: ""
   bind_address: "0.0.0.0"
   bind_port: 7946
-  advertise_address: "mxkeys-node-a.internal"
+  advertise_address: "notary-node-a.internal"
   advertise_port: 7946
   seeds: []
-  consensus_mode: crdt # crdt | raft (raft is experimental: no persistent log, no snapshots)
+  consensus_mode: crdt # crdt | raft
   sync_interval: 5
-  shared_secret: "replace-with-long-random-secret"
+  # Required when cluster.enabled=true. Must be at least 32 characters.
+  # Placeholder values (e.g. "replace-with-long-random-secret") are rejected.
+  shared_secret: "CHANGE-TO-A-LONG-RANDOM-SECRET-GTE-32-CHARS"
+  # Raft persistence. Directory created with 0700 if missing.
+  raft_state_dir: "/var/lib/mxkeys/raft"
+  raft_sync_on_append: true
