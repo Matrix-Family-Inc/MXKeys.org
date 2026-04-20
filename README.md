@@ -119,7 +119,7 @@ For a full local verification pass:
 ./scripts/ci-parity-preflight.sh
 ```
 
-This script mirrors the PR gate workflow, including package selection from `scripts/go-package-list.sh`, the targeted integration-with-fixtures subset, frontend checks in `landing/`, and the patched `govulncheck` toolchain used in CI.
+This script mirrors the PR gate workflow: unit + race + tagged integration tests, vet, gofmt, govulncheck, gosec, coverage gate, staticcheck, errcheck, a 30s-per-target fuzz pass, and the landing lint/test/build/typecheck cycle.
 
 ## Documentation
 
@@ -129,6 +129,8 @@ This script mirrors the PR gate workflow, including package selection from `scri
 - Deployment: `docs/deployment.md`
 - Build and verification: `docs/build.md`
 - Security: `docs/threat-model.md`
+- Runbooks: `docs/runbook/` (key rotation, cluster DR, schema migration)
+- ADRs: `docs/adr/`
 
 ---
 
@@ -140,20 +142,31 @@ Apache License 2.0. See `LICENSE` and `SECURITY.md`.
 
 ## Landing Page
 
-The landing page at [mxkeys.org](https://mxkeys.org) supports automatic language detection based on browser preferences.
+The `landing/` tree is an operator-forkable marketing page for a deployed
+notary. Feature-Sliced Design with Zustand for UI state, Zod for env
+validation, TanStack Router/Query ready for future pages, lazy-loaded i18n
+(22 locales, ~7-12 KB each), and Sentry opt-in via `VITE_SENTRY_DSN`.
+Set `VITE_SITE_URL` to rebrand without file edits.
 
-Supported languages: Arabic, Bengali, Chinese (Simplified), Dutch, English, French, German, Hebrew, Hindi, Indonesian, Italian, Japanese, Korean, Polish, Portuguese, Russian, Spanish, Thai, Turkish, Ukrainian, Urdu, Vietnamese.
+Supported languages: Arabic, Bengali, Chinese (Simplified), Dutch, English,
+French, German, Hebrew, Hindi, Indonesian, Italian, Japanese, Korean,
+Polish, Portuguese, Russian, Spanish, Thai, Turkish, Ukrainian, Urdu,
+Vietnamese. RTL languages (Arabic, Hebrew, Urdu) have automatic layout
+direction.
 
-RTL languages (Arabic, Hebrew, Urdu) are fully supported with automatic layout direction.
+See `docs/adr/0009-landing-fsd-stack.md` for stack rationale.
 
 ---
 
 ## Project
 
-MXKeys is part of Matrix Family Inc. infrastructure.
+MXKeys is an independent Matrix federation key-notary server maintained by
+Matrix Family Inc. It works with any Matrix homeserver (Synapse, Dendrite,
+Conduit, MXCore). Operators deploy their own branded notary without
+coupling to any specific homeserver or ecosystem.
 
-Website: https://matrix.family
-Support: support@matrix.family
-Matrix: @support:matrix.family
+Company: Matrix Family Inc. (https://matrix.family)
+Maintainer: Brabus
+Contact: dev@matrix.family
 
 Copyright (c) 2026 Matrix Family Inc. All rights reserved.

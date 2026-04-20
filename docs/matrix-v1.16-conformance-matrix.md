@@ -2,8 +2,8 @@ Project: MXKeys
 Company: Matrix Family Inc. (https://matrix.family)
 Maintainer: Brabus
 Contact: dev@matrix.family
-Date: Mon Mar 16 2026 UTC
-Status: Created
+Date: Mon Apr 20 2026 UTC
+Status: Updated
 
 # MXKeys Matrix v1.16 Conformance Matrix
 
@@ -64,8 +64,13 @@ This file is the only maintained v1.16 conformance artifact in `docs/`.
 ## Verification Commands
 
 ```bash
-go test ./...
-go test -tags=integration ./tests/integration/...
-go test -race ./...
-go vet ./...
+packages="$(bash ./scripts/go-package-list.sh | tr '\n' ' ')"
+go test -count=1 ${packages}
+go test -count=1 -race ${packages}
+go test -tags=integration -race ./tests/integration/...
+go vet ${packages}
+
+# Extended verification beyond the Matrix conformance subset:
+./scripts/coverage-gate.sh
+./scripts/fuzz-quick.sh
 ```
