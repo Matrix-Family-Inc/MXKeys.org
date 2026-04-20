@@ -1,3 +1,10 @@
+Project: MXKeys
+Company: Matrix Family Inc. (https://matrix.family)
+Maintainer: Brabus
+Contact: dev@matrix.family
+Date: Mon Apr 20 2026 UTC
+Status: Updated
+
 # MXKeys Architecture
 
 ## Scope
@@ -7,7 +14,10 @@ This document describes the current runtime shape of MXKeys:
 - HTTP request flow,
 - cache and fetch path,
 - transparency and analytics subsystems,
-- authenticated cluster transport.
+- authenticated cluster transport,
+- Raft persistence (WAL + snapshots),
+- signing-key provider abstraction,
+- schema migration runner.
 
 The normative API contract lives in `docs/federation-behavior.md`.
 
@@ -19,7 +29,7 @@ Public request flow in `internal/server`:
 2. optional `RequestIDRequirementMiddleware`
 3. `SecurityHeadersMiddleware`
 4. request logging middleware
-5. rate limiting middleware
+5. rate limiting middleware (LRU cache of per-IP token buckets, O(1) eviction)
 6. route handler on `http.ServeMux`
 
 Stable public routes:
@@ -47,15 +57,18 @@ These routes are registered only when their feature is available and the enterpr
 
 | Component | Responsibility |
 |-----------|----------------|
+| `cmd/mxkeys` | Process entry point; parses `-config`, initializes logging, wires signals |
 | `internal/server` | HTTP routing, middleware, status, protected operational endpoints |
-| `internal/keys/notary*` | query orchestration, signing, cache selection, storage writes |
-| `internal/keys/fetcher*` | remote fetch, fallback notaries, retry, signature verification, SSRF checks |
+| `internal/keys/notary*` | Query orchestration, signing, cache selection, storage writes |
+| `internal/keys/fetcher*` | Remote fetch, fallback notaries, retry, signature verification, SSRF checks |
 | `internal/keys/resolver*` | `.well-known`, SRV, legacy SRV, host/port resolution |
-| `internal/keys/storage.go` | PostgreSQL persistence for responses and individual keys |
-| `internal/keys/transparency*` | append-only transparency log, Merkle proofs, verification |
-| `internal/keys/analytics*` | runtime key statistics and anomaly tracking |
-| `internal/cluster/*` | authenticated CRDT or Raft-backed replication |
-| `internal/zero/*` | internal infrastructure packages (config, canonical JSON, metrics, raft, logging) |
+| `internal/keys/storage.go` | PostgreSQL persistence for responses and individual keys (schema owned by migrations) |
+| `internal/keys/keyprovider` | Pluggable signing-key backend (file, env, kms-stub); see ADR-0007 |
+| `internal/keys/transparency*` | Append-only transparency log, Merkle proofs, verification |
+| `internal/keys/analytics*` | Runtime key statistics and anomaly tracking |
+| `internal/cluster/*` | Authenticated CRDT or Raft-backed replication |
+| `internal/storage/migrations` | Embedded SQL migrations runner (see ADR-0008) |
+| `internal/zero/*` | Internal infrastructure packages (config, canonical JSON, metrics, raft, logging) |
 
 ## Key Query Flow
 
@@ -74,31 +87,60 @@ Client
 
 ## Cache and Persistence
 
-- memory cache stores short-lived `ServerKeysResponse` objects,
-- PostgreSQL stores full responses and per-key rows,
-- expired entries are cleaned periodically,
-- stale fallback responses are returned only under explicit logic in the notary path.
+- Memory cache: short-lived `ServerKeysResponse` objects with defensive cloning on every lookup.
+- PostgreSQL: full responses + per-key rows, schema managed via `internal/storage/migrations`.
+- Expired entries cleaned by a cleanup goroutine (config `keys.cleanup_hours`).
+- Stale fallback responses are returned only under explicit logic in the notary path (cache kept alive after a failed fetch when still within TTL).
+
+## Schema Migrations
+
+See ADR-0008.
+
+- `internal/storage/migrations` owns all DDL.
+- Embedded SQL files named `NNNN_name.sql` applied in version order.
+- `schema_migrations` table tracks applied versions.
+- Each migration runs in its own transaction: a failed migration rolls back without corrupting bookkeeping.
+- `server.New` invokes `migrations.Apply` before any dependent component touches the database.
+
+## Signing Key Provider
+
+See ADR-0007.
+
+- `internal/keys/keyprovider.Provider` interface: `LoadOrGenerate`, `PublicKey`, `Sign`, `Kind`.
+- `FileProvider` (default, backward compatible): raw ed25519 bytes at 0600 under a 0700 directory.
+- `EnvProvider`: base64 seed or full key from an env variable.
+- `KMSStub`: documents the future external-KMS contract; returns `ErrNotImplemented`.
 
 ## Cluster Model
 
-Cluster mode supports:
+See ADR-0001.
 
-- `crdt` for eventually consistent replication,
-- `raft` for replicated command flow.
+- `crdt` (default): eventually consistent replication, LWW by timestamp.
+- `raft` (production): quorum commit with persistent WAL + snapshots under `cluster.raft_state_dir`.
 
-Cluster invariants:
+### Cluster Transport Invariants
 
-- transport uses shared-secret HMAC authentication,
-- wire messages are bounded in size and time-limited,
-- wildcard bind addresses require explicit advertise address,
-- replicated server responses are treated as trusted cluster data and written into cache/storage on peers.
+- Transport uses shared-secret HMAC-SHA256 authentication over canonical JSON of the message fields (type, from, timestamp, payload_hex). Canonical encoding eliminates structural ambiguity from ad-hoc string concatenation.
+- Wire messages are bounded in size and time-limited; 5-minute skew window.
+- Replay protection: MAC signatures are cached for the skew window; reuses are rejected.
+- Wildcard bind addresses require explicit advertise address.
+- Replicated server responses are treated as trusted cluster data and written into cache/storage on peers only after the embedded self-signature re-verifies.
+
+### Raft Persistence
+
+- WAL: append-only `raft.wal` with per-record length + CRC32C header. Group-commit batcher amortizes fsync across bursts with bounded queue backpressure.
+- Snapshot: `raft.snapshot` with magic prefix, metadata header, and CRC32C payload. Written via temp-file + rename for crash safety.
+- InstallSnapshot RPC catches up followers whose `nextIndex` sits below the leader's compaction boundary.
+- `SetSnapshotProvider` / `SetSnapshotInstaller` callbacks keep the state-machine payload opaque to the Raft layer.
 
 ## Security Notes
 
-- upstream key material is verified cryptographically before first local acceptance,
-- request decoding enforces size and JSON depth limits,
-- SSRF checks reject resolved private IPs when enabled,
-- enterprise operational routes require token-based access.
+- Upstream key material is verified cryptographically before first local acceptance.
+- Request decoding enforces size and JSON depth limits.
+- SSRF checks reject resolved private IPs when enabled.
+- Enterprise operational routes require token-based access.
+- `cluster.shared_secret` rejects known example placeholders and enforces minimum length 32.
+- Canonical JSON parser is continuously fuzzed (`FuzzJSON`, `FuzzMarshalRoundTrip`) against round-trip and idempotence invariants.
 
 ## Metrics
 
