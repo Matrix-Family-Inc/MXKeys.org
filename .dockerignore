@@ -1,6 +1,7 @@
 # Git
 .git
 .gitignore
+.gitattributes
 
 # IDE
 .idea
@@ -9,10 +10,14 @@
 *.swo
 
 # Build artifacts
-mxkeys
+/mxkeys
+/mxkeys-verify
+/release/
 *.exe
 *.test
 *.out
+coverage.*
+.preflight/
 
 # Test files
 *_test.go
@@ -26,9 +31,16 @@ docs/
 # Landing page
 landing/
 
-# Local config
+# Local config and secrets
 config.yaml
+.env
+.env.*
 *.key
+*.pem
+*.crt
+*.p12
+*.backup
+*.bak
 
 # Misc
 .DS_Store

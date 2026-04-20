@@ -73,7 +73,7 @@ func TestSigningKeyPersistence(t *testing.T) {
 func TestGetOwnKeysFormat(t *testing.T) {
 	pub, _, _ := ed25519.GenerateKey(nil)
 	pubB64 := base64.RawStdEncoding.EncodeToString(pub)
-	serverName := "test.mxkeys.org"
+	serverName := "test.notary.example.org"
 	keyID := "ed25519:mxkeys"
 
 	ownKeys := &ServerKeysResponse{

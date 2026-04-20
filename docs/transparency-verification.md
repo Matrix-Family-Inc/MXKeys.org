@@ -77,7 +77,7 @@ Mechanisms for establishing Level 3 trust:
 The CLI verifier supports `-expected-fingerprint` to enforce Level 3 trust:
 
 ```bash
-mxkeys-verify -url https://mxkeys.org -expected-fingerprint abc123...
+mxkeys-verify -url https://notary.example.org -expected-fingerprint abc123...
 ```
 
 If the fetched fingerprint does not match, verification fails immediately (exit code 3).

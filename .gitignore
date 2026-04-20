@@ -3,7 +3,17 @@ dist/
 .cursor/
 *.log
 .DS_Store
-mxkeys
+Thumbs.db
+
+# Go build artifacts
+/mxkeys
+/mxkeys-verify
+/release/
+*.test
+*.exe
+*.out
+
+# Local config and secrets
 config.yaml
 .env
 .env.*
@@ -13,5 +23,21 @@ config.yaml
 *.p12
 *.backup
 *.bak
+
+# Coverage and profiling
+coverage.out
+coverage.html
+/.preflight/
+/profile.out
+/cpu.prof
+/mem.prof
+
+# Editor/IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Internal-only artifacts
 docs/release-100-checklist.md
 matrix-family-info.md

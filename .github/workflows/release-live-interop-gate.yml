@@ -1,11 +1,7 @@
 # Project: MXKeys
 # Company: Matrix Family Inc. (https://matrix.family)
-# Owner: Matrix Family Inc.
 # Maintainer: Brabus
-# Role: Lead Architect
 # Contact: dev@matrix.family
-# Support: support@matrix.family
-# Matrix: @support:matrix.family
 # Date: Sun Mar 15 2026 UTC
 # Status: Created
 
@@ -28,8 +24,10 @@ permissions:
   contents: read
 
 env:
+  # Live interop target is operator-specific and must be provided via repository variable.
+  # If MXKEYS_LIVE_BASE_URL is not set, the test helper skips. No hardcoded fallback domain.
   MXKEYS_LIVE_TEST: "1"
-  MXKEYS_LIVE_BASE_URL: ${{ vars.MXKEYS_LIVE_BASE_URL != '' && vars.MXKEYS_LIVE_BASE_URL || 'https://mxkeys.org' }}
+  MXKEYS_LIVE_BASE_URL: ${{ vars.MXKEYS_LIVE_BASE_URL }}
 
 jobs:
   live-federation-strictness:

@@ -1,12 +1,8 @@
 /*
  * Project: MXKeys
  * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
  * Maintainer: Brabus
- * Role: Lead Architect
  * Contact: dev@matrix.family
- * Support: support@matrix.family
- * Matrix: @support:matrix.family
  * Date: Thu 06 Feb 2026 UTC
  * Status: Created
  */
