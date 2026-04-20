@@ -1,12 +1,12 @@
-# Project: MXKeys (mxkeys.org)
-# Company: EasyProTech LLC
+# Project: MXKeys
+# Company: Matrix Family Inc. (https://matrix.family)
+# Maintainer: Brabus
+# Contact: dev@matrix.family
 
 User-agent: *
 Allow: /
 
-# Sitemap
-Sitemap: https://mxkeys.org/sitemap.xml
+Sitemap: __MXKEYS_SITE_URL__/sitemap.xml
 
-# Disallow development paths
 Disallow: /src/
 Disallow: /node_modules/
