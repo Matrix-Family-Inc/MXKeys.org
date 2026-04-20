@@ -11,6 +11,8 @@ package raft
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -75,6 +77,7 @@ func (w *WAL) readAllLocked() ([]LogEntry, error) {
 
 		length := binary.LittleEndian.Uint32(hdr[0:4])
 		declaredCRC := binary.LittleEndian.Uint32(hdr[4:8])
+		declaredMAC := hdr[8:walHeaderSize]
 		if length == 0 || length > walMaxRecord {
 			return entries, ErrWALCorrupt
 		}
@@ -84,8 +87,22 @@ func (w *WAL) readAllLocked() ([]LogEntry, error) {
 			return entries, ErrWALCorrupt
 		}
 
+		// Fast path: CRC first. Bit rot shows up here and returns the
+		// generic "corrupt" outcome the existing callers expect.
 		if crc32.Checksum(payload, walCRC) != declaredCRC {
 			return entries, ErrWALCorrupt
+		}
+
+		// HMAC check. Covers both header-prefix and payload; a valid
+		// CRC combined with an invalid MAC is the smoking gun of a
+		// deliberate write, so we surface a distinct error to make
+		// ops-level classification possible. Truncation on the caller
+		// side is still appropriate: Raft treats the tail as lost.
+		mac := hmac.New(sha256.New, w.hmacKey)
+		mac.Write(hdr[0:8])
+		mac.Write(payload)
+		if !hmac.Equal(mac.Sum(nil), declaredMAC) {
+			return entries, ErrWALTampered
 		}
 
 		var entry LogEntry

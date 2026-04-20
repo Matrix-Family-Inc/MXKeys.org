@@ -89,7 +89,7 @@ cluster:
 trusted_notaries:
   - server_name: matrix.org
     key_id: ed25519:auto
-    public_key: "cHVibGljX2tleQ"
+    public_key: "Nzxs2Mh0Fb+Uhv3uTE47iWBoCGY8oSa11BZX9S7W6RE"
 `
 	if err := os.WriteFile(configPath, []byte(configData), 0600); err != nil {
 		t.Fatalf("failed to write config: %v", err)

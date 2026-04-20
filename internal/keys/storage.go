@@ -10,12 +10,15 @@
 package keys
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
+	"net"
+	"os"
+	"syscall"
 	"time"
 )
 
@@ -50,6 +53,17 @@ func NewStorage(db *sql.DB) (*Storage, error) {
 	return &Storage{db: db}, nil
 }
 
+// isRetryableStorageError classifies database errors that are worth a
+// bounded retry. Uses typed classification:
+//
+//   - driver.ErrBadConn is the canonical "get me a fresh connection"
+//     signal from database/sql.
+//   - net.Error.Timeout() catches the PG driver's network timeouts.
+//   - syscall.Errno classification handles ECONNRESET / ECONNREFUSED /
+//     EPIPE that surface when the postgres listener is being cycled.
+//   - context.DeadlineExceeded is retryable within the operator's
+//     timeout budget; the outer call site is responsible for not
+//     re-entering after the budget is exhausted.
 func isRetryableStorageError(err error) bool {
 	if err == nil {
 		return false
@@ -57,14 +71,49 @@ func isRetryableStorageError(err error) bool {
 	if errors.Is(err, driver.ErrBadConn) {
 		return true
 	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
 
-	errText := strings.ToLower(err.Error())
-	return strings.Contains(errText, "timeout") ||
-		strings.Contains(errText, "temporarily unavailable") ||
-		strings.Contains(errText, "connection reset") ||
-		strings.Contains(errText, "connection refused") ||
-		strings.Contains(errText, "broken pipe") ||
-		strings.Contains(errText, "driver: bad connection")
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return true
+	}
+
+	var syscallErr *os.SyscallError
+	if errors.As(err, &syscallErr) {
+		if errno, ok := syscallErr.Err.(syscall.Errno); ok {
+			switch errno {
+			case syscall.ECONNREFUSED,
+				syscall.ECONNRESET,
+				syscall.EPIPE,
+				syscall.EHOSTUNREACH,
+				syscall.ENETUNREACH,
+				syscall.ETIMEDOUT:
+				return true
+			}
+		}
+	}
+
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		switch errno {
+		case syscall.ECONNREFUSED,
+			syscall.ECONNRESET,
+			syscall.EPIPE,
+			syscall.EHOSTUNREACH,
+			syscall.ENETUNREACH,
+			syscall.ETIMEDOUT:
+			return true
+		}
+	}
+
+	return false
 }
 
 func (s *Storage) execWrite(query string, args ...interface{}) error {

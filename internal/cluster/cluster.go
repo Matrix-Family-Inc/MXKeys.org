@@ -21,6 +21,7 @@ import (
 
 	"mxkeys/internal/zero/log"
 	"mxkeys/internal/zero/metrics"
+	"mxkeys/internal/zero/nettls"
 	"mxkeys/internal/zero/raft"
 )
 
@@ -53,6 +54,13 @@ type ClusterConfig struct {
 	RaftStateDir string
 	// RaftSyncOnAppend fsyncs the Raft WAL after each append. Default true.
 	RaftSyncOnAppend bool
+
+	// TLS configures transport-level encryption and mutual
+	// authentication for cluster traffic (both CRDT and Raft).
+	// When TLS.Enabled is false the transport stays on plain TCP
+	// (backward-compatible default). Mutual authentication
+	// (RequireClientCert=true) is strongly recommended in production.
+	TLS nettls.Config
 }
 
 // Node represents a cluster node

@@ -13,10 +13,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"time"
 
 	"mxkeys/internal/zero/log"
+	"mxkeys/internal/zero/nettls"
 	"mxkeys/internal/zero/raft"
 )
 
@@ -28,7 +28,7 @@ type raftCommand struct {
 
 func (c *Cluster) startCRDT() error {
 	addr := fmt.Sprintf("%s:%d", c.config.BindAddress, c.config.BindPort)
-	listener, err := net.Listen("tcp", addr)
+	listener, err := nettls.Listen("tcp", addr, c.config.TLS)
 	if err != nil {
 		return fmt.Errorf("failed to start cluster listener: %w", err)
 	}
@@ -41,6 +41,7 @@ func (c *Cluster) startCRDT() error {
 		"bind_address", addr,
 		"advertise_address", fmt.Sprintf("%s:%d", c.advertiseAddress(), c.advertisePort()),
 		"consensus_mode", c.consensusMode(),
+		"tls_enabled", c.config.TLS.Enabled,
 	)
 
 	c.wg.Add(1)
@@ -79,6 +80,7 @@ func (c *Cluster) startRaft(ctx context.Context) error {
 		HeartbeatInterval: 100 * time.Millisecond,
 		CommitTimeout:     5 * time.Second,
 		SharedSecret:      c.config.SharedSecret,
+		TLS:               c.config.TLS,
 	})
 
 	// Attach persistent state so committed log entries survive restart.
@@ -125,6 +127,7 @@ func (c *Cluster) startRaft(ctx context.Context) error {
 		"bind_address", fmt.Sprintf("%s:%d", c.config.BindAddress, c.config.BindPort),
 		"advertise_address", fmt.Sprintf("%s:%d", c.advertiseAddress(), c.advertisePort()),
 		"consensus_mode", c.consensusMode(),
+		"tls_enabled", c.config.TLS.Enabled,
 	)
 	return nil
 }

@@ -66,6 +66,15 @@ type Config struct {
 	// File-specific.
 	StoragePath string
 
+	// Passphrase, when non-empty, enables at-rest encryption of the
+	// file-backed key via AES-256-GCM with a KEK derived from this
+	// passphrase using PBKDF2-HMAC-SHA256 (600 000 iterations). When
+	// empty, the file backend stores the key as plaintext at 0600
+	// (backward-compatible with pre-encryption installs).
+	//
+	// For Kind == KindEnv and KindKMS this field is ignored.
+	Passphrase []byte
+
 	// Env-specific.
 	EnvVar string
 
@@ -79,6 +88,9 @@ type Config struct {
 func New(cfg Config) (Provider, error) {
 	switch cfg.Kind {
 	case "", KindFile:
+		if len(cfg.Passphrase) > 0 {
+			return newFileProviderWithPassphrase(cfg.StoragePath, cfg.Passphrase)
+		}
 		return newFileProvider(cfg.StoragePath)
 	case KindEnv:
 		return newEnvProvider(cfg.EnvVar)

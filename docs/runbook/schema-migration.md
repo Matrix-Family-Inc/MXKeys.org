@@ -3,7 +3,7 @@ Company: Matrix Family Inc. (https://matrix.family)
 Maintainer: Brabus
 Contact: dev@matrix.family
 Date: Mon Apr 20 2026 UTC
-Status: Created
+Status: Updated
 
 # Runbook: Schema Migration
 
@@ -92,33 +92,32 @@ version landed.
 
 ## Adding a New Migration (developer path)
 
-1. Pick the next unused version number (existing: 0001; next would
-   be 0002):
+1. Pick the next unused version number. Currently shipped:
+   `0001_initial.sql`, `0002_transparency_log.sql`.
 
    ```bash
    ls internal/storage/migrations/sql
    ```
 
-2. Create `internal/storage/migrations/sql/0002_add_rotation_ts.sql`.
+2. Create `internal/storage/migrations/sql/NNNN_description.sql`.
    Use `IF NOT EXISTS` where possible:
 
    ```sql
-   -- 0002_add_rotation_ts.sql
+   -- 0003_add_rotation_ts.sql
    ALTER TABLE server_keys ADD COLUMN IF NOT EXISTS rotation_ts timestamptz;
    CREATE INDEX IF NOT EXISTS idx_server_keys_rotation_ts ON server_keys(rotation_ts);
    ```
 
-3. Add a test covering the migration in
-   `internal/storage/migrations/migrations_test.go` (version
-   ordering, filename parsing, and idempotence tests exist already;
-   extend the load test if the new migration needs shape
-   validation).
+3. Add a test in `internal/storage/migrations/migrations_test.go`.
+   Version ordering, filename parsing, and idempotence tests
+   exist; extend the load test when the new migration needs
+   shape validation.
 
-4. Bump the coverage-gate floor if the new code path brings the
+4. Raise the coverage-gate floor if the new code path brings the
    package under its threshold.
 
-5. Ship. The first operator to upgrade applies the migration on
-   their next restart.
+5. Once merged, the migration applies on the next operator
+   restart.
 
 ## Recovery Scenarios
 

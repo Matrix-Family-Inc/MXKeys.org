@@ -11,9 +11,13 @@ package keys
 
 import (
 	"context"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -78,6 +82,9 @@ func TestNotaryCleanupRoutineStopsCleanly(t *testing.T) {
 	n.StopCleanupRoutine()
 }
 
+// TestIsRetryableStorageError validates the typed-error classification.
+// Tests exercise real error shapes the PG driver surfaces rather than
+// plain errors.New text (the previous string fallback is gone).
 func TestIsRetryableStorageError(t *testing.T) {
 	tests := []struct {
 		name string
@@ -85,9 +92,17 @@ func TestIsRetryableStorageError(t *testing.T) {
 		want bool
 	}{
 		{name: "nil", err: nil, want: false},
-		{name: "timeout", err: errors.New("statement timeout"), want: true},
-		{name: "bad connection", err: errors.New("driver: bad connection"), want: true},
-		{name: "permanent", err: errors.New("duplicate key value violates unique constraint"), want: false},
+		{name: "driver.ErrBadConn", err: driver.ErrBadConn, want: true},
+		{name: "wrapped driver.ErrBadConn", err: fmt.Errorf("exec: %w", driver.ErrBadConn), want: true},
+		{name: "context.DeadlineExceeded", err: context.DeadlineExceeded, want: true},
+		{name: "syscall ECONNRESET", err: syscall.ECONNRESET, want: true},
+		{name: "os.SyscallError ECONNREFUSED",
+			err:  &os.SyscallError{Syscall: "connect", Err: syscall.ECONNREFUSED},
+			want: true},
+		{name: "plain permanent (was matched by old string fallback, now ignored)",
+			err:  errors.New("statement timeout"),
+			want: false},
+		{name: "plain unique-constraint", err: errors.New("duplicate key value violates unique constraint"), want: false},
 	}
 
 	for _, tt := range tests {

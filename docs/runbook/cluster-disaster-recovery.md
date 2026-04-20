@@ -3,7 +3,7 @@ Company: Matrix Family Inc. (https://matrix.family)
 Maintainer: Brabus
 Contact: dev@matrix.family
 Date: Mon Apr 20 2026 UTC
-Status: Created
+Status: Updated
 
 # Runbook: Cluster Disaster Recovery
 
@@ -174,8 +174,40 @@ for n in peer1 peer2 peer3; do
 done
 ```
 
-## Follow-ups (not yet runbooked)
+## TLS Certificate Rotation
 
-- Automated disaster-recovery drills.
-- Operator tooling for atomic `shared_secret` rotation across all
-  cluster peers.
+When `cluster.tls.enabled=true`, cluster TLS certs expire and must
+be rotated. TLS configuration reload on SIGHUP is not supported;
+rotation happens through rolling restart.
+
+1. Generate new certs signed by the same CA on every node.
+2. Place new cert and key files at the paths configured in
+   `cluster.tls.cert_file` and `cluster.tls.key_file` (overwrite
+   atomically via `cp` to a `.new` name then `mv`).
+3. Rolling-restart the nodes one at a time, verifying quorum
+   stays healthy between restarts.
+4. A CA change requires deploying the new CA bundle to every
+   node before the first node restart, otherwise the first node
+   to restart fails mTLS with its peers.
+
+## Shared Secret Rotation
+
+`cluster.shared_secret` authenticates every cluster RPC. The
+transport rejects any message whose HMAC was computed under a
+different secret.
+
+1. Generate a new secret of at least 32 random characters:
+
+   ```bash
+   head -c 48 /dev/urandom | base64 -w0
+   ```
+
+2. Update the secret in every node's config.
+
+3. Rolling-restart the nodes. The window during which some peers
+   still hold the old secret is a partition; plan the rollout so
+   the window is short relative to `maxMessageSkew` (5 minutes).
+
+4. If the old secret is believed compromised, stop every node
+   before the rollout and restart them together instead of
+   rolling. Raft will re-elect a leader once quorum is present.

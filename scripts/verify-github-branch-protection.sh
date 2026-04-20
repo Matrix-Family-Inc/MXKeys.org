@@ -3,8 +3,8 @@
 # Company: Matrix Family Inc. (https://matrix.family)
 # Maintainer: Brabus
 # Contact: dev@matrix.family
-# Date: Mon Mar 16 2026 UTC
-# Status: Created
+# Date: Mon Apr 20 2026 UTC
+# Status: Updated
 
 set -euo pipefail
 
@@ -34,6 +34,9 @@ resp="$(curl -fsSL \
 
 case "${profile}" in
   pr)
+    # MUST stay in lock-step with the job names in
+    # .github/workflows/pr-gate.yml. A missing entry here is a
+    # silent hole in the release gate.
     required_checks=(
       "unit"
       "integration-with-fixtures"
@@ -44,6 +47,11 @@ case "${profile}" in
       "frontend-quality"
       "security-vuln"
       "security-sast"
+      "coverage"
+      "staticcheck"
+      "errcheck"
+      "fuzz-quick"
+      "file-size"
     )
     ;;
   release)

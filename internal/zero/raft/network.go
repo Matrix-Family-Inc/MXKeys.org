@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"mxkeys/internal/zero/log"
+	"mxkeys/internal/zero/nettls"
 )
 
 // acceptLoop accepts incoming connections.
@@ -70,7 +71,7 @@ func (n *Node) handleConnection(conn net.Conn) {
 
 // sendRPC sends an RPC message to a peer.
 func (n *Node) sendRPC(peer string, msgType MessageType, payload interface{}) (*RPCMessage, error) {
-	conn, err := net.DialTimeout("tcp", peer, 2*time.Second)
+	conn, err := nettls.DialTimeout("tcp", peer, 2*time.Second, n.config.TLS)
 	if err != nil {
 		return nil, err
 	}

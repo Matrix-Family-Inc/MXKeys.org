@@ -32,7 +32,10 @@ func (n *Node) sliceIndex(absoluteIndex uint64) (int, bool) {
 	if absoluteIndex == 0 || absoluteIndex <= n.logOffset {
 		return -1, false
 	}
-	slot := int(absoluteIndex - n.logOffset - 1)
+	// The guard above (absoluteIndex <= n.logOffset → return) ensures
+	// the difference is positive and bounded by len(n.log), so the
+	// uint64→int narrowing is always safe.
+	slot := int(absoluteIndex - n.logOffset - 1) // #nosec G115 -- bounded by len(n.log)
 	if slot >= len(n.log) {
 		return -1, false
 	}
@@ -89,7 +92,7 @@ func (n *Node) truncateSliceAfter(lastKeepIndex uint64) {
 		n.log = n.log[:0]
 		return
 	}
-	slot := int(lastKeepIndex - n.logOffset)
+	slot := int(lastKeepIndex - n.logOffset) // #nosec G115 -- guarded above
 	if slot < len(n.log) {
 		n.log = n.log[:slot]
 	}

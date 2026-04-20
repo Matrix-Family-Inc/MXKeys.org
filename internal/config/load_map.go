@@ -10,6 +10,8 @@
 package config
 
 import (
+	"time"
+
 	zeroconfig "mxkeys/internal/zero/config"
 )
 
@@ -23,6 +25,16 @@ func applyMapConfig(config *Config, m map[string]interface{}, _ string) {
 	}
 	if v := zeroconfig.GetString(m, "server.bind_address"); v != "" {
 		config.Server.BindAddress = v
+	}
+	if v := zeroconfig.GetString(m, "server.shutdown_timeout"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			config.Server.ShutdownTimeout = d
+		}
+	}
+	if v := zeroconfig.GetString(m, "server.predrain_delay"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			config.Server.PredrainDelay = d
+		}
 	}
 
 	if v := zeroconfig.GetString(m, "database.url"); v != "" {
@@ -56,6 +68,9 @@ func applyMapConfig(config *Config, m map[string]interface{}, _ string) {
 	}
 	if v := zeroconfig.GetInt(m, "keys.cleanup_hours"); v != 0 {
 		config.Keys.CleanupHours = v
+	}
+	if v := zeroconfig.GetString(m, "keys.encryption.passphrase_env"); v != "" {
+		config.Keys.EncryptionPassphraseEnv = v
 	}
 
 	if v := zeroconfig.GetStringSlice(m, "trusted_servers.fallback"); len(v) > 0 {
@@ -199,5 +214,26 @@ func applyClusterMap(config *Config, m map[string]interface{}) {
 	}
 	if zeroconfig.Has(m, "cluster.raft_sync_on_append") {
 		config.Cluster.RaftSyncOnAppend = zeroconfig.GetBool(m, "cluster.raft_sync_on_append")
+	}
+	if zeroconfig.Has(m, "cluster.tls.enabled") {
+		config.Cluster.TLS.Enabled = zeroconfig.GetBool(m, "cluster.tls.enabled")
+	}
+	if v := zeroconfig.GetString(m, "cluster.tls.cert_file"); v != "" {
+		config.Cluster.TLS.CertFile = v
+	}
+	if v := zeroconfig.GetString(m, "cluster.tls.key_file"); v != "" {
+		config.Cluster.TLS.KeyFile = v
+	}
+	if v := zeroconfig.GetString(m, "cluster.tls.ca_file"); v != "" {
+		config.Cluster.TLS.CAFile = v
+	}
+	if zeroconfig.Has(m, "cluster.tls.require_client_cert") {
+		config.Cluster.TLS.RequireClientCert = zeroconfig.GetBool(m, "cluster.tls.require_client_cert")
+	}
+	if v := zeroconfig.GetString(m, "cluster.tls.min_version"); v != "" {
+		config.Cluster.TLS.MinVersion = v
+	}
+	if v := zeroconfig.GetString(m, "cluster.tls.server_name"); v != "" {
+		config.Cluster.TLS.ServerName = v
 	}
 }

@@ -65,23 +65,31 @@ func main() {
 		}
 	}()
 
-	// Context with signal handling
+	// Signal handling:
+	//   * First SIGINT/SIGTERM triggers graceful shutdown (ctx cancel).
+	//   * Second signal forces exit(130) so operators can interrupt a
+	//     stuck shutdown. A stuck shutdown usually indicates an HTTP
+	//     client holding open connections past shutdown_timeout or a
+	//     peer that never closes its raft connection.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Handle signals
-	sigChan := make(chan os.Signal, 1)
+	sigChan := make(chan os.Signal, 2)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		for sig := range sigChan {
-			log.Info("Received shutdown signal", "signal", sig)
-			cancel()
-			return
-		}
+		first := <-sigChan
+		log.Info("Received shutdown signal", "signal", first.String())
+		cancel()
+
+		second := <-sigChan
+		log.Warn("Received second shutdown signal, forcing exit",
+			"signal", second.String(),
+			"exit_code", 130,
+		)
+		os.Exit(130)
 	}()
 
-	// Run server
 	if err := srv.Run(ctx); err != nil {
 		log.Error("Server error", "error", err)
 		os.Exit(1)

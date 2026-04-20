@@ -198,6 +198,166 @@ func TestValidateRejectsInvalidFields(t *testing.T) {
 	}
 }
 
+func TestValidateTrustedNotaries(t *testing.T) {
+	// A valid ed25519 public key (32 bytes) in raw base64. Any deterministic
+	// byte stream of length 32 is a valid placeholder for this test since
+	// validation only checks length and shape, not curve-point validity.
+	validKey := "Nzxs2Mh0Fb+Uhv3uTE47iWBoCGY8oSa11BZX9S7W6RE"
+
+	tests := []struct {
+		name     string
+		notaries []TrustedNotary
+		errMatch string
+	}{
+		{
+			name:     "placeholder rejected",
+			notaries: []TrustedNotary{{ServerName: "matrix.org", KeyID: "ed25519:auto", PublicKey: "base64-encoded-public-key"}},
+			errMatch: "placeholder",
+		},
+		{
+			name:     "empty server_name rejected",
+			notaries: []TrustedNotary{{ServerName: "", KeyID: "ed25519:auto", PublicKey: validKey}},
+			errMatch: "server_name is required",
+		},
+		{
+			name:     "empty key_id rejected",
+			notaries: []TrustedNotary{{ServerName: "matrix.org", KeyID: "", PublicKey: validKey}},
+			errMatch: "key_id is required",
+		},
+		{
+			name:     "empty public_key rejected",
+			notaries: []TrustedNotary{{ServerName: "matrix.org", KeyID: "ed25519:auto", PublicKey: ""}},
+			errMatch: "public_key is required",
+		},
+		{
+			name:     "non-base64 public_key rejected",
+			notaries: []TrustedNotary{{ServerName: "matrix.org", KeyID: "ed25519:auto", PublicKey: "not base64!!"}},
+			errMatch: "invalid base64",
+		},
+		{
+			name:     "wrong-length public_key rejected",
+			notaries: []TrustedNotary{{ServerName: "matrix.org", KeyID: "ed25519:auto", PublicKey: "YWJj"}}, // base64("abc"), 3 bytes
+			errMatch: "has length",
+		},
+		{
+			name:     "valid entry accepted",
+			notaries: []TrustedNotary{{ServerName: "matrix.org", KeyID: "ed25519:auto", PublicKey: validKey}},
+		},
+		{
+			name:     "empty list accepted",
+			notaries: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig()
+			cfg.Security.TrustedNotaries = tt.notaries
+			err := cfg.Validate()
+			if tt.errMatch == "" {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tt.errMatch)
+			}
+			if !strings.Contains(err.Error(), tt.errMatch) {
+				t.Fatalf("unexpected error %q, want substring %q", err.Error(), tt.errMatch)
+			}
+		})
+	}
+}
+
+func TestValidateClusterTLS(t *testing.T) {
+	tests := []struct {
+		name     string
+		mutate   func(*Config)
+		errMatch string
+	}{
+		{
+			name:     "disabled TLS always valid",
+			mutate:   func(c *Config) { c.Cluster.TLS.Enabled = false },
+			errMatch: "",
+		},
+		{
+			name: "missing cert_file rejected",
+			mutate: func(c *Config) {
+				c.Cluster.TLS.Enabled = true
+				c.Cluster.TLS.CertFile = ""
+				c.Cluster.TLS.KeyFile = "/k"
+				c.Cluster.TLS.CAFile = "/ca"
+			},
+			errMatch: "cert_file is required",
+		},
+		{
+			name: "missing key_file rejected",
+			mutate: func(c *Config) {
+				c.Cluster.TLS.Enabled = true
+				c.Cluster.TLS.CertFile = "/c"
+				c.Cluster.TLS.KeyFile = ""
+				c.Cluster.TLS.CAFile = "/ca"
+			},
+			errMatch: "key_file is required",
+		},
+		{
+			name: "missing ca_file rejected",
+			mutate: func(c *Config) {
+				c.Cluster.TLS.Enabled = true
+				c.Cluster.TLS.CertFile = "/c"
+				c.Cluster.TLS.KeyFile = "/k"
+				c.Cluster.TLS.CAFile = ""
+			},
+			errMatch: "ca_file is required",
+		},
+		{
+			name: "invalid min_version rejected",
+			mutate: func(c *Config) {
+				c.Cluster.TLS.Enabled = true
+				c.Cluster.TLS.CertFile = "/c"
+				c.Cluster.TLS.KeyFile = "/k"
+				c.Cluster.TLS.CAFile = "/ca"
+				c.Cluster.TLS.MinVersion = "1.0"
+			},
+			errMatch: "min_version must be",
+		},
+		{
+			name: "min_version 1.2 accepted",
+			mutate: func(c *Config) {
+				c.Cluster.TLS.Enabled = true
+				c.Cluster.TLS.CertFile = "/c"
+				c.Cluster.TLS.KeyFile = "/k"
+				c.Cluster.TLS.CAFile = "/ca"
+				c.Cluster.TLS.MinVersion = "1.2"
+			},
+			errMatch: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig()
+			// Enable cluster so the TLS branch is exercised.
+			cfg.Cluster.Enabled = true
+			tt.mutate(cfg)
+			err := cfg.Validate()
+			if tt.errMatch == "" {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tt.errMatch)
+			}
+			if !strings.Contains(err.Error(), tt.errMatch) {
+				t.Fatalf("unexpected error %q, want substring %q", err.Error(), tt.errMatch)
+			}
+		})
+	}
+}
+
 func TestValidateAllowsIncompleteClusterWhenDisabled(t *testing.T) {
 	cfg := validConfig()
 	cfg.Cluster.Enabled = false

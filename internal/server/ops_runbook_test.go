@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -29,7 +30,11 @@ func TestGracefulShutdownStopsServerAndClosesDB(t *testing.T) {
 	}
 	rl := NewRateLimiter(DefaultRateLimitConfig())
 
-	s := &Server{db: db, rateLimiter: rl}
+	// Fast-drain config so the test finishes promptly.
+	cfg := &config.Config{}
+	cfg.Server.PredrainDelay = 1 * time.Millisecond
+	cfg.Server.ShutdownTimeout = 1 * time.Second
+	s := &Server{db: db, rateLimiter: rl, config: cfg}
 	srv := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(20 * time.Millisecond)
@@ -49,6 +54,9 @@ func TestGracefulShutdownStopsServerAndClosesDB(t *testing.T) {
 	if err := s.gracefulShutdown(srv); err != nil {
 		t.Fatalf("gracefulShutdown returned error: %v", err)
 	}
+	if !s.IsShuttingDown() {
+		t.Fatal("shuttingDown flag must be set after gracefulShutdown")
+	}
 
 	if err := db.Ping(); err == nil {
 		t.Fatalf("database should be closed after gracefulShutdown")
@@ -58,6 +66,27 @@ func TestGracefulShutdownStopsServerAndClosesDB(t *testing.T) {
 
 	// Must be idempotent after gracefulShutdown.
 	rl.Stop()
+}
+
+// TestReadinessReports503WhenShuttingDown asserts the core rolling-restart
+// contract: once gracefulShutdown is initiated, /_mxkeys/readyz must
+// return 503 so that LBs drain traffic before in-flight requests fail.
+func TestReadinessReports503WhenShuttingDown(t *testing.T) {
+	s := &Server{
+		config: &config.Config{},
+	}
+	s.shuttingDown.Store(true)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/_mxkeys/readyz", nil)
+	s.handleReadiness(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 during shutdown, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), `"status":"draining"`) {
+		t.Fatalf("expected draining status in body, got %q", w.Body.String())
+	}
 }
 
 func TestCloseHandlesNilComponentsAndIsIdempotentForRateLimiter(t *testing.T) {

@@ -3,37 +3,34 @@ Company: Matrix Family Inc. (https://matrix.family)
 Maintainer: Brabus
 Contact: dev@matrix.family
 Date: Mon Apr 20 2026 UTC
-Status: Created
+Status: Updated
 
 # ADR-0007: Signing Key Provider Abstraction
 
 ## Status
 
-Accepted
+Accepted.
 
 ## Context
 
-The notary's ed25519 signing key is the root of trust exposed by
-MXKeys: if it leaks, the notary's entire perspective-signature record
-must be invalidated ecosystem-wide. The original implementation read
-and wrote the key as raw bytes on local disk under
-`keys.storage_path`. That works for single-node deployments but has
-three structural problems:
+The notary's ed25519 signing key is the root of trust. Leakage
+invalidates every perspective signature this notary ever issued.
+The original implementation read and wrote the key as raw bytes
+under `keys.storage_path`. Three structural gaps with that model:
 
-1. **Operator ergonomics**: orchestrator-mounted secrets (Kubernetes
-   Secrets via env, systemd-credentials) require a round-trip through
-   a file path that may or may not be persistent.
-2. **External KMS**: operators with compliance requirements need to
-   keep the private material inside a dedicated key-management
-   system (HSM, cloud KMS) rather than on the application host.
-3. **Testability**: Notary tests that exercise permission hardening
-   had to reach into private Notary state; the logic was coupled to
-   the service type instead of living with the key.
+1. Operator ergonomics: orchestrator-mounted secrets (Kubernetes
+   Secrets via env, systemd credentials) require a round-trip
+   through a file path that may or may not be persistent.
+2. External KMS: operators with compliance requirements keep the
+   private material inside a dedicated key-management system
+   rather than on the application host.
+3. Testability: tests for permission hardening had to reach into
+   private Notary state because the key lifecycle was coupled to
+   the service type.
 
 ## Decision
 
-Introduce `internal/keys/keyprovider` with a `Provider` interface and
-three implementations:
+`internal/keys/keyprovider` defines a `Provider` interface:
 
 ```go
 type Provider interface {
@@ -44,47 +41,62 @@ type Provider interface {
 }
 ```
 
-- `FileProvider`: backward-compatible disk storage. Generates on first
-  call, enforces 0700 directory and 0600 file permissions on every
-  open so out-of-band chmod cannot weaken posture silently.
-- `EnvProvider`: reads a base64-encoded seed or full key from an env
-  variable. No generation; operator is responsible for key provisioning.
-- `KMSStub`: placeholder that documents the interface shape for future
-  external-KMS integration. `LoadOrGenerate` and `Sign` return
-  `ErrNotImplemented`.
+Implementations:
 
-The Notary retains a legacy `NewNotary` constructor that wraps the
-file backend, preserving API compatibility with embedders that have
-not yet migrated. New call sites use `NewNotaryWithConfig` with an
-explicit provider.
+- `FileProvider`. Disk storage. Generates on first call. Enforces
+  0700 on the directory and 0600 on the key file at every open so
+  an out-of-band `chmod` cannot weaken posture silently. When a
+  passphrase is configured the key is stored as an `MXKENC01`
+  envelope (AES-256-GCM, PBKDF2-HMAC-SHA256 at 600 000
+  iterations). A legacy plaintext key is upgraded in place on the
+  next load; the plaintext file is then removed. Plaintext mode
+  refuses to read an existing `.enc` file rather than silently
+  ignoring it.
+- `EnvProvider`. Reads a base64-encoded seed or full key from an
+  environment variable. No generation; the operator provisions
+  the key.
+- `KMSStub`. Placeholder that documents the interface for a
+  future external-KMS implementation. `LoadOrGenerate` and `Sign`
+  return `ErrNotImplemented`.
 
-Config knobs added to `keys` section (follow-up; currently file-only
-is fully wired; env and kms paths require operator to construct the
-provider directly and call `NewNotaryWithConfig`).
+Server initialization builds the provider from `keys` config:
+
+- `keys.storage_path` selects `FileProvider`.
+- `keys.encryption.passphrase_env` names an environment variable
+  that holds the passphrase for at-rest encryption. An empty
+  value is a hard error, not a fallback to plaintext.
+
+The Notary retains a legacy `NewNotary` constructor that wraps
+the file backend without encryption, preserving API compatibility
+with embedders that have not migrated. Server code uses
+`NewNotaryWithConfig` with an explicit provider.
 
 ## Consequences
 
-- Signing-key hygiene tests live in `internal/keys/keyprovider` and
-  exercise the provider directly rather than reaching into Notary
-  internals.
-- A future external-KMS implementation slots in by implementing the
-  interface and editing one switch in `keyprovider.New`.
-- Operators running with `file` continue to see the same on-disk
-  layout, permissions, and generation behavior.
-- Backup/rotation procedures live in `docs/runbook/key-rotation.md`
-  and operate at the provider boundary, not on file paths directly.
+- Signing-key hygiene tests live in `internal/keys/keyprovider`
+  and exercise the provider directly.
+- An external-KMS implementation slots in by implementing the
+  interface and adding a branch in `keyprovider.New`.
+- Operators running with `file` without a passphrase see the same
+  on-disk layout as prior versions.
+- Operators who set a passphrase get AES-256-GCM at rest with
+  PBKDF2-HMAC-SHA256 at the OWASP-recommended iteration count.
+- Backup and rotation procedures operate at the provider
+  boundary. See `docs/runbook/key-rotation.md` and
+  `docs/runbook/backup-restore.md`.
 
 ## Alternatives Considered
 
-- Keep a hard-coded file path and let operators symlink from
-  Kubernetes Secret mounts: rejected; symlink + readonly fs quirks
-  are hard to debug and surface as cryptic startup errors.
-- Embed full external-KMS client (AWS KMS, GCP KMS, HashiCorp Vault)
-  immediately: rejected until a concrete operator requirement exists
-  for a specific KMS; the `KMSStub` keeps the contract frozen so the
-  integration is a drop-in later.
+- Hard-coded file path with symlink into Kubernetes Secret
+  mounts. Rejected: symlink plus read-only filesystem surfaces
+  as startup errors that are hard to diagnose.
+- Embed a specific KMS client (AWS, GCP, Vault) immediately.
+  Rejected until there is a concrete operator requirement for
+  one. The stub keeps the interface fixed.
 
 ## References
 
 - `internal/keys/keyprovider/`
+- `internal/keys/keyprovider/file_crypto.go`
 - `docs/runbook/key-rotation.md`
+- `docs/runbook/backup-restore.md`
