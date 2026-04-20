@@ -158,6 +158,22 @@ func TestValidateRejectsInvalidFields(t *testing.T) {
 			errMatch: "cluster.shared_secret is required when cluster.enabled=true",
 		},
 		{
+			name: "cluster shared secret rejects placeholder",
+			mutate: func(c *Config) {
+				c.Cluster.Enabled = true
+				c.Cluster.SharedSecret = "replace-with-long-random-secret"
+			},
+			errMatch: "cluster.shared_secret contains a placeholder value",
+		},
+		{
+			name: "cluster shared secret enforces minimum length",
+			mutate: func(c *Config) {
+				c.Cluster.Enabled = true
+				c.Cluster.SharedSecret = "too-short"
+			},
+			errMatch: "cluster.shared_secret must be at least 32 characters",
+		},
+		{
 			name: "cluster enabled allows only supported consensus",
 			mutate: func(c *Config) {
 				c.Cluster.Enabled = true

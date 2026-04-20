@@ -3,8 +3,8 @@
  * Company: Matrix Family Inc. (https://matrix.family)
  * Maintainer: Brabus
  * Contact: dev@matrix.family
- * Date: Tue Jan 27 2026 UTC
- * Status: Created
+ * Date: Mon Apr 20 2026 UTC
+ * Status: Updated
  */
 
 package keys
@@ -19,7 +19,8 @@ import (
 	"time"
 )
 
-// Storage handles persistence for server keys
+// Storage handles persistence for server keys.
+// Schema is owned by internal/storage/migrations; Storage never runs DDL.
 type Storage struct {
 	db *sql.DB
 }
@@ -29,7 +30,7 @@ const (
 	storageRetryBackoff  = 100 * time.Millisecond
 )
 
-// StoredKey represents a stored server key
+// StoredKey represents a stored server key.
 type StoredKey struct {
 	ServerName  string
 	KeyID       string
@@ -39,56 +40,14 @@ type StoredKey struct {
 	RawResponse []byte
 }
 
-// NewStorage creates new key storage
+// NewStorage constructs a Storage bound to db. Schema creation is a separate
+// concern: operators must run internal/storage/migrations.Apply before this is
+// called (Server.New wires this automatically).
 func NewStorage(db *sql.DB) (*Storage, error) {
-	s := &Storage{db: db}
-	if err := s.createTables(); err != nil {
-		return nil, err
+	if db == nil {
+		return nil, fmt.Errorf("storage: nil db")
 	}
-	return s, nil
-}
-
-// createTables creates required tables
-func (s *Storage) createTables() error {
-	_, err := s.db.Exec(`
-		CREATE TABLE IF NOT EXISTS server_keys (
-			server_name TEXT NOT NULL,
-			key_id TEXT NOT NULL,
-			public_key BYTEA NOT NULL,
-			valid_until TIMESTAMP WITH TIME ZONE NOT NULL,
-			fetched_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-			raw_response JSONB,
-			PRIMARY KEY (server_name, key_id)
-		)
-	`)
-	if err != nil {
-		return err
-	}
-
-	_, err = s.db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_server_keys_server ON server_keys(server_name)
-	`)
-	if err != nil {
-		return err
-	}
-
-	_, err = s.db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_server_keys_valid ON server_keys(valid_until)
-	`)
-	if err != nil {
-		return err
-	}
-
-	// Table for caching full server key responses
-	_, err = s.db.Exec(`
-		CREATE TABLE IF NOT EXISTS server_key_responses (
-			server_name TEXT PRIMARY KEY,
-			response JSONB NOT NULL,
-			valid_until TIMESTAMP WITH TIME ZONE NOT NULL,
-			fetched_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-		)
-	`)
-	return err
+	return &Storage{db: db}, nil
 }
 
 func isRetryableStorageError(err error) bool {

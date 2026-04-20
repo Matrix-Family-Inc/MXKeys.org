@@ -59,7 +59,7 @@ func validConfig() *Config {
 			AdvertisePort:    7946,
 			ConsensusMode:    "crdt",
 			SyncInterval:     5,
-			SharedSecret:     "cluster-secret",
+			SharedSecret:     "cluster-secret-32-chars-minimum-padding",
 		},
 	}
 }

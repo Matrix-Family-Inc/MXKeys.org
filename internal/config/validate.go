@@ -129,6 +129,12 @@ func (c *Config) Validate() error {
 		if strings.TrimSpace(c.Cluster.SharedSecret) == "" {
 			return fmt.Errorf("cluster.shared_secret is required when cluster.enabled=true")
 		}
+		if isPlaceholderSecret(c.Cluster.SharedSecret) {
+			return fmt.Errorf("cluster.shared_secret contains a placeholder value; set a long, random secret")
+		}
+		if len(c.Cluster.SharedSecret) < 32 {
+			return fmt.Errorf("cluster.shared_secret must be at least 32 characters (recommended: 64+ random bytes base64-encoded)")
+		}
 		if c.Cluster.ConsensusMode != "crdt" && c.Cluster.ConsensusMode != "raft" {
 			return fmt.Errorf("cluster.consensus_mode must be 'crdt' or 'raft'")
 		}
@@ -143,4 +149,22 @@ func isWildcardAddress(addr string) bool {
 	default:
 		return false
 	}
+}
+
+// placeholderSecrets are distributed in config.example.yaml as obvious
+// placeholders and must never survive into a real deployment.
+var placeholderSecrets = map[string]struct{}{
+	"replace-with-long-random-secret": {},
+	"replace-with-long-random-token":  {},
+	"change-me":                       {},
+	"changeme":                        {},
+	"default":                         {},
+	"secret":                          {},
+}
+
+// isPlaceholderSecret reports whether the given secret looks like one of the
+// documented example placeholders from config.example.yaml.
+func isPlaceholderSecret(secret string) bool {
+	_, ok := placeholderSecrets[strings.ToLower(strings.TrimSpace(secret))]
+	return ok
 }

@@ -10,12 +10,19 @@
 package keys
 
 import (
-	"crypto/ed25519"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"mxkeys/internal/keys/keyprovider"
 )
 
+// TestNotarySigningKeyBackupRestoreDrill exercises the operator runbook for
+// backing up and restoring the notary signing key: generate in primary dir,
+// copy the on-disk file to a backup dir, restore into a fresh dir, reload via
+// the file provider, and assert the public key is bit-identical to the
+// original.
 func TestNotarySigningKeyBackupRestoreDrill(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "mxkeys-backup-drill-*")
 	if err != nil {
@@ -27,9 +34,12 @@ func TestNotarySigningKeyBackupRestoreDrill(t *testing.T) {
 	backupDir := filepath.Join(tmpDir, "backup")
 	restoreDir := filepath.Join(tmpDir, "restore")
 
-	n1 := &Notary{}
-	if err := n1.initSigningKey(primaryDir); err != nil {
-		t.Fatalf("failed to initialize primary key: %v", err)
+	p1, err := keyprovider.New(keyprovider.Config{Kind: keyprovider.KindFile, StoragePath: primaryDir})
+	if err != nil {
+		t.Fatalf("primary provider: %v", err)
+	}
+	if _, _, err := p1.LoadOrGenerate(context.Background()); err != nil {
+		t.Fatalf("primary LoadOrGenerate: %v", err)
 	}
 
 	primaryPath := filepath.Join(primaryDir, "mxkeys_ed25519.key")
@@ -62,14 +72,15 @@ func TestNotarySigningKeyBackupRestoreDrill(t *testing.T) {
 		t.Fatalf("failed to restore key from backup: %v", err)
 	}
 
-	n2 := &Notary{}
-	if err := n2.initSigningKey(restoreDir); err != nil {
-		t.Fatalf("failed to initialize restored key: %v", err)
+	p2, err := keyprovider.New(keyprovider.Config{Kind: keyprovider.KindFile, StoragePath: restoreDir})
+	if err != nil {
+		t.Fatalf("restore provider: %v", err)
+	}
+	if _, _, err := p2.LoadOrGenerate(context.Background()); err != nil {
+		t.Fatalf("restore LoadOrGenerate: %v", err)
 	}
 
-	pub1 := n1.serverKeyPair.Public().(ed25519.PublicKey)
-	pub2 := n2.serverKeyPair.Public().(ed25519.PublicKey)
-	if !pub1.Equal(pub2) {
+	if !p1.PublicKey().Equal(p2.PublicKey()) {
 		t.Fatal("backup/restore drill failed: restored signing key does not match original")
 	}
 }

@@ -3,8 +3,8 @@
  * Company: Matrix Family Inc. (https://matrix.family)
  * Maintainer: Brabus
  * Contact: dev@matrix.family
- * Date: Tue Jan 27 2026 UTC
- * Status: Created
+ * Date: Mon Apr 20 2026 UTC
+ * Status: Updated
  */
 
 package keys
@@ -12,17 +12,15 @@ package keys
 import (
 	"context"
 	"crypto/ed25519"
-	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
 	"golang.org/x/sync/singleflight"
 
+	"mxkeys/internal/keys/keyprovider"
 	"mxkeys/internal/zero/canonical"
 	"mxkeys/internal/zero/log"
 )
@@ -59,7 +57,60 @@ type cachedResponse struct {
 	validUntil time.Time
 }
 
-// NewNotary creates new notary service
+// NotaryConfig holds the configuration required to build a Notary.
+// Use this struct over the legacy positional NewNotary constructor.
+type NotaryConfig struct {
+	ServerName          string
+	KeyProvider         keyprovider.Provider
+	ValidityHours       int
+	CacheTTLHours       int
+	FallbackServers     []string
+	FetchTimeout        time.Duration
+	TrustedNotaries     []TrustedNotaryKey
+	MaxSignaturesPerKey int
+}
+
+// NewNotaryWithConfig constructs a Notary from the richer config struct and
+// a pluggable signing-key Provider.
+func NewNotaryWithConfig(ctx context.Context, db *sql.DB, cfg NotaryConfig) (*Notary, error) {
+	if cfg.KeyProvider == nil {
+		return nil, fmt.Errorf("notary: key provider is required")
+	}
+
+	storage, err := NewStorage(db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create storage: %w", err)
+	}
+
+	fetcher := NewFetcherWithConfig(FetcherConfig{
+		FallbackServers: cfg.FallbackServers,
+		Timeout:         cfg.FetchTimeout,
+		TrustedNotaries: cfg.TrustedNotaries,
+		MaxSignatures:   cfg.MaxSignaturesPerKey,
+	})
+
+	n := &Notary{
+		serverName:    cfg.ServerName,
+		storage:       storage,
+		fetcher:       fetcher,
+		cache:         make(map[string]*cachedResponse),
+		validityHours: cfg.ValidityHours,
+		cacheTTLHours: cfg.CacheTTLHours,
+	}
+
+	priv, keyID, err := cfg.KeyProvider.LoadOrGenerate(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load signing key: %w", err)
+	}
+	n.serverKeyPair = priv
+	n.serverKeyID = keyID
+	log.Info("Notary signing key loaded", "key_id", keyID, "provider", string(cfg.KeyProvider.Kind()))
+
+	return n, nil
+}
+
+// NewNotary is a backwards-compatible wrapper that uses the default file-based
+// key provider. New call sites should prefer NewNotaryWithConfig.
 func NewNotary(
 	db *sql.DB,
 	serverName string,
@@ -70,85 +121,23 @@ func NewNotary(
 	trustedNotaries []TrustedNotaryKey,
 	maxSignaturesPerKey int,
 ) (*Notary, error) {
-	storage, err := NewStorage(db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create storage: %w", err)
-	}
-
-	fetcher := NewFetcherWithConfig(FetcherConfig{
-		FallbackServers: fallbackServers,
-		Timeout:         fetchTimeout,
-		TrustedNotaries: trustedNotaries,
-		MaxSignatures:   maxSignaturesPerKey,
+	provider, err := keyprovider.New(keyprovider.Config{
+		Kind:        keyprovider.KindFile,
+		StoragePath: keyStoragePath,
 	})
-
-	n := &Notary{
-		serverName:    serverName,
-		storage:       storage,
-		fetcher:       fetcher,
-		cache:         make(map[string]*cachedResponse),
-		validityHours: validityHours,
-		cacheTTLHours: cacheTTLHours,
-	}
-
-	// Load or generate server signing key
-	if err := n.initSigningKey(keyStoragePath); err != nil {
-		return nil, fmt.Errorf("failed to init signing key: %w", err)
-	}
-
-	return n, nil
-}
-
-// initSigningKey loads existing key or generates new one
-func (n *Notary) initSigningKey(keyStoragePath string) error {
-	keyPath := filepath.Join(keyStoragePath, "mxkeys_ed25519.key")
-
-	if err := os.MkdirAll(keyStoragePath, 0700); err != nil {
-		return fmt.Errorf("failed to create key storage directory: %w", err)
-	}
-	if err := os.Chmod(keyStoragePath, 0700); err != nil {
-		return fmt.Errorf("failed to enforce key storage directory permissions: %w", err)
-	}
-
-	// Try to load existing key
-	if data, err := os.ReadFile(keyPath); err == nil {
-		switch len(data) {
-		case ed25519.PrivateKeySize:
-			n.serverKeyPair = ed25519.PrivateKey(data)
-		case ed25519.SeedSize:
-			n.serverKeyPair = ed25519.NewKeyFromSeed(data)
-		default:
-			return fmt.Errorf("existing notary signing key has invalid length %d", len(data))
-		}
-		n.serverKeyID = "ed25519:mxkeys"
-		if err := os.Chmod(keyPath, 0600); err != nil {
-			return fmt.Errorf("failed to enforce key file permissions: %w", err)
-		}
-		log.Info("Loaded existing notary signing key", "key_id", n.serverKeyID)
-		return nil
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("failed to read existing notary signing key: %w", err)
-	}
-
-	// Generate new key
-	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		return fmt.Errorf("failed to generate key: %w", err)
+		return nil, fmt.Errorf("failed to build key provider: %w", err)
 	}
-
-	n.serverKeyPair = privateKey
-	n.serverKeyID = "ed25519:mxkeys"
-
-	// Save key
-	if err := os.WriteFile(keyPath, privateKey, 0600); err != nil {
-		return fmt.Errorf("failed to save notary signing key: %w", err)
-	}
-	if err := os.Chmod(keyPath, 0600); err != nil {
-		return fmt.Errorf("failed to enforce key file permissions: %w", err)
-	}
-	log.Info("Generated and saved new notary signing key", "key_id", n.serverKeyID)
-
-	return nil
+	return NewNotaryWithConfig(context.Background(), db, NotaryConfig{
+		ServerName:          serverName,
+		KeyProvider:         provider,
+		ValidityHours:       validityHours,
+		CacheTTLHours:       cacheTTLHours,
+		FallbackServers:     fallbackServers,
+		FetchTimeout:        fetchTimeout,
+		TrustedNotaries:     trustedNotaries,
+		MaxSignaturesPerKey: maxSignaturesPerKey,
+	})
 }
 
 // GetOwnKeys returns this notary's own public keys
