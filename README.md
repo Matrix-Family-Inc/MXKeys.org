@@ -1,6 +1,6 @@
 # MXKeys
 
-![Go](https://img.shields.io/badge/go-1.22+-blue)
+![Go](https://img.shields.io/badge/go-1.26+-blue)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green)
 ![Matrix](https://img.shields.io/badge/matrix-federation-purple)
 ![Prometheus](https://img.shields.io/badge/metrics-prometheus-orange)
@@ -40,7 +40,8 @@ Minimum config shape:
 
 ```yaml
 server:
-  name: mxkeys.example.org
+  # Set to the public server name of your deployment (must match TLS certificate).
+  name: notary.example.org
 
 database:
   url: postgres://mxkeys:password@localhost/mxkeys?sslmode=disable
@@ -53,7 +54,7 @@ trusted_servers:
     - matrix.org
 ```
 
-`database.url` has no built-in default and must be configured explicitly. For protected operational routes, set `security.enterprise_access_token`. For cluster mode, set `cluster.shared_secret` and, when binding to a wildcard address, `cluster.advertise_address`.
+`server.name` must be configured explicitly to the public hostname of your deployment. `database.url` has no built-in default and must be configured explicitly. For protected operational routes, set `security.enterprise_access_token`. For cluster mode, set `cluster.shared_secret` and, when binding to a wildcard address, `cluster.advertise_address`.
 If `security.trust_forwarded_headers` is enabled, configure the full trusted proxy chain in `security.trusted_proxies` and ensure those proxies overwrite forwarded headers instead of passing client-supplied values through unchanged.
 
 ## Public API
@@ -71,10 +72,10 @@ GET  /_mxkeys/status
 GET  /_mxkeys/metrics
 ```
 
-Query example:
+Query example (replace `notary.example.org` with your deployed hostname):
 
 ```bash
-curl -X POST https://mxkeys.org/_matrix/key/v2/query \
+curl -X POST https://notary.example.org/_matrix/key/v2/query \
   -H "Content-Type: application/json" \
   -d '{"server_keys":{"matrix.org":{}}}'
 ```
@@ -85,11 +86,21 @@ The strongest compatibility promise applies to the Matrix key-notary endpoints. 
 
 ## Integration
 
+Replace `notary.example.org` with the public hostname of your MXKeys deployment.
+
 Synapse:
 
 ```yaml
 trusted_key_servers:
-  - server_name: mxkeys.org
+  - server_name: notary.example.org
+```
+
+Dendrite:
+
+```yaml
+federation_api:
+  key_perspectives:
+    - server_name: notary.example.org
 ```
 
 MXCore:
@@ -97,7 +108,7 @@ MXCore:
 ```yaml
 federation:
   trusted_key_servers:
-    - mxkeys.org
+    - notary.example.org
 ```
 
 ## Verification

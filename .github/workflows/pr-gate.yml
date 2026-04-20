@@ -1,11 +1,7 @@
 # Project: MXKeys
 # Company: Matrix Family Inc. (https://matrix.family)
-# Owner: Matrix Family Inc.
 # Maintainer: Brabus
-# Role: Lead Architect
 # Contact: dev@matrix.family
-# Support: support@matrix.family
-# Matrix: @support:matrix.family
 # Date: Sun Mar 15 2026 UTC
 # Status: Created
 
@@ -162,12 +158,12 @@ jobs:
           go-version-file: go.mod
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
-      - name: Run govulncheck (patched toolchain)
+      - name: Run govulncheck
         shell: bash
         run: |
           set -euo pipefail
           packages="$(bash ./scripts/go-package-list.sh | tr '\n' ' ')"
-          GOTOOLCHAIN=go1.26.2 "$(go env GOPATH)/bin/govulncheck" ${packages}
+          "$(go env GOPATH)/bin/govulncheck" ${packages}
 
   security-sast:
     name: security-sast

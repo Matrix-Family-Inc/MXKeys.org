@@ -1,12 +1,8 @@
 /*
  * Project: MXKeys
  * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
  * Maintainer: Brabus
- * Role: Lead Architect
  * Contact: dev@matrix.family
- * Support: support@matrix.family
- * Matrix: @support:matrix.family
  * Date: Wed Apr 08 2026 UTC
  * Status: Created
  */
@@ -25,15 +21,23 @@ import (
 	"mxkeys/internal/keys"
 )
 
-func TestLiveFederationQueryStrictness(t *testing.T) {
+// liveBaseURL returns the base URL for live federation tests.
+// Tests skip when MXKEYS_LIVE_TEST != "1" or MXKEYS_LIVE_BASE_URL is not set.
+// No hardcoded fallback: live tests must target an explicitly configured deployment.
+func liveBaseURL(t *testing.T) string {
+	t.Helper()
 	if os.Getenv("MXKEYS_LIVE_TEST") != "1" {
 		t.Skip("set MXKEYS_LIVE_TEST=1 to run live federation checks")
 	}
-
 	baseURL := os.Getenv("MXKEYS_LIVE_BASE_URL")
 	if baseURL == "" {
-		baseURL = "https://mxkeys.org"
+		t.Skip("set MXKEYS_LIVE_BASE_URL to run live federation checks")
 	}
+	return baseURL
+}
+
+func TestLiveFederationQueryStrictness(t *testing.T) {
+	baseURL := liveBaseURL(t)
 
 	client := &http.Client{Timeout: 15 * time.Second}
 
@@ -83,14 +87,7 @@ func TestLiveFederationQueryStrictness(t *testing.T) {
 }
 
 func TestLiveQueryCompatibility(t *testing.T) {
-	if os.Getenv("MXKEYS_LIVE_TEST") != "1" {
-		t.Skip("set MXKEYS_LIVE_TEST=1 to run live federation checks")
-	}
-
-	baseURL := os.Getenv("MXKEYS_LIVE_BASE_URL")
-	if baseURL == "" {
-		baseURL = "https://mxkeys.org"
-	}
+	baseURL := liveBaseURL(t)
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	reqBody := `{"server_keys":{"s-a.mxtest.tech":{},"s-b.mxtest.tech":{}}}`
@@ -137,14 +134,7 @@ func TestLiveQueryCompatibility(t *testing.T) {
 }
 
 func TestLiveNotaryFailurePath(t *testing.T) {
-	if os.Getenv("MXKEYS_LIVE_TEST") != "1" {
-		t.Skip("set MXKEYS_LIVE_TEST=1 to run live federation checks")
-	}
-
-	baseURL := os.Getenv("MXKEYS_LIVE_BASE_URL")
-	if baseURL == "" {
-		baseURL = "https://mxkeys.org"
-	}
+	baseURL := liveBaseURL(t)
 
 	client := &http.Client{Timeout: 20 * time.Second}
 	reqBody := `{"server_keys":{"s-a.mxtest.tech":{},"no-such-server.invalid":{}}}`

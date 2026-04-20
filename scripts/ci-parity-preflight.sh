@@ -1,12 +1,8 @@
 #!/usr/bin/env bash
 # Project: MXKeys
 # Company: Matrix Family Inc. (https://matrix.family)
-# Owner: Matrix Family Inc.
 # Maintainer: Brabus
-# Role: Lead Architect
 # Contact: dev@matrix.family
-# Support: support@matrix.family
-# Matrix: @support:matrix.family
 # Date: Mon Mar 16 2026 UTC
 # Status: Created
 
@@ -58,7 +54,7 @@ echo "[6/11] govulncheck"
 if [[ ! -x "$(go env GOPATH)/bin/govulncheck" ]]; then
   go install golang.org/x/vuln/cmd/govulncheck@latest
 fi
-GOTOOLCHAIN=go1.26.2 "$(go env GOPATH)/bin/govulncheck" ${packages}
+"$(go env GOPATH)/bin/govulncheck" ${packages}
 
 echo "[7/11] gosec (high)"
 if [[ ! -x "$(go env GOPATH)/bin/gosec" ]]; then
@@ -90,12 +86,15 @@ echo "[10/11] frontend build"
 )
 
 if [[ "${MXKEYS_LIVE_TEST:-0}" == "1" ]]; then
-  base_url="${MXKEYS_LIVE_BASE_URL:-https://mxkeys.org}"
-  echo "[11/11] live interop against ${base_url}"
-  MXKEYS_LIVE_TEST=1 MXKEYS_LIVE_BASE_URL="${base_url}" \
+  if [[ -z "${MXKEYS_LIVE_BASE_URL:-}" ]]; then
+    echo "ERROR: MXKEYS_LIVE_BASE_URL must be set when MXKEYS_LIVE_TEST=1 (no hardcoded fallback)."
+    exit 1
+  fi
+  echo "[11/11] live interop against ${MXKEYS_LIVE_BASE_URL}"
+  MXKEYS_LIVE_TEST=1 MXKEYS_LIVE_BASE_URL="${MXKEYS_LIVE_BASE_URL}" \
     go test -count=1 ./internal/server -run 'TestLive(FederationQueryStrictness|QueryCompatibility|NotaryFailurePath)' -v
 else
-  echo "[11/11] live interop skipped (set MXKEYS_LIVE_TEST=1 to enable)"
+  echo "[11/11] live interop skipped (set MXKEYS_LIVE_TEST=1 and MXKEYS_LIVE_BASE_URL to enable)"
 fi
 
 echo "CI parity preflight passed."

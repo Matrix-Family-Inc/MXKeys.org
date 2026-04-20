@@ -1,0 +1,37 @@
+# Normalize line endings for text files
+* text=auto eol=lf
+
+# Explicit text types
+*.go      text eol=lf diff=golang
+*.ts      text eol=lf
+*.tsx     text eol=lf
+*.js      text eol=lf
+*.jsx     text eol=lf
+*.json    text eol=lf
+*.yaml    text eol=lf
+*.yml     text eol=lf
+*.md      text eol=lf
+*.sh      text eol=lf
+*.sql     text eol=lf
+Dockerfile text eol=lf
+
+# Binary types (never diff)
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.webp    binary
+*.ico     binary
+*.pdf     binary
+*.woff    binary
+*.woff2   binary
+
+# Lockfiles: do not diff, but track
+bun.lock       -diff
+go.sum         -diff
+package-lock.json -diff
+
+# Generated artifacts excluded from language stats
+docs/grafana/*.json linguist-generated
+landing/dist/*      linguist-generated
+*.pb.go             linguist-generated
