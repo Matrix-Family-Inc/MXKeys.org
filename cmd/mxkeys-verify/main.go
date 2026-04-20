@@ -257,7 +257,9 @@ func trustLevelName(level int) string {
 func outputJSON(v interface{}) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	enc.Encode(v)
+	if err := enc.Encode(v); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to encode JSON output: %v\n", err)
+	}
 }
 
 func truncHash(h string) string {

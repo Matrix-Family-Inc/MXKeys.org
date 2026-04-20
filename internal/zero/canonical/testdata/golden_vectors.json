@@ -1,0 +1,82 @@
+[
+  {
+    "name": "empty_object",
+    "input": "{}",
+    "canonical": "{}"
+  },
+  {
+    "name": "empty_array",
+    "input": "[]",
+    "canonical": "[]"
+  },
+  {
+    "name": "matrix_spec_simple",
+    "input": "{\"one\": 1, \"two\": \"Two\"}",
+    "canonical": "{\"one\":1,\"two\":\"Two\"}"
+  },
+  {
+    "name": "matrix_spec_key_sort",
+    "input": "{\"b\":\"2\",\"a\":\"1\"}",
+    "canonical": "{\"a\":\"1\",\"b\":\"2\"}"
+  },
+  {
+    "name": "matrix_spec_whitespace_stripped",
+    "input": "{   \"auth\"   :    {   \"success\":true}}",
+    "canonical": "{\"auth\":{\"success\":true}}"
+  },
+  {
+    "name": "matrix_spec_nested",
+    "input": "{\"a\":{\"d\":4,\"c\":3},\"b\":2}",
+    "canonical": "{\"a\":{\"c\":3,\"d\":4},\"b\":2}"
+  },
+  {
+    "name": "integer_zero",
+    "input": "{\"n\":0}",
+    "canonical": "{\"n\":0}"
+  },
+  {
+    "name": "integer_negative",
+    "input": "{\"n\":-1}",
+    "canonical": "{\"n\":-1}"
+  },
+  {
+    "name": "integer_max_safe",
+    "input": "{\"n\":9007199254740991}",
+    "canonical": "{\"n\":9007199254740991}"
+  },
+  {
+    "name": "integer_min_safe_negative",
+    "input": "{\"n\":-9007199254740991}",
+    "canonical": "{\"n\":-9007199254740991}"
+  },
+  {
+    "name": "string_with_escapes",
+    "input": "{\"s\":\"quote\\\"tab\\tnewline\\n\"}",
+    "canonical": "{\"s\":\"quote\\\"tab\\tnewline\\n\"}"
+  },
+  {
+    "name": "string_unicode_bmp",
+    "input": "{\"name\":\"\u00e9\u4e2d\u6587\"}",
+    "canonical": "{\"name\":\"é中文\"}"
+  },
+  {
+    "name": "array_mixed_types",
+    "input": "[1,\"two\",true,null,{\"k\":\"v\"}]",
+    "canonical": "[1,\"two\",true,null,{\"k\":\"v\"}]"
+  },
+  {
+    "name": "deeply_nested",
+    "input": "{\"a\":{\"b\":{\"c\":{\"d\":{\"e\":42}}}}}",
+    "canonical": "{\"a\":{\"b\":{\"c\":{\"d\":{\"e\":42}}}}}"
+  },
+  {
+    "name": "signed_tree_head_shape",
+    "input": "{\"tree_size\": 100, \"root_hash\": \"abc123\", \"timestamp_ms\": 1745000000000, \"signer\": \"notary.example.org\"}",
+    "canonical": "{\"root_hash\":\"abc123\",\"signer\":\"notary.example.org\",\"timestamp_ms\":1745000000000,\"tree_size\":100}"
+  },
+  {
+    "name": "matrix_server_keys_shape",
+    "input": "{\"server_name\":\"example.org\",\"valid_until_ts\":1745000000000,\"verify_keys\":{\"ed25519:a\":{\"key\":\"base64data\"}},\"old_verify_keys\":{}}",
+    "canonical": "{\"old_verify_keys\":{},\"server_name\":\"example.org\",\"valid_until_ts\":1745000000000,\"verify_keys\":{\"ed25519:a\":{\"key\":\"base64data\"}}}"
+  }
+]

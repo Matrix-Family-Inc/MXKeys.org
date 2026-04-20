@@ -184,7 +184,10 @@ func (c *Cluster) raftNodes() []*Node {
 			port = "0"
 		}
 		portNum := 0
-		fmt.Sscanf(port, "%d", &portNum)
+		// Sscanf failure leaves portNum at 0, which is the intended
+		// sentinel for unparseable seed ports. Explicit discard quiets
+		// errcheck without changing behavior.
+		_, _ = fmt.Sscanf(port, "%d", &portNum)
 		nodes = append(nodes, &Node{
 			ID:       peer,
 			Address:  host,

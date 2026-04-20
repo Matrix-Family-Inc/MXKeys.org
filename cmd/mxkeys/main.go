@@ -59,7 +59,11 @@ func main() {
 		log.Error("Failed to create server", "error", err)
 		os.Exit(1)
 	}
-	defer srv.Close()
+	defer func() {
+		if err := srv.Close(); err != nil {
+			log.Warn("server close failed", "error", err)
+		}
+	}()
 
 	// Context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())

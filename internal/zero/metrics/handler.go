@@ -30,5 +30,8 @@ type metricsHandler struct {
 func (h *metricsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	collectRuntimeMetrics()
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-	h.registry.WriteTo(w)
+	// Exposition errors (client disconnect mid-body) are not actionable
+	// here: status has already been committed by Header() above. Explicit
+	// discard quiets errcheck without changing behavior.
+	_, _ = h.registry.WriteTo(w)
 }
