@@ -70,7 +70,6 @@ func (c *Cluster) stopCRDT() error {
 }
 
 func (c *Cluster) startRaft(ctx context.Context) error {
-	log.Warn("Raft consensus mode is experimental: no persistent log storage, no snapshots; use CRDT for production workloads")
 	node := raft.NewNode(raft.Config{
 		NodeID:            c.nodeID,
 		BindAddress:       c.config.BindAddress,
@@ -81,6 +80,17 @@ func (c *Cluster) startRaft(ctx context.Context) error {
 		CommitTimeout:     5 * time.Second,
 		SharedSecret:      c.config.SharedSecret,
 	})
+
+	// Attach persistent state so committed log entries survive restart.
+	// An empty state dir retains the legacy in-memory mode for backward
+	// compatibility with existing deployments that have not configured one.
+	if c.config.RaftStateDir != "" {
+		if err := node.SetStateDir(c.config.RaftStateDir, c.config.RaftSyncOnAppend); err != nil {
+			return fmt.Errorf("failed to attach raft state dir %q: %w", c.config.RaftStateDir, err)
+		}
+	} else {
+		log.Warn("Raft running without persistent state (cluster.raft_state_dir unset); committed entries will not survive restart")
+	}
 	node.SetOnStateChange(func(state raft.State) {
 		switch state {
 		case raft.Leader, raft.Follower:

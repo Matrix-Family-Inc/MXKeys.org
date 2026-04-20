@@ -16,10 +16,18 @@ import (
 )
 
 // Start starts the Raft node.
+// When a state directory is attached (see SetStateDir), this also loads the
+// persisted snapshot and replays the WAL before opening the listener so the
+// in-memory state reflects durable history prior to accepting RPCs.
 func (n *Node) Start(ctx context.Context) error {
 	if n.config.SharedSecret == "" {
 		return fmt.Errorf("raft shared secret is required")
 	}
+
+	if err := n.LoadFromDisk(); err != nil {
+		return fmt.Errorf("raft: load from disk: %w", err)
+	}
+
 	addr := fmt.Sprintf("%s:%d", n.config.BindAddress, n.config.BindPort)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -62,6 +70,8 @@ func (n *Node) Stop() error {
 }
 
 // Submit submits a command to the Raft cluster.
+// Leader-only: the command is appended to the log, persisted to WAL before
+// commit (durability precondition for linearizability), then replicated.
 func (n *Node) Submit(ctx context.Context, command []byte) error {
 	n.mu.Lock()
 	if n.state != Leader {
@@ -74,11 +84,16 @@ func (n *Node) Submit(ctx context.Context, command []byte) error {
 		Term:    n.currentTerm,
 		Command: command,
 	}
+	// Persist BEFORE making the entry visible to replication so a crash
+	// immediately after Submit cannot return success for an un-durable entry.
+	if err := n.persistEntry(entry); err != nil {
+		n.mu.Unlock()
+		return fmt.Errorf("raft: persist: %w", err)
+	}
 	n.log = append(n.log, entry)
 	n.updateCommitIndex()
 	n.mu.Unlock()
 
-	// Replicate to peers.
 	return n.replicateEntry(ctx, entry)
 }
 

@@ -126,6 +126,13 @@ type ClusterConfig struct {
 	ConsensusMode    string   // "raft" or "crdt"
 	SyncInterval     int      // seconds between state sync
 	SharedSecret     string   // required HMAC secret for cluster transport
+	// RaftStateDir is the directory that holds the Raft write-ahead log and
+	// snapshot file. Required when ConsensusMode="raft" so the node can
+	// recover committed state across restarts.
+	RaftStateDir string
+	// RaftSyncOnAppend fsyncs the WAL after every append (durability for
+	// power-loss). Default true.
+	RaftSyncOnAppend bool
 }
 
 // Load assembles a Config from optional YAML + environment overrides.
@@ -237,4 +244,6 @@ func setDefaults(c *Config) {
 	c.Cluster.ConsensusMode = "crdt"
 	c.Cluster.SyncInterval = 5
 	c.Cluster.SharedSecret = ""
+	c.Cluster.RaftStateDir = "/var/lib/mxkeys/raft"
+	c.Cluster.RaftSyncOnAppend = true
 }

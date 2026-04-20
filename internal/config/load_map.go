@@ -194,4 +194,10 @@ func applyClusterMap(config *Config, m map[string]interface{}) {
 	if v := zeroconfig.GetString(m, "cluster.shared_secret"); v != "" {
 		config.Cluster.SharedSecret = v
 	}
+	if v := zeroconfig.GetString(m, "cluster.raft_state_dir"); v != "" {
+		config.Cluster.RaftStateDir = v
+	}
+	if zeroconfig.Has(m, "cluster.raft_sync_on_append") {
+		config.Cluster.RaftSyncOnAppend = zeroconfig.GetBool(m, "cluster.raft_sync_on_append")
+	}
 }
