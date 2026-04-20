@@ -60,11 +60,22 @@ func (w *WAL) filterRewrite(keep func(LogEntry) bool) error {
 
 // rewriteLocked atomically replaces the WAL with a new file containing keep.
 // Requires w.mu held.
+//
+// The replacement file is written with the current walMagic prefix so a
+// rewritten WAL is indistinguishable from a freshly-created one. This keeps
+// the format version monotonic: a partially-rewritten state cannot appear
+// to be an older version to a future reader.
 func (w *WAL) rewriteLocked(keep []LogEntry) error {
 	tmpPath := filepath.Join(w.dir, walFileName+".rewrite")
 	tmp, err := os.OpenFile(tmpPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("raft wal: open tmp: %w", err)
+	}
+
+	if _, err := tmp.Write(walMagic[:]); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("raft wal: write tmp magic: %w", err)
 	}
 
 	// Temporarily swap w.file to the tmp handle so appendLocked can reuse the

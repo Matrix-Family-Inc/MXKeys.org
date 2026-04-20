@@ -92,6 +92,9 @@ func (n *Node) LoadFromDisk() error {
 		n.mu.Lock()
 		n.snapshotIndex = snap.Meta.LastIncludedIndex
 		n.snapshotTerm = snap.Meta.LastIncludedTerm
+		// logOffset starts at the snapshot boundary so subsequent WAL
+		// entries (Index > snapshotIndex) index correctly into n.log.
+		n.logOffset = snap.Meta.LastIncludedIndex
 		n.commitIndex = snap.Meta.LastIncludedIndex
 		n.lastApplied = snap.Meta.LastIncludedIndex
 		if snap.Meta.LastIncludedTerm > n.currentTerm {
@@ -161,23 +164,22 @@ func (n *Node) persistEntries(entries []LogEntry) error {
 //
 // Caller must hold n.mu.
 func (n *Node) truncateLogAfter(lastKeepIndex uint64) error {
-	if uint64(len(n.log)) > lastKeepIndex {
-		// Log is 1-indexed via Entry.Index; the in-memory slice is 0-indexed.
-		n.log = n.log[:lastKeepIndex]
-	}
+	n.truncateSliceAfter(lastKeepIndex)
 	if n.wal == nil {
 		return nil
 	}
 	return n.wal.TruncateAfter(lastKeepIndex)
 }
 
-// CompactLog produces a new on-disk snapshot at the current applied index
-// and truncates the WAL prefix. Requires a registered SnapshotProvider.
+// CompactLog produces a new on-disk snapshot at the current applied index,
+// truncates the WAL prefix, and drops the in-memory log prefix covered by
+// the snapshot. Requires a registered SnapshotProvider.
 //
-// The in-memory log slice is intentionally not truncated here; the snapshot
-// is for catch-up (InstallSnapshot RPC) and WAL-size containment, not for
-// in-process memory reclaim. Callers that need memory reclaim must manage
-// it at a higher layer.
+// After CompactLog the in-memory slice contains only entries with
+// Index > snapshotIndex. logOffset advances to snapshotIndex so the
+// invariant n.log[i].Index == n.logOffset + i + 1 holds. Subsequent index
+// arithmetic must go through logLen/sliceIndex/entryAt rather than
+// dereferencing n.log with the raw absolute index.
 func (n *Node) CompactLog() error {
 	if n.stateDir == "" || n.snapshotProvider == nil {
 		return fmt.Errorf("raft: compaction requires state dir and snapshot provider")
@@ -185,16 +187,17 @@ func (n *Node) CompactLog() error {
 
 	n.mu.RLock()
 	lastIdx := n.lastApplied
-	var lastTerm uint64
-	if lastIdx > 0 && int(lastIdx) <= len(n.log) {
-		lastTerm = n.log[lastIdx-1].Term
-	} else {
-		lastTerm = n.snapshotTerm
-	}
+	lastTerm, ok := n.termAt(lastIdx)
 	n.mu.RUnlock()
 
 	if lastIdx == 0 {
 		return fmt.Errorf("raft: nothing to compact")
+	}
+	if !ok {
+		// lastApplied is neither in memory nor at the snapshot boundary.
+		// That means lastApplied <= snapshotIndex already (a compaction ran
+		// after an InstallSnapshot); nothing new to compact.
+		return fmt.Errorf("raft: lastApplied already below snapshot")
 	}
 
 	data, err := n.snapshotProvider()
@@ -215,6 +218,19 @@ func (n *Node) CompactLog() error {
 	}
 
 	n.mu.Lock()
+	// Drop the in-memory prefix covered by the snapshot. logOffset becomes
+	// lastIdx so Index/offset arithmetic stays consistent.
+	if lastIdx > n.logOffset {
+		drop := int(lastIdx - n.logOffset)
+		if drop > len(n.log) {
+			drop = len(n.log)
+		}
+		// Preserve the post-snapshot tail in a fresh backing slice so the
+		// old array with compacted entries becomes eligible for GC.
+		rest := append([]LogEntry(nil), n.log[drop:]...)
+		n.log = rest
+	}
+	n.logOffset = lastIdx
 	n.snapshotIndex = lastIdx
 	n.snapshotTerm = lastTerm
 	n.mu.Unlock()

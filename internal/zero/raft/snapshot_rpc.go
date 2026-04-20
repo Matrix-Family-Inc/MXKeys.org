@@ -91,14 +91,18 @@ func (n *Node) handleInstallSnapshot(msg *RPCMessage) *RPCMessage {
 	}
 	// Drop log entries fully covered by the snapshot; preserve any tail
 	// whose Index > LastIncludedIndex to avoid re-fetching already-replicated
-	// work from the leader.
-	keep := n.log[:0]
+	// work from the leader. Advance logOffset so the invariant
+	// n.log[i].Index == n.logOffset + i + 1 holds after the rewrite.
+	var keep []LogEntry
 	for _, e := range n.log {
 		if e.Index > req.LastIncludedIndex {
 			keep = append(keep, e)
 		}
 	}
 	n.log = keep
+	if req.LastIncludedIndex > n.logOffset {
+		n.logOffset = req.LastIncludedIndex
+	}
 	response.Term = n.currentTerm
 	n.mu.Unlock()
 
