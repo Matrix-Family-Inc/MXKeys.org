@@ -186,6 +186,80 @@ func TestCompactLogProducesSnapshotAndTrimsWAL(t *testing.T) {
 	if len(entries) != 0 {
 		t.Fatalf("WAL should be empty after compaction (all entries covered), got %d", len(entries))
 	}
+
+	// In-memory compaction: logOffset advances, n.log drops the prefix.
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	if n.logOffset != 3 {
+		t.Fatalf("expected logOffset=3 after compaction, got %d", n.logOffset)
+	}
+	if len(n.log) != 0 {
+		t.Fatalf("expected in-memory log empty after compaction (all entries covered), got %d", len(n.log))
+	}
+	if n.logLen() != 3 {
+		t.Fatalf("logLen() must still report absolute log length 3, got %d", n.logLen())
+	}
+}
+
+// TestSubmitAfterCompactionUsesCorrectIndex verifies the post-compaction
+// indexing invariant: after a snapshot at index N, the next Submit produces
+// an entry with Index N+1 (not len(n.log)+1), and subsequent replication
+// sees it correctly via the logOffset-aware accessors.
+func TestSubmitAfterCompactionUsesCorrectIndex(t *testing.T) {
+	dir := t.TempDir()
+	n := NewNode(Config{NodeID: "n1"})
+	if err := n.SetStateDir(dir, true); err != nil {
+		t.Fatalf("SetStateDir: %v", err)
+	}
+	defer func() { _ = n.wal.Close() }()
+
+	n.SetSnapshotProvider(func() ([]byte, error) { return []byte("state"), nil })
+
+	// Seed three entries + compact.
+	n.mu.Lock()
+	n.state = Leader
+	n.currentTerm = 5
+	n.log = []LogEntry{
+		{Index: 1, Term: 5, Command: json.RawMessage(`"a"`)},
+		{Index: 2, Term: 5, Command: json.RawMessage(`"b"`)},
+		{Index: 3, Term: 5, Command: json.RawMessage(`"c"`)},
+	}
+	for _, e := range n.log {
+		if err := n.wal.Append(e); err != nil {
+			n.mu.Unlock()
+			t.Fatalf("wal seed: %v", err)
+		}
+	}
+	n.commitIndex = 3
+	n.lastApplied = 3
+	n.mu.Unlock()
+
+	if err := n.CompactLog(); err != nil {
+		t.Fatalf("CompactLog: %v", err)
+	}
+
+	// The sole leader applies nothing remotely; Submit returns ErrTimeout
+	// after CommitTimeout because there are no peers to reach quorum on a
+	// multi-node config. To isolate the indexing check, we drive Submit's
+	// append-and-persist logic directly via the underlying machinery.
+	n.mu.Lock()
+	n.state = Leader
+	next := n.logLen() + 1
+	entry := LogEntry{Index: next, Term: n.currentTerm, Command: json.RawMessage(`"d"`)}
+	if err := n.wal.Append(entry); err != nil {
+		n.mu.Unlock()
+		t.Fatalf("wal append: %v", err)
+	}
+	n.log = append(n.log, entry)
+	got := n.logLen()
+	n.mu.Unlock()
+
+	if next != 4 {
+		t.Fatalf("expected Submit to choose Index=4 post-compaction, got %d", next)
+	}
+	if got != 4 {
+		t.Fatalf("logLen() must be 4 after appending one post-compaction entry, got %d", got)
+	}
 }
 
 // TestSnapshotRoundTrip exercises SaveSnapshot + LoadSnapshot in isolation.

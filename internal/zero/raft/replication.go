@@ -91,11 +91,19 @@ func (n *Node) appendEntriesSnapshot(peer string) (appendEntriesSnapshot, bool) 
 		prevLogIndex: nextIdx - 1,
 		leaderCommit: n.commitIndex,
 	}
-	if snapshot.prevLogIndex > 0 && snapshot.prevLogIndex <= uint64(len(n.log)) {
-		snapshot.prevLogTerm = n.log[snapshot.prevLogIndex-1].Term
+	if snapshot.prevLogIndex > 0 {
+		// termAt consults the snapshot boundary automatically when the
+		// prevLogIndex is covered by a compacted prefix.
+		if term, ok := n.termAt(snapshot.prevLogIndex); ok {
+			snapshot.prevLogTerm = term
+		}
 	}
-	if nextIdx <= uint64(len(n.log)) {
-		snapshot.entries = cloneLogEntries(n.log[nextIdx-1:])
+	// Copy the tail from nextIdx onward when it is available in memory.
+	// A lagging peer whose nextIdx sits below logOffset must be caught up
+	// via InstallSnapshot instead; that path is driven by the leader's
+	// heartbeat loop.
+	if slot, ok := n.sliceIndex(nextIdx); ok {
+		snapshot.entries = cloneLogEntries(n.log[slot:])
 	}
 	return snapshot, true
 }
@@ -120,8 +128,9 @@ func cloneLogEntries(entries []LogEntry) []LogEntry {
 
 // updateCommitIndex updates commit index based on matchIndex.
 func (n *Node) updateCommitIndex() {
-	for i := n.commitIndex + 1; i <= uint64(len(n.log)); i++ {
-		if n.log[i-1].Term != n.currentTerm {
+	for i := n.commitIndex + 1; i <= n.logLen(); i++ {
+		term, ok := n.termAt(i)
+		if !ok || term != n.currentTerm {
 			continue
 		}
 
@@ -152,7 +161,13 @@ func (n *Node) applyLoop() {
 		n.mu.Lock()
 		for n.lastApplied < n.commitIndex {
 			n.lastApplied++
-			entry := n.log[n.lastApplied-1]
+			entry, ok := n.entryAt(n.lastApplied)
+			if !ok {
+				// The entry falls below logOffset: it has already been
+				// applied via a snapshot install, so skip without invoking
+				// the state-machine callback again.
+				continue
+			}
 			n.mu.Unlock()
 
 			if n.onApply != nil {

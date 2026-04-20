@@ -48,11 +48,7 @@ func (n *Node) startElection() {
 	n.lastContact = time.Now()
 	currentTerm := n.currentTerm
 	peers := append([]string(nil), n.config.Peers...)
-	lastLogIndex := uint64(len(n.log))
-	var lastLogTerm uint64
-	if lastLogIndex > 0 {
-		lastLogTerm = n.log[lastLogIndex-1].Term
-	}
+	lastLogIndex, lastLogTerm := n.lastLogIndexTerm()
 	stateChange := n.onStateChange
 	electionTimeout := n.config.ElectionTimeout
 	n.mu.Unlock()

@@ -77,6 +77,14 @@ type Node struct {
 	commitIndex uint64
 	lastApplied uint64
 
+	// logOffset is the number of entries logically present in the log but
+	// absent from the in-memory slice. Invariant:
+	//     n.log[i].Index == n.logOffset + uint64(i) + 1
+	// Grows monotonically only via CompactLog/InstallSnapshot after those
+	// operations successfully persist a snapshot that covers the dropped
+	// prefix. Always equals snapshotIndex when non-zero.
+	logOffset uint64
+
 	// snapshotIndex is the highest Raft log index reflected in the latest
 	// persisted snapshot. Entries with Index <= snapshotIndex may be absent
 	// from n.log (compacted) and must be served from disk via InstallSnapshot.

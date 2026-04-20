@@ -72,6 +72,8 @@ func (n *Node) Stop() error {
 // Submit submits a command to the Raft cluster.
 // Leader-only: the command is appended to the log, persisted to WAL before
 // commit (durability precondition for linearizability), then replicated.
+//
+// Uses logLen() so the assigned Index accounts for any compacted prefix.
 func (n *Node) Submit(ctx context.Context, command []byte) error {
 	n.mu.Lock()
 	if n.state != Leader {
@@ -80,7 +82,7 @@ func (n *Node) Submit(ctx context.Context, command []byte) error {
 	}
 
 	entry := LogEntry{
-		Index:   uint64(len(n.log)) + 1,
+		Index:   n.logLen() + 1,
 		Term:    n.currentTerm,
 		Command: command,
 	}

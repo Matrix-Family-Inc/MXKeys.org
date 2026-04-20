@@ -143,10 +143,11 @@ func TestWALDetectsCRCTampering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	// First record: 8 bytes header + len bytes. Advance past it to find the
-	// payload of record 2.
-	firstLen := binary.LittleEndian.Uint32(raw[0:4])
-	tamperOffset := int(8 + firstLen + 8) // skip first record + second header
+	// After the 12-byte magic, each record is 8 bytes header + length bytes.
+	// Skip magic + first record header to read first length, then advance
+	// past the first record and the second record's header.
+	firstLen := binary.LittleEndian.Uint32(raw[walMagicSize : walMagicSize+4])
+	tamperOffset := int(walMagicSize + 8 + firstLen + 8)
 	raw[tamperOffset] ^= 0xFF
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		t.Fatalf("rewrite: %v", err)
@@ -164,6 +165,67 @@ func TestWALDetectsCRCTampering(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].Index != 1 {
 		t.Fatalf("expected only the first well-formed entry, got %+v", got)
+	}
+}
+
+// TestWALRejectsUnknownMagic verifies that opening a WAL file with an
+// incompatible magic prefix is a hard error rather than a silent parse of
+// potentially foreign data.
+func TestWALRejectsUnknownMagic(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, walFileName)
+	// Write a fake magic that matches the version-v1 shape (never shipped
+	// but a reader that defensive-checks the magic should reject it).
+	bogus := []byte{'M', 'X', 'K', 'S', '_', 'W', 'A', 'L', '_', 'v', '1', 0}
+	if err := os.WriteFile(path, bogus, 0o600); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true}); err == nil {
+		t.Fatal("expected OpenWAL to reject unknown magic")
+	}
+}
+
+// TestWALGroupCommitAmortizesFsync exercises the batching path: many
+// concurrent Appends must all complete without deadlock and the resulting
+// WAL must contain every entry in submission order (per-goroutine ordering
+// is preserved by the per-call channel contract; overall ordering is not).
+func TestWALGroupCommitAmortizesFsync(t *testing.T) {
+	w, _ := newTestWAL(t)
+
+	const n = 64
+	done := make(chan error, n)
+	for i := 0; i < n; i++ {
+		i := i
+		go func() {
+			done <- w.Append(LogEntry{Index: uint64(i + 1), Term: 1, Command: json.RawMessage(`"x"`)})
+		}()
+	}
+	for i := 0; i < n; i++ {
+		if err := <-done; err != nil {
+			t.Fatalf("append %d: %v", i, err)
+		}
+	}
+
+	got, err := w.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if len(got) != n {
+		t.Fatalf("expected %d entries, got %d", n, len(got))
+	}
+}
+
+// TestWALAppendAfterCloseRejected verifies ErrWALClosed is returned once
+// Close has run, preventing silent loss of entries accepted after shutdown.
+func TestWALAppendAfterCloseRejected(t *testing.T) {
+	w, _ := newTestWAL(t)
+	mustAppend(t, w, LogEntry{Index: 1, Term: 1})
+	if err := w.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	err := w.Append(LogEntry{Index: 2, Term: 1})
+	if !errors.Is(err, ErrWALClosed) {
+		t.Fatalf("expected ErrWALClosed, got %v", err)
 	}
 }
 

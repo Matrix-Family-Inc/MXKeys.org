@@ -108,12 +108,14 @@ func (n *Node) handleAppendEntries(msg *RPCMessage) *RPCMessage {
 	n.leaderId = req.LeaderId
 	n.lastContact = time.Now()
 
-	// Check log consistency.
+	// Check log consistency. prevLog may sit anywhere:
+	//   * Exactly at the snapshot boundary: termAt consults snapshotTerm.
+	//   * Inside the in-memory window: termAt looks it up in n.log.
+	//   * Beyond the tail or below the snapshot prefix: reject (Success=false)
+	//     so the leader decrements nextIndex and retries (or sends InstallSnapshot).
 	if req.PrevLogIndex > 0 {
-		if req.PrevLogIndex > uint64(len(n.log)) {
-			return n.wrapResponse(MsgAppendRes, response)
-		}
-		if n.log[req.PrevLogIndex-1].Term != req.PrevLogTerm {
+		term, ok := n.termAt(req.PrevLogIndex)
+		if !ok || term != req.PrevLogTerm {
 			return n.wrapResponse(MsgAppendRes, response)
 		}
 	}
@@ -124,8 +126,9 @@ func (n *Node) handleAppendEntries(msg *RPCMessage) *RPCMessage {
 	// cannot lose a record the follower has already acknowledged.
 	for i, entry := range req.Entries {
 		idx := req.PrevLogIndex + uint64(i) + 1
-		if idx <= uint64(len(n.log)) {
-			if n.log[idx-1].Term != entry.Term {
+		existing, inWindow := n.entryAt(idx)
+		if inWindow {
+			if existing.Term != entry.Term {
 				if err := n.truncateLogAfter(idx - 1); err != nil {
 					return n.wrapResponse(MsgAppendRes, response)
 				}
@@ -134,12 +137,14 @@ func (n *Node) handleAppendEntries(msg *RPCMessage) *RPCMessage {
 				}
 				n.log = append(n.log, entry)
 			}
-		} else {
+		} else if idx > n.logLen() {
 			if err := n.persistEntry(entry); err != nil {
 				return n.wrapResponse(MsgAppendRes, response)
 			}
 			n.log = append(n.log, entry)
 		}
+		// Else: idx falls under logOffset. Already durably in the snapshot,
+		// silently skip.
 	}
 
 	// Update commit index.
@@ -158,12 +163,10 @@ func (n *Node) handleAppendEntries(msg *RPCMessage) *RPCMessage {
 }
 
 // isLogUpToDate checks if candidate's log is at least as up-to-date as ours.
+// Uses lastLogIndexTerm so a post-compaction follower with an empty in-memory
+// log still reports its durable snapshot boundary rather than a bogus zero.
 func (n *Node) isLogUpToDate(lastLogIndex, lastLogTerm uint64) bool {
-	myLastIndex := uint64(len(n.log))
-	var myLastTerm uint64
-	if myLastIndex > 0 {
-		myLastTerm = n.log[myLastIndex-1].Term
-	}
+	myLastIndex, myLastTerm := n.lastLogIndexTerm()
 
 	if lastLogTerm != myLastTerm {
 		return lastLogTerm > myLastTerm
