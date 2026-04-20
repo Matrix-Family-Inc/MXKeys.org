@@ -11,6 +11,8 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -24,14 +26,25 @@ import (
 )
 
 func main() {
-	// Load configuration
-	cfg, err := config.Load()
+	configPath := flag.String("config", "", "path to config.yaml (optional; falls back to config.yaml and /etc/mxkeys/config.yaml)")
+	showVersion := flag.Bool("version", false, "print version and exit")
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: mxkeys [flags]\n\nFlags:\n")
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(version.Full())
+		return
+	}
+
+	cfg, err := config.Load(*configPath)
 	if err != nil {
 		log.Error("Failed to load configuration", "error", err)
 		os.Exit(1)
 	}
 
-	// Configure logging
 	configureLogging(cfg)
 
 	log.Info("MXKeys Federation Trust Infrastructure starting",

@@ -84,7 +84,7 @@ cluster:
     - 127.0.0.1:7948
   consensus_mode: raft
   sync_interval: 9
-  shared_secret: cluster-secret
+  shared_secret: cluster-secret-32-chars-minimum-padding
 
 trusted_notaries:
   - server_name: matrix.org
@@ -132,7 +132,7 @@ trusted_notaries:
 	if !cfg.Cluster.Enabled || cfg.Cluster.ConsensusMode != "raft" || len(cfg.Cluster.Seeds) != 2 {
 		t.Fatalf("cluster values not loaded")
 	}
-	if cfg.Cluster.AdvertiseAddress != "10.0.0.10" || cfg.Cluster.SharedSecret != "cluster-secret" {
+	if cfg.Cluster.AdvertiseAddress != "10.0.0.10" || cfg.Cluster.SharedSecret != "cluster-secret-32-chars-minimum-padding" {
 		t.Fatalf("extended cluster values not loaded")
 	}
 	if len(cfg.Security.TrustedNotaries) != 1 {

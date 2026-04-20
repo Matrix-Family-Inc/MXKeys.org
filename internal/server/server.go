@@ -20,6 +20,7 @@ import (
 	"mxkeys/internal/cluster"
 	"mxkeys/internal/config"
 	"mxkeys/internal/keys"
+	"mxkeys/internal/storage/migrations"
 	"mxkeys/internal/zero/log"
 )
 
@@ -53,6 +54,17 @@ func New(cfg *config.Config) (*Server, error) {
 
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	// Apply schema migrations before any dependent component touches the DB.
+	// Failure to migrate is fatal: running on a stale schema risks silent
+	// corruption of notary state.
+	applied, err := migrations.Apply(db)
+	if err != nil {
+		return nil, fmt.Errorf("schema migrations failed: %w", err)
+	}
+	if applied > 0 {
+		log.Info("Schema migrations applied", "count", applied)
 	}
 
 	// Create notary service

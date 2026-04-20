@@ -154,47 +154,73 @@ func TestHandleKeyQueryRejectionReasonMetrics(t *testing.T) {
 	}
 }
 
-func TestOldestVisitorIPsReturnsOldestEntriesFirst(t *testing.T) {
-	now := time.Now()
-	visitors := map[string]*visitor{
-		"newest": {lastSeen: now},
-		"middle": {lastSeen: now.Add(-time.Minute)},
-		"oldest": {lastSeen: now.Add(-2 * time.Minute)},
+// TestRateLimiterLRUEvictsOldestOnCapacity verifies that when the visitor
+// map is full, inserting a new visitor evicts exactly one LRU-tail entry and
+// retains all more-recently-used entries.
+func TestRateLimiterLRUEvictsOldestOnCapacity(t *testing.T) {
+	rl := NewRateLimiter(RateLimitConfig{
+		GlobalRequestsPerSecond: 1,
+		GlobalBurst:             1,
+		QueryRequestsPerSecond:  1,
+		QueryBurst:              1,
+		MaxVisitors:             3,
+	})
+	defer rl.Stop()
+
+	rl.getVisitor("10.0.0.1")
+	rl.getVisitor("10.0.0.2")
+	rl.getVisitor("10.0.0.3")
+
+	if rl.order.Len() != 3 {
+		t.Fatalf("expected 3 visitors, got %d", rl.order.Len())
 	}
 
-	got := oldestVisitorIPs(visitors, 2)
-	if len(got) != 2 {
-		t.Fatalf("len(got) = %d, want 2", len(got))
+	// Access 10.0.0.1 again: it moves to front, 10.0.0.2 is now LRU tail.
+	rl.getVisitor("10.0.0.1")
+
+	// Insert a new visitor past capacity: 10.0.0.2 must be evicted.
+	rl.getVisitor("10.0.0.4")
+
+	if rl.order.Len() != 3 {
+		t.Fatalf("expected capacity to hold at 3, got %d", rl.order.Len())
 	}
-	if got[0] != "oldest" || got[1] != "middle" {
-		t.Fatalf("oldestVisitorIPs() = %v, want [oldest middle]", got)
+	if _, ok := rl.visitors["10.0.0.2"]; ok {
+		t.Fatal("LRU tail visitor should have been evicted")
+	}
+	for _, ip := range []string{"10.0.0.1", "10.0.0.3", "10.0.0.4"} {
+		if _, ok := rl.visitors[ip]; !ok {
+			t.Fatalf("expected %s to remain", ip)
+		}
 	}
 }
 
-func TestRateLimiterEvictsOldestVisitorsWhenForced(t *testing.T) {
-	rl := NewRateLimiter(DefaultRateLimitConfig())
+// TestRateLimiterCleanupDropsIdleVisitors verifies the background cleanup
+// predicate: visitors older than idleTTL are removed in LRU order.
+func TestRateLimiterCleanupDropsIdleVisitors(t *testing.T) {
+	rl := NewRateLimiter(RateLimitConfig{
+		GlobalRequestsPerSecond: 1,
+		GlobalBurst:             1,
+		QueryRequestsPerSecond:  1,
+		QueryBurst:              1,
+		MaxVisitors:             10,
+		IdleTTL:                 50 * time.Millisecond,
+	})
 	defer rl.Stop()
 
-	base := time.Now().Add(-30 * time.Second)
-	for i := 0; i < maxVisitors; i++ {
-		ip := fmt.Sprintf("198.51.100.%d", i)
-		rl.visitors[ip] = &visitor{
-			limiter:      nil,
-			queryLimiter: nil,
-			lastSeen:     base.Add(time.Duration(i) * time.Microsecond),
-		}
-	}
+	rl.getVisitor("198.51.100.1")
+	rl.getVisitor("198.51.100.2")
 
-	rl.evictOldestLocked()
+	time.Sleep(80 * time.Millisecond)
 
-	expectedRemaining := maxVisitors - maxVisitors/10
-	if len(rl.visitors) != expectedRemaining {
-		t.Fatalf("len(visitors) = %d, want %d after forced eviction", len(rl.visitors), expectedRemaining)
+	// Bump one visitor: it should survive cleanup.
+	rl.getVisitor("198.51.100.2")
+
+	rl.cleanup()
+
+	if _, ok := rl.visitors["198.51.100.1"]; ok {
+		t.Fatal("idle visitor should have been cleaned up")
 	}
-	if _, exists := rl.visitors["198.51.100.0"]; exists {
-		t.Fatal("oldest visitor should have been evicted")
-	}
-	if _, exists := rl.visitors[fmt.Sprintf("198.51.100.%d", maxVisitors-1)]; !exists {
-		t.Fatal("newest visitor should remain after forced eviction")
+	if _, ok := rl.visitors["198.51.100.2"]; !ok {
+		t.Fatal("recently-seen visitor must survive cleanup")
 	}
 }

@@ -128,18 +128,32 @@ type ClusterConfig struct {
 	SharedSecret     string   // required HMAC secret for cluster transport
 }
 
-// Load loads config from file or environment variables
-func Load() (*Config, error) {
+// Load assembles a Config from optional YAML + environment overrides.
+//
+// Resolution order:
+//  1. If explicitPath is non-empty, it is used directly. Missing file is a
+//     hard error (the operator asked for that exact path).
+//  2. Otherwise, the first existing candidate in [config.yaml, /etc/mxkeys/config.yaml]
+//     is used. Neither existing is acceptable (env-only deployments).
+//
+// Environment variables (prefix MXKEYS_) always override file values. Final
+// configuration is Validate()d before being returned.
+func Load(explicitPath ...string) (*Config, error) {
 	config := &Config{}
 	setDefaults(config)
 
-	// Try config file paths
 	var configPath string
-	paths := []string{"config.yaml", "/etc/mxkeys/config.yaml"}
-	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil {
-			configPath = p
-			break
+	if len(explicitPath) > 0 && explicitPath[0] != "" {
+		configPath = explicitPath[0]
+		if _, err := os.Stat(configPath); err != nil {
+			return nil, fmt.Errorf("config file %q: %w", configPath, err)
+		}
+	} else {
+		for _, p := range []string{"config.yaml", "/etc/mxkeys/config.yaml"} {
+			if _, err := os.Stat(p); err == nil {
+				configPath = p
+				break
+			}
 		}
 	}
 
@@ -149,12 +163,10 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("failed to load config: %w", err)
 		}
 
-		// Apply env overrides
 		zeroconfig.WithEnvOverride(m, "MXKEYS")
 		applyMapConfig(config, m, configPath)
 	}
 
-	// Apply environment variable overrides
 	if err := applyEnvOverrides(config); err != nil {
 		return nil, fmt.Errorf("environment overrides: %w", err)
 	}

@@ -10,10 +10,13 @@
 package keys
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"mxkeys/internal/keys/keyprovider"
 )
 
 func TestNotaryApplyTrustPolicyToRequest(t *testing.T) {
@@ -83,6 +86,22 @@ func TestSortedServerNames(t *testing.T) {
 	}
 }
 
+// These permission tests exercise the file-backed keyprovider, which is the
+// current home of on-disk signing-key hygiene. The tests used to live against
+// an inline notary.initSigningKey helper; since that has been extracted into
+// internal/keys/keyprovider we call the provider directly here.
+
+func loadFileProvider(t *testing.T, dir string) {
+	t.Helper()
+	p, err := keyprovider.New(keyprovider.Config{Kind: keyprovider.KindFile, StoragePath: dir})
+	if err != nil {
+		t.Fatalf("keyprovider.New: %v", err)
+	}
+	if _, _, err := p.LoadOrGenerate(context.Background()); err != nil {
+		t.Fatalf("LoadOrGenerate: %v", err)
+	}
+}
+
 func TestInitSigningKeyEnforcesSecurePermissions(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("permission bits are not portable on windows")
@@ -94,10 +113,7 @@ func TestInitSigningKeyEnforcesSecurePermissions(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	n := &Notary{}
-	if err := n.initSigningKey(tmpDir); err != nil {
-		t.Fatalf("initSigningKey failed: %v", err)
-	}
+	loadFileProvider(t, tmpDir)
 
 	keyPath := filepath.Join(tmpDir, "mxkeys_ed25519.key")
 
@@ -129,10 +145,7 @@ func TestInitSigningKeyTightensExistingPermissions(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	n := &Notary{}
-	if err := n.initSigningKey(tmpDir); err != nil {
-		t.Fatalf("initSigningKey failed: %v", err)
-	}
+	loadFileProvider(t, tmpDir)
 
 	keyPath := filepath.Join(tmpDir, "mxkeys_ed25519.key")
 
@@ -143,9 +156,7 @@ func TestInitSigningKeyTightensExistingPermissions(t *testing.T) {
 		t.Fatalf("failed to relax file perms: %v", err)
 	}
 
-	if err := n.initSigningKey(tmpDir); err != nil {
-		t.Fatalf("initSigningKey second run failed: %v", err)
-	}
+	loadFileProvider(t, tmpDir)
 
 	dirInfo, err := os.Stat(tmpDir)
 	if err != nil {
@@ -177,8 +188,11 @@ func TestInitSigningKeyRejectsCorruptedExistingFile(t *testing.T) {
 		t.Fatalf("failed to seed corrupted key file: %v", err)
 	}
 
-	n := &Notary{}
-	if err := n.initSigningKey(tmpDir); err == nil {
+	p, err := keyprovider.New(keyprovider.Config{Kind: keyprovider.KindFile, StoragePath: tmpDir})
+	if err != nil {
+		t.Fatalf("keyprovider.New: %v", err)
+	}
+	if _, _, err := p.LoadOrGenerate(context.Background()); err == nil {
 		t.Fatal("expected corrupted key file to be rejected")
 	}
 

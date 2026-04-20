@@ -3,71 +3,99 @@
  * Company: Matrix Family Inc. (https://matrix.family)
  * Maintainer: Brabus
  * Contact: dev@matrix.family
- * Date: Sat Mar 15 2026 UTC
- * Status: Created
+ * Date: Mon Apr 20 2026 UTC
+ * Status: Updated
  */
 
 package server
 
 import (
+	"container/list"
 	"net/http"
-	"sort"
 	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
 )
 
-const maxVisitors = 100000 // Maximum unique IPs to track before aggressive eviction
+// defaultMaxVisitors is the fallback capacity when config does not specify one.
+const defaultMaxVisitors = 100000
 
+// RateLimiter enforces per-IP request rate limits with an LRU cache of
+// visitor entries. The LRU provides O(1) get, insert, and eviction under
+// bounded memory when the number of unique client IPs exceeds capacity.
 type RateLimiter struct {
-	visitors map[string]*visitor
-	mu       sync.RWMutex
+	mu       sync.Mutex
+	visitors map[string]*list.Element
+	order    *list.List // front = most recently used, back = oldest
 
 	globalRate   rate.Limit
 	globalBurst  int
 	queryRate    rate.Limit
 	queryBurst   int
+	maxVisitors  int
 	cleanupEvery time.Duration
+	idleTTL      time.Duration
 	stopCh       chan struct{}
 	stopOnce     sync.Once
 }
 
 type visitor struct {
+	ip           string
 	limiter      *rate.Limiter
 	queryLimiter *rate.Limiter
 	lastSeen     time.Time
 }
 
-type visitorSnapshot struct {
-	ip       string
-	lastSeen time.Time
-}
-
+// RateLimitConfig describes the rate-limit bounds for both the global limiter
+// (applied to all routes) and the tighter query limiter (applied to the
+// POST /_matrix/key/v2/query hot path).
 type RateLimitConfig struct {
 	GlobalRequestsPerSecond float64
 	GlobalBurst             int
 	QueryRequestsPerSecond  float64
 	QueryBurst              int
+	// MaxVisitors caps the number of distinct client IPs tracked
+	// simultaneously. Exceeding it evicts the LRU tail in O(1).
+	// Zero or negative means use defaultMaxVisitors.
+	MaxVisitors int
+	// IdleTTL is the cutoff for the background cleanup loop: visitors not
+	// seen for IdleTTL are dropped. Zero means 10 minutes.
+	IdleTTL time.Duration
 }
 
+// DefaultRateLimitConfig returns a conservative default tuned for small
+// operators; production deployments should override via config.
 func DefaultRateLimitConfig() RateLimitConfig {
 	return RateLimitConfig{
 		GlobalRequestsPerSecond: 100,
 		GlobalBurst:             200,
 		QueryRequestsPerSecond:  10,
 		QueryBurst:              20,
+		MaxVisitors:             defaultMaxVisitors,
+		IdleTTL:                 10 * time.Minute,
 	}
 }
 
+// NewRateLimiter constructs a RateLimiter and starts its background cleanup
+// goroutine. Call Stop to release it.
 func NewRateLimiter(cfg RateLimitConfig) *RateLimiter {
+	if cfg.MaxVisitors <= 0 {
+		cfg.MaxVisitors = defaultMaxVisitors
+	}
+	if cfg.IdleTTL <= 0 {
+		cfg.IdleTTL = 10 * time.Minute
+	}
 	rl := &RateLimiter{
-		visitors:     make(map[string]*visitor),
+		visitors:     make(map[string]*list.Element, cfg.MaxVisitors/8+1),
+		order:        list.New(),
 		globalRate:   rate.Limit(cfg.GlobalRequestsPerSecond),
 		globalBurst:  cfg.GlobalBurst,
 		queryRate:    rate.Limit(cfg.QueryRequestsPerSecond),
 		queryBurst:   cfg.QueryBurst,
+		maxVisitors:  cfg.MaxVisitors,
 		cleanupEvery: 5 * time.Minute,
+		idleTTL:      cfg.IdleTTL,
 		stopCh:       make(chan struct{}),
 	}
 
@@ -76,90 +104,46 @@ func NewRateLimiter(cfg RateLimitConfig) *RateLimiter {
 	return rl
 }
 
+// getVisitor returns the visitor for ip, creating it on first use. Promoted
+// to the LRU front in O(1). Inserts that exceed capacity evict the LRU tail.
 func (rl *RateLimiter) getVisitor(ip string) *visitor {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
-	if v, exists := rl.visitors[ip]; exists {
+	if el, ok := rl.visitors[ip]; ok {
+		v := el.Value.(*visitor)
 		v.lastSeen = time.Now()
+		rl.order.MoveToFront(el)
 		return v
 	}
 
-	// Protect against memory exhaustion from too many unique IPs
-	if len(rl.visitors) >= maxVisitors {
+	if rl.order.Len() >= rl.maxVisitors {
 		rl.evictOldestLocked()
 	}
 
 	v := &visitor{
+		ip:           ip,
 		limiter:      rate.NewLimiter(rl.globalRate, rl.globalBurst),
 		queryLimiter: rate.NewLimiter(rl.queryRate, rl.queryBurst),
 		lastSeen:     time.Now(),
 	}
-	rl.visitors[ip] = v
+	el := rl.order.PushFront(v)
+	rl.visitors[ip] = el
 	return v
 }
 
-// evictOldestLocked removes oldest entries when map is full. Caller must hold lock.
+// evictOldestLocked drops the LRU tail entry. Caller holds rl.mu.
 func (rl *RateLimiter) evictOldestLocked() {
-	threshold := time.Now().Add(-1 * time.Minute)
-	evicted := 0
-	targetEvictions := maxVisitors / 10
-	if targetEvictions < 1 {
-		targetEvictions = 1
+	el := rl.order.Back()
+	if el == nil {
+		return
 	}
-
-	// First pass: evict entries older than threshold
-	for ip, v := range rl.visitors {
-		if v.lastSeen.Before(threshold) {
-			delete(rl.visitors, ip)
-			evicted++
-			if evicted >= targetEvictions {
-				return
-			}
-		}
-	}
-
-	// If still at capacity, force evict oldest entries
-	if len(rl.visitors) >= maxVisitors {
-		// Partial sort to find N oldest (selection algorithm)
-		toEvict := targetEvictions - evicted
-		for _, ip := range oldestVisitorIPs(rl.visitors, toEvict) {
-			delete(rl.visitors, ip)
-		}
-	}
+	v := el.Value.(*visitor)
+	delete(rl.visitors, v.ip)
+	rl.order.Remove(el)
 }
 
-func oldestVisitorIPs(visitors map[string]*visitor, limit int) []string {
-	if limit <= 0 || len(visitors) == 0 {
-		return nil
-	}
-
-	entries := make([]visitorSnapshot, 0, len(visitors))
-	for ip, v := range visitors {
-		if v == nil {
-			continue
-		}
-		entries = append(entries, visitorSnapshot{
-			ip:       ip,
-			lastSeen: v.lastSeen,
-		})
-	}
-
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].lastSeen.Before(entries[j].lastSeen)
-	})
-
-	if limit > len(entries) {
-		limit = len(entries)
-	}
-
-	ips := make([]string, 0, limit)
-	for i := 0; i < limit; i++ {
-		ips = append(ips, entries[i].ip)
-	}
-	return ips
-}
-
+// cleanupLoop periodically drops idle visitors older than idleTTL.
 func (rl *RateLimiter) cleanupLoop() {
 	ticker := time.NewTicker(rl.cleanupEvery)
 	defer ticker.Stop()
@@ -174,24 +158,34 @@ func (rl *RateLimiter) cleanupLoop() {
 	}
 }
 
+// Stop releases the background cleanup goroutine.
 func (rl *RateLimiter) Stop() {
 	rl.stopOnce.Do(func() {
 		close(rl.stopCh)
 	})
 }
 
+// cleanup sweeps visitors not seen for longer than idleTTL. Walks the LRU
+// from tail forward and stops as soon as it hits an entry younger than the
+// cutoff (LRU order implies everything ahead is newer).
 func (rl *RateLimiter) cleanup() {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
-	threshold := time.Now().Add(-10 * time.Minute)
-	for ip, v := range rl.visitors {
-		if v.lastSeen.Before(threshold) {
-			delete(rl.visitors, ip)
+	cutoff := time.Now().Add(-rl.idleTTL)
+	for el := rl.order.Back(); el != nil; {
+		v := el.Value.(*visitor)
+		if !v.lastSeen.Before(cutoff) {
+			break
 		}
+		prev := el.Prev()
+		delete(rl.visitors, v.ip)
+		rl.order.Remove(el)
+		el = prev
 	}
 }
 
+// Middleware applies the global per-IP rate limit.
 func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := extractIP(r)
@@ -207,6 +201,8 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	})
 }
 
+// QueryMiddleware applies the tighter query-path per-IP rate limit on top of
+// the global limiter; both must admit the request.
 func (rl *RateLimiter) QueryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := extractIP(r)
