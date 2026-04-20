@@ -11,7 +11,7 @@ func TestLoadFromDiskReplaysWAL(t *testing.T) {
 	dir := t.TempDir()
 
 	// Simulate a previous instance that wrote three entries to the WAL.
-	w, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true})
+	w, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true, HMACKey: testWALKey})
 	if err != nil {
 		t.Fatalf("OpenWAL: %v", err)
 	}
@@ -25,7 +25,7 @@ func TestLoadFromDiskReplaysWAL(t *testing.T) {
 	}
 
 	// Fresh node bound to the same dir: LoadFromDisk must rebuild n.log.
-	n := NewNode(Config{NodeID: "n1"})
+	n := NewNode(Config{NodeID: "n1", SharedSecret: "test-wal-hmac-key-32-bytes-or-so!"})
 	if err := n.SetStateDir(dir, true); err != nil {
 		t.Fatalf("SetStateDir: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestLoadFromDiskRestoresSnapshotThenReplaysTail(t *testing.T) {
 	// WAL contains entries 4..7. Entries 4 and 5 are already in the
 	// snapshot and must be skipped on replay. Entries 6 and 7 extend past
 	// the snapshot and must land in n.log.
-	w, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true})
+	w, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true, HMACKey: testWALKey})
 	if err != nil {
 		t.Fatalf("OpenWAL: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestLoadFromDiskRestoresSnapshotThenReplaysTail(t *testing.T) {
 	}
 	installerCalls := 0
 
-	n := NewNode(Config{NodeID: "n1"})
+	n := NewNode(Config{NodeID: "n1", SharedSecret: "test-wal-hmac-key-32-bytes-or-so!"})
 	if err := n.SetStateDir(dir, true); err != nil {
 		t.Fatalf("SetStateDir: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestLoadFromDiskRestoresSnapshotThenReplaysTail(t *testing.T) {
 // on-disk snapshot captures the declared index/term.
 func TestCompactLogProducesSnapshotAndTrimsWAL(t *testing.T) {
 	dir := t.TempDir()
-	n := NewNode(Config{NodeID: "n1"})
+	n := NewNode(Config{NodeID: "n1", SharedSecret: "test-wal-hmac-key-32-bytes-or-so!"})
 	if err := n.SetStateDir(dir, true); err != nil {
 		t.Fatalf("SetStateDir: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestCompactLogProducesSnapshotAndTrimsWAL(t *testing.T) {
 // sees it correctly via the logOffset-aware accessors.
 func TestSubmitAfterCompactionUsesCorrectIndex(t *testing.T) {
 	dir := t.TempDir()
-	n := NewNode(Config{NodeID: "n1"})
+	n := NewNode(Config{NodeID: "n1", SharedSecret: "test-wal-hmac-key-32-bytes-or-so!"})
 	if err := n.SetStateDir(dir, true); err != nil {
 		t.Fatalf("SetStateDir: %v", err)
 	}

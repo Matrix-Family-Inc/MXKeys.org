@@ -12,6 +12,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"time"
 
 	zeroconfig "mxkeys/internal/zero/config"
 )
@@ -35,6 +36,18 @@ type ServerConfig struct {
 	Name        string
 	Port        int
 	BindAddress string
+
+	// ShutdownTimeout is the maximum time the HTTP server may spend
+	// draining in-flight requests during graceful shutdown. Zero
+	// selects the internal default (30 s).
+	ShutdownTimeout time.Duration
+
+	// PredrainDelay is the pause between flipping the readiness probe
+	// to 503 ("draining") and starting the HTTP drain. It gives
+	// upstream load balancers time to remove the instance from
+	// rotation before new request arrivals stop being accepted.
+	// Zero selects the internal default (5 s).
+	PredrainDelay time.Duration
 }
 
 // DatabaseConfig database settings
@@ -57,6 +70,14 @@ type KeysConfig struct {
 	CacheTTLHours int
 	FetchTimeoutS int
 	CleanupHours  int
+
+	// EncryptionPassphraseEnv is the environment variable that holds
+	// the passphrase used to encrypt the on-disk signing key. When
+	// empty, the file-backed provider stores the key as plaintext at
+	// 0600 (backward-compatible with pre-encryption installs). When
+	// set but the variable is empty, startup fails closed: half-
+	// configured encryption is a security regression, not a default.
+	EncryptionPassphraseEnv string
 }
 
 // TrustedServersConfig upstream notary servers
@@ -133,6 +154,21 @@ type ClusterConfig struct {
 	// RaftSyncOnAppend fsyncs the WAL after every append (durability for
 	// power-loss). Default true.
 	RaftSyncOnAppend bool
+	// TLS configures transport-level encryption and optional mutual
+	// authentication for cluster traffic. Disabled by default for
+	// backward compatibility.
+	TLS ClusterTLSConfig
+}
+
+// ClusterTLSConfig describes cluster transport TLS.
+type ClusterTLSConfig struct {
+	Enabled           bool   // turn on TLS for listen and dial
+	CertFile          string // server cert (PEM)
+	KeyFile           string // server private key (PEM)
+	CAFile            string // peer CA bundle (PEM)
+	RequireClientCert bool   // mutual TLS (recommended for production)
+	MinVersion        string // "1.2" or "1.3" (default "1.3")
+	ServerName        string // optional SNI/CN pin for dials
 }
 
 // Load assembles a Config from optional YAML + environment overrides.

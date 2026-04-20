@@ -52,7 +52,7 @@ func (n *Notary) ApplyReplicatedServerResponse(serverName string, rawResponse st
 }
 
 // validateReplicatedServerResponse parses and verifies the replicated payload.
-// The payload must carry a self-signature for the remote server — the notary
+// The payload must carry a self-signature for the remote server. The notary
 // must not accept replicated responses without cryptographic verification.
 func (n *Notary) validateReplicatedServerResponse(serverName string, rawResponse string, validUntilTS int64) (*ServerKeysResponse, error) {
 	if strings.TrimSpace(rawResponse) == "" {

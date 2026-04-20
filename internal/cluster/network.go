@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"mxkeys/internal/zero/log"
+	"mxkeys/internal/zero/nettls"
 )
 
 // acceptLoop accepts incoming connections.
@@ -210,7 +211,7 @@ func (c *Cluster) broadcastMessage(msg *ClusterMessage) {
 		c.wg.Add(1)
 		go func(addr string) {
 			defer c.wg.Done()
-			conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+			conn, err := nettls.DialTimeout("tcp", addr, 2*time.Second, c.config.TLS)
 			if err != nil {
 				return
 			}
@@ -230,7 +231,7 @@ func (c *Cluster) broadcastMessage(msg *ClusterMessage) {
 }
 
 func (c *Cluster) roundTripMessage(address string, msg *ClusterMessage) (*ClusterMessage, error) {
-	conn, err := net.DialTimeout("tcp", address, 5*time.Second)
+	conn, err := nettls.DialTimeout("tcp", address, 5*time.Second, c.config.TLS)
 	if err != nil {
 		return nil, err
 	}

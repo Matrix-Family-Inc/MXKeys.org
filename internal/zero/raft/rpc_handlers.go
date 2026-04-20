@@ -17,6 +17,8 @@ import (
 // handleRPC processes incoming RPC messages.
 func (n *Node) handleRPC(msg *RPCMessage) *RPCMessage {
 	switch msg.Type {
+	case MsgPreVote:
+		return n.handlePreVote(msg)
 	case MsgRequestVote:
 		return n.handleRequestVote(msg)
 	case MsgAppendEntries:
@@ -26,6 +28,44 @@ func (n *Node) handleRPC(msg *RPCMessage) *RPCMessage {
 	default:
 		return nil
 	}
+}
+
+// handlePreVote answers pre-vote probes. It does not mutate n.currentTerm,
+// n.votedFor, or n.state. That is the whole point of a pre-vote.
+//
+// A grant requires both:
+//   - the candidate's log is at least as up to date as ours, at the
+//     hypothetical term they would campaign with (req.Term);
+//   - we have not heard from the current leader recently. The
+//     "recently" window is the election timeout; if we have, granting
+//     pre-votes would let a partitioned node disrupt a healthy
+//     leader.
+func (n *Node) handlePreVote(msg *RPCMessage) *RPCMessage {
+	var req PreVoteRequest
+	if err := json.Unmarshal(msg.Payload, &req); err != nil {
+		n.mu.RLock()
+		term := n.currentTerm
+		n.mu.RUnlock()
+		return n.wrapResponse(MsgPreVoteRes, PreVoteResponse{Term: term, VoteGranted: false})
+	}
+
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	resp := PreVoteResponse{Term: n.currentTerm, VoteGranted: false}
+	if req.Term < n.currentTerm {
+		return n.wrapResponse(MsgPreVoteRes, resp)
+	}
+	// Refuse while we still believe a leader is reachable. A node that
+	// just heard from the leader should not help a campaigner unseat it.
+	if time.Since(n.lastContact) < n.config.ElectionTimeout && n.leaderId != "" {
+		return n.wrapResponse(MsgPreVoteRes, resp)
+	}
+	if !n.isLogUpToDate(req.LastLogIndex, req.LastLogTerm) {
+		return n.wrapResponse(MsgPreVoteRes, resp)
+	}
+	resp.VoteGranted = true
+	return n.wrapResponse(MsgPreVoteRes, resp)
 }
 
 // handleRequestVote handles vote requests.

@@ -32,6 +32,13 @@ declare -a COVERAGE_PACKAGE_FLOORS=(
   "mxkeys/internal/keys/keyprovider=65"
   "mxkeys/internal/cluster=60"
   "mxkeys/internal/server=55"
+  # Raised as part of the Phase 9 hardening pass. Floors reflect the
+  # actual current coverage minus a small cushion so ordinary refactors
+  # do not trip the gate. Raise deliberately when new tests land.
+  "mxkeys/internal/keys=40"
+  "mxkeys/internal/zero/canonical=40"
+  "mxkeys/internal/zero/metrics=35"
+  "mxkeys/internal/storage/migrations=30"
 )
 
 profile="$(mktemp -t mxkeys-cov.XXXXXX.out)"

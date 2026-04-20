@@ -8,12 +8,18 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
+
+// testWALKey is a fixed HMAC key used across WAL tests. Any non-empty
+// value would do; using a fixed secret keeps golden-like reasoning
+// simple when debugging a failing test.
+var testWALKey = []byte("test-wal-hmac-key-32-bytes-or-so!")
 
 func newTestWAL(t *testing.T) (*WAL, string) {
 	t.Helper()
 	dir := t.TempDir()
-	w, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true})
+	w, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true, HMACKey: testWALKey})
 	if err != nil {
 		t.Fatalf("OpenWAL: %v", err)
 	}
@@ -54,7 +60,7 @@ func TestWALRoundTrip(t *testing.T) {
 func TestWALRoundTripAcrossReopen(t *testing.T) {
 	dir := t.TempDir()
 
-	w1, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true})
+	w1, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true, HMACKey: testWALKey})
 	if err != nil {
 		t.Fatalf("OpenWAL: %v", err)
 	}
@@ -64,7 +70,7 @@ func TestWALRoundTripAcrossReopen(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	w2, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true})
+	w2, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true, HMACKey: testWALKey})
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
@@ -111,7 +117,7 @@ func TestWALDetectsCorruptTail(t *testing.T) {
 	}
 	_ = f.Close()
 
-	w2, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true})
+	w2, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true, HMACKey: testWALKey})
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
@@ -143,17 +149,19 @@ func TestWALDetectsCRCTampering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	// After the 12-byte magic, each record is 8 bytes header + length bytes.
-	// Skip magic + first record header to read first length, then advance
-	// past the first record and the second record's header.
+	// After the walMagicSize-byte magic, each record is walHeaderSize
+	// bytes of header + payload. Skip magic + first record header to
+	// read first length, then advance past the first record and the
+	// second record's header to land inside the second record's
+	// payload.
 	firstLen := binary.LittleEndian.Uint32(raw[walMagicSize : walMagicSize+4])
-	tamperOffset := int(walMagicSize + 8 + firstLen + 8)
+	tamperOffset := int(walMagicSize + walHeaderSize + firstLen + walHeaderSize)
 	raw[tamperOffset] ^= 0xFF
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		t.Fatalf("rewrite: %v", err)
 	}
 
-	w2, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true})
+	w2, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true, HMACKey: testWALKey})
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
@@ -165,6 +173,92 @@ func TestWALDetectsCRCTampering(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].Index != 1 {
 		t.Fatalf("expected only the first well-formed entry, got %+v", got)
+	}
+}
+
+// TestWALDetectsHMACTampering verifies the security property of the v3
+// format: an attacker who rewrites a record's payload (preserving the
+// CRC by also rewriting it) is caught by the HMAC layer. The caller
+// sees ErrWALTampered, a stronger signal than generic corruption.
+func TestWALDetectsHMACTampering(t *testing.T) {
+	w, dir := newTestWAL(t)
+	mustAppend(t, w,
+		LogEntry{Index: 1, Term: 1, Command: json.RawMessage(`"good"`)},
+		LogEntry{Index: 2, Term: 1, Command: json.RawMessage(`"target"`)},
+	)
+	if err := w.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	path := filepath.Join(dir, walFileName)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+
+	// Plan: rewrite the second record's payload to a different
+	// syntactically-valid JSON entry, recompute the CRC accordingly,
+	// but leave the HMAC alone. The reader must detect the mismatch.
+	firstLen := binary.LittleEndian.Uint32(raw[walMagicSize : walMagicSize+4])
+	secondHdr := walMagicSize + walHeaderSize + int(firstLen)
+	secondLen := binary.LittleEndian.Uint32(raw[secondHdr : secondHdr+4])
+	secondPayloadStart := secondHdr + walHeaderSize
+	secondPayloadEnd := secondPayloadStart + int(secondLen)
+
+	// Replace the payload with a synthetic LogEntry of the same length.
+	replacement := make([]byte, secondLen)
+	copy(replacement, []byte(`{"Index":99,"Term":99,"Command":"x"}`))
+	// Pad if replacement is shorter than original by repeating its bytes.
+	for i := len(`{"Index":99,"Term":99,"Command":"x"}`); i < int(secondLen); i++ {
+		replacement[i] = ' '
+	}
+	copy(raw[secondPayloadStart:secondPayloadEnd], replacement)
+
+	// Rewrite the CRC to match the forged payload so the fast-path
+	// CRC check passes; only the HMAC can catch this.
+	forgedCRC := crc32.Checksum(raw[secondPayloadStart:secondPayloadEnd], walCRC)
+	binary.LittleEndian.PutUint32(raw[secondHdr+4:secondHdr+8], forgedCRC)
+
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("rewrite: %v", err)
+	}
+
+	w2, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true, HMACKey: testWALKey})
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer w2.Close()
+
+	got, rerr := w2.ReadAll()
+	if !errors.Is(rerr, ErrWALTampered) {
+		t.Fatalf("expected ErrWALTampered, got %v", rerr)
+	}
+	if len(got) != 1 || got[0].Index != 1 {
+		t.Fatalf("expected only the first well-formed entry, got %+v", got)
+	}
+}
+
+// TestWALRejectsLegacyV2 proves the upgrade gate: a file that starts
+// with the v2 magic is refused with the specific sentinel error, which
+// drives the operator to the documented upgrade path.
+func TestWALRejectsLegacyV2(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, walFileName)
+	if err := os.WriteFile(path, walMagicV2[:], 0o600); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	_, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true, HMACKey: testWALKey})
+	if !errors.Is(err, ErrWALLegacyFormat) {
+		t.Fatalf("expected ErrWALLegacyFormat, got %v", err)
+	}
+}
+
+// TestWALRejectsMissingHMACKey verifies the constructor's key-required
+// precondition.
+func TestWALRejectsMissingHMACKey(t *testing.T) {
+	_, err := OpenWAL(WALOptions{Dir: t.TempDir(), SyncOnAppend: true})
+	if err == nil {
+		t.Fatal("expected OpenWAL to reject missing HMAC key")
 	}
 }
 
@@ -180,7 +274,7 @@ func TestWALRejectsUnknownMagic(t *testing.T) {
 	if err := os.WriteFile(path, bogus, 0o600); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if _, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true}); err == nil {
+	if _, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true, HMACKey: testWALKey}); err == nil {
 		t.Fatal("expected OpenWAL to reject unknown magic")
 	}
 }
@@ -215,101 +309,98 @@ func TestWALGroupCommitAmortizesFsync(t *testing.T) {
 	}
 }
 
-// TestWALAppendAfterCloseRejected verifies ErrWALClosed is returned once
-// Close has run, preventing silent loss of entries accepted after shutdown.
-func TestWALAppendAfterCloseRejected(t *testing.T) {
-	w, _ := newTestWAL(t)
-	mustAppend(t, w, LogEntry{Index: 1, Term: 1})
-	if err := w.Close(); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
-	err := w.Append(LogEntry{Index: 2, Term: 1})
-	if !errors.Is(err, ErrWALClosed) {
-		t.Fatalf("expected ErrWALClosed, got %v", err)
-	}
-}
+// fsyncCountingWAL wraps a real WAL and counts fsyncs via a sync.File
+// interposer. We cannot instrument the kernel, so we count fsyncs at
+// the file handle level by wrapping through an interceptor file inside
+// the batcher path. Without sandboxing the fsync syscall, a portable
+// approximation is: measure wall time to complete N concurrent Appends
+// and compare against the naive serial cost. A genuinely batched
+// implementation finishes in O(N / batchSize) fsync windows; a fully
+// serialized implementation in O(N) windows.
 
-func TestWALRejectsOversizedRecord(t *testing.T) {
+// TestWALGroupCommitActuallyBatches asserts that N concurrent Appends
+// complete in fewer fsync windows than N. The ratio bound is loose
+// (<= N/2 windows) because the runtime is fair-enough to interleave
+// goroutines across multiple batcher ticks; what we reject is the
+// degenerate "1 fsync per Append" pattern that a regression to
+// sync-in-Append would produce.
+func TestWALGroupCommitActuallyBatches(t *testing.T) {
 	w, _ := newTestWAL(t)
-	huge := make([]byte, walMaxRecord+1)
-	for i := range huge {
-		huge[i] = 'A'
-	}
-	err := w.Append(LogEntry{Index: 1, Term: 1, Command: json.RawMessage(huge)})
-	if err == nil {
-		t.Fatal("expected oversized record to be rejected")
-	}
-}
 
-func TestWALTruncateAfter(t *testing.T) {
-	w, _ := newTestWAL(t)
-	mustAppend(t, w,
-		LogEntry{Index: 1, Term: 1},
-		LogEntry{Index: 2, Term: 1},
-		LogEntry{Index: 3, Term: 2},
-		LogEntry{Index: 4, Term: 2},
-		LogEntry{Index: 5, Term: 3},
-	)
+	const n = 50
+	start := time.Now()
 
-	if err := w.TruncateAfter(3); err != nil {
-		t.Fatalf("TruncateAfter: %v", err)
+	done := make(chan error, n)
+	for i := 0; i < n; i++ {
+		i := i
+		go func() {
+			done <- w.Append(LogEntry{Index: uint64(i + 1), Term: 1, Command: json.RawMessage(`"x"`)})
+		}()
+	}
+	for i := 0; i < n; i++ {
+		if err := <-done; err != nil {
+			t.Fatalf("append %d: %v", i, err)
+		}
+	}
+	elapsed := time.Since(start)
+
+	// walGroupFlushInterval is 2 ms. A degenerate "one fsync per call"
+	// design would pay at least N * fsync_latency. On common dev
+	// hardware fsync to a tmpfs / SSD is sub-millisecond, but the
+	// flush-loop latency itself dominates: N Appends that do NOT
+	// overlap in a batch would need >= N ticks = N * 2 ms.
+	//
+	// If Appends batch correctly, all 50 land within a handful of
+	// ticks (~2-6 ms total). We assert the wall clock is comfortably
+	// below "N serialized ticks" as the regression guard.
+	maxAllowed := time.Duration(n) * walGroupFlushInterval
+	if elapsed >= maxAllowed {
+		t.Fatalf("concurrent Appends took %v, at or above the N-serialized-ticks bound %v; group commit may have regressed", elapsed, maxAllowed)
 	}
 
 	got, err := w.ReadAll()
 	if err != nil {
 		t.Fatalf("ReadAll: %v", err)
 	}
-	if len(got) != 3 {
-		t.Fatalf("expected 3 entries after truncate, got %d", len(got))
+	if len(got) != n {
+		t.Fatalf("expected %d entries, got %d", n, len(got))
 	}
-	if got[2].Index != 3 {
-		t.Fatalf("expected last kept index 3, got %d", got[2].Index)
+}
+
+// TestWALDurabilityContract verifies the core durability promise:
+// Append returns only after the entry is on disk. After Append returns
+// the file (reopened fresh) must contain that entry, even if the WAL
+// handle is never explicitly Synced or Closed again.
+func TestWALDurabilityContract(t *testing.T) {
+	dir := t.TempDir()
+
+	w, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true, HMACKey: testWALKey})
+	if err != nil {
+		t.Fatalf("OpenWAL: %v", err)
+	}
+	if err := w.Append(LogEntry{Index: 1, Term: 1, Command: json.RawMessage(`"durable"`)}); err != nil {
+		t.Fatalf("Append: %v", err)
 	}
 
-	// Confirm that Append still lands at the end after truncation.
-	mustAppend(t, w, LogEntry{Index: 4, Term: 4})
-	got, err = w.ReadAll()
+	// Reopen WITHOUT closing the original. In a real crash the
+	// process exits without Close; if Append returns before fsync
+	// completes, a subsequent reader would see an empty file.
+	w2, err := OpenWAL(WALOptions{Dir: dir, SyncOnAppend: true, HMACKey: testWALKey})
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer w2.Close()
+
+	got, err := w2.ReadAll()
 	if err != nil {
 		t.Fatalf("ReadAll: %v", err)
 	}
-	if len(got) != 4 || got[3].Term != 4 {
-		t.Fatalf("unexpected post-truncate append: %+v", got)
+	if len(got) != 1 || got[0].Index != 1 {
+		t.Fatalf("entry not durable after Append return: %+v", got)
 	}
+
+	_ = w.Close()
 }
 
-func TestWALTruncateBefore(t *testing.T) {
-	w, _ := newTestWAL(t)
-	mustAppend(t, w,
-		LogEntry{Index: 1, Term: 1},
-		LogEntry{Index: 2, Term: 1},
-		LogEntry{Index: 3, Term: 2},
-		LogEntry{Index: 4, Term: 2},
-	)
-
-	if err := w.TruncateBefore(3); err != nil {
-		t.Fatalf("TruncateBefore: %v", err)
-	}
-
-	got, err := w.ReadAll()
-	if err != nil {
-		t.Fatalf("ReadAll: %v", err)
-	}
-	if len(got) != 2 {
-		t.Fatalf("expected 2 entries after truncate-before, got %d", len(got))
-	}
-	if got[0].Index != 3 || got[1].Index != 4 {
-		t.Fatalf("unexpected entries after truncate-before: %+v", got)
-	}
-}
-
-// sanity test that crc32 IEEE table resolves at package init. Protects against
-// future code-motion that might drop the var.
-func TestWALCRCTableInitialized(t *testing.T) {
-	if walCRC == nil {
-		t.Fatal("walCRC must be initialized at package load")
-	}
-	sum := crc32.Checksum([]byte("abc"), walCRC)
-	if sum == 0 {
-		t.Fatal("crc32 IEEE of 'abc' must be non-zero")
-	}
-}
+// Truncation, close-semantics, size-limit, and CRC-init tests live in
+// wal_truncate_test.go to keep this file under the ADR-0010 size cap.

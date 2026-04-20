@@ -4,123 +4,180 @@ All notable changes to MXKeys are documented in this file.
 
 ## [Unreleased]
 
-Ideal-pass release: architectural hardening, test-gate expansion,
-and full landing reorganization. No breaking changes to the Matrix
-federation API contract.
+No breaking changes to the Matrix federation API contract.
 
 ### Added
 
-- Schema migrations runner (`internal/storage/migrations`) with embedded
-  versioned SQL, per-migration transactions, and `schema_migrations`
-  bookkeeping. Startup applies pending migrations before any dependent
-  component touches the database. See ADR-0008.
-- Signing-key provider abstraction (`internal/keys/keyprovider`) with
-  `FileProvider`, `EnvProvider`, and `KMSStub` implementations. Backwards-
-  compatible: existing file-backed deployments continue to work with no
-  configuration change. See ADR-0007.
-- Raft WAL (`internal/zero/raft/wal*.go`) with CRC32C per-record integrity,
-  format magic `MXKS_WAL_v2`, group-commit batcher, bounded-queue back-
-  pressure, and atomic truncate-rewrite. See ADR-0001.
-- Raft snapshots (`internal/zero/raft/snapshot*.go`): CRC-protected
-  `raft.snapshot` file, `InstallSnapshot` RPC for lagging-follower
-  catch-up, and `Node.CompactLog` for periodic compaction. In-memory
-  `logOffset` accessor layer so the slice can drop compacted prefixes
-  without reindex-refactoring every call site.
-- LRU per-IP rate limiter (`internal/server/ratelimit.go`) with O(1)
-  eviction via `container/list` + `map[string]*list.Element`. Replaces
-  the previous O(n) sort-based eviction path.
-- CLI flags: `-config /path/to/config.yaml` and `-version`. Config.Load
-  now accepts an explicit path and fails fast when that path is missing.
-- Config guards: `cluster.shared_secret` rejects a known placeholder
-  whitelist and enforces minimum 32 characters. Cluster-transport HMAC
-  payload switched from ad-hoc string formatting to canonical JSON over
-  the MACed fields, eliminating a class of structural-ambiguity
-  collisions.
+- Schema migrations runner (`internal/storage/migrations`) with
+  embedded versioned SQL, per-migration transactions, and a
+  `schema_migrations` bookkeeping table. Startup applies pending
+  migrations before any dependent subsystem touches the database.
+  Shipped migrations: `0001_initial.sql`, `0002_transparency_log.sql`.
+  See ADR-0008.
+- Signing-key provider abstraction (`internal/keys/keyprovider`)
+  with `FileProvider`, `EnvProvider`, and `KMSStub`. Backward-
+  compatible default. See ADR-0007.
+- Signing-key at-rest encryption (`internal/keys/keyprovider/
+  file_crypto.go`): AES-256-GCM envelope (`MXKENC01`) with KEK
+  derived via PBKDF2-HMAC-SHA256 at 600 000 iterations. Opt-in
+  via `keys.encryption.passphrase_env`. Legacy plaintext key is
+  upgraded on first load when a passphrase is configured.
+- Cluster transport TLS (`internal/zero/nettls`): server and
+  client config loaders, mutual TLS, TLS 1.3 by default (1.2
+  opt-in). Wired into CRDT listener, CRDT dials, and Raft
+  network. Configured under `cluster.tls.*`.
+- Raft WAL v3 (`internal/zero/raft/wal*.go`): per-record
+  CRC32C (bit rot) and HMAC-SHA256 (tamper detection, keyed
+  from `cluster.shared_secret`). Group-commit batcher, bounded-
+  queue back-pressure, atomic truncate-rewrite. `ErrWALTampered`
+  distinguishes intentional writes from bit rot. v2 files refused
+  with `ErrWALLegacyFormat`.
+- Raft snapshot chunking: `InstallSnapshot` streams in 512 KiB
+  chunks with `(LastIncludedIndex, LastIncludedTerm)` on every
+  chunk; the follower reassembles and applies on `Done=true`.
+- Raft pre-vote extension: non-mutating `MsgPreVote` round before
+  bumping `currentTerm`. Prevents a partitioned or flapping node
+  from unseating a healthy leader.
+- Graceful shutdown: SIGTERM flips `/_mxkeys/readyz` to 503
+  (`draining`), waits `server.predrain_delay` (default 5 s) for
+  load-balancer propagation, drains HTTP inside
+  `server.shutdown_timeout` (default 30 s), stops the cluster,
+  closes the DB handle. A second signal forces exit 130.
+- LRU per-IP rate limiter (`internal/server/ratelimit.go`) with
+  O(1) eviction via `container/list` + `map[string]*list.Element`.
+- CLI flags: `-config /path/to/config.yaml` and `-version`.
+- Config guards: `cluster.shared_secret` rejects placeholder
+  strings and enforces 32+ characters. `trusted_notaries` entries
+  reject placeholder public keys and require a valid base64
+  ed25519 length. Cluster-transport HMAC payload uses canonical
+  JSON.
+- File-size lint (`scripts/file-size-lint.sh`): warn at 300 lines,
+  fail at 500. New `file-size` CI job. See ADR-0010.
 - Fuzz targets: `FuzzJSON`, `FuzzMarshalRoundTrip`
   (`internal/zero/canonical`), `FuzzValidateServerName`,
-  `FuzzValidateKeyID`, `FuzzDecodeStrictJSON` (`internal/server`),
-  `FuzzParseServerName` (`internal/keys`). Ran 30s per target in CI via
-  `scripts/fuzz-quick.sh`.
+  `FuzzValidateKeyID`, `FuzzDecodeStrictJSON`
+  (`internal/server`), `FuzzParseServerName` (`internal/keys`).
+  Run 30 s per target in the `fuzz-quick` CI job.
 - Golden vectors for canonical JSON
-  (`internal/zero/canonical/testdata/golden_vectors.json`) with 16
-  fixtures covering boundary integers, escapes, Unicode, deep nesting,
-  and realistic federation shapes.
-- CI gates: `coverage` (per-package floors + total floor via
-  `scripts/coverage-gate.sh`), `staticcheck`, `errcheck` (`-ignoretests`
-  + curated excludes), `fuzz-quick`.
-- Landing E2E smoke: `@playwright/test` with three specs (home render,
-  RTL direction toggle on `?lang=ar`, mobile menu open/close).
-- New ADRs: 0006 (file header standard), 0007 (signing-key provider),
-  0008 (schema migrations), 0009 (landing stack).
-- Runbooks: `docs/runbook/key-rotation.md`,
+  (`internal/zero/canonical/testdata/golden_vectors.json`): 16
+  fixtures covering boundary integers, escapes, Unicode, deep
+  nesting, and realistic federation shapes.
+- CI gates: `coverage`, `staticcheck`, `errcheck` (`-ignoretests`
+  with a curated exclude list), `fuzz-quick`, `file-size`.
+- Landing E2E smoke (`@playwright/test`): home render, RTL toggle
+  on `?lang=ar`, mobile menu.
+- Landing mandatory stack:
+  - `msw` 2.x with `server.ts`, `browser.ts`, and `handlers.ts`;
+    Vitest setup starts and stops the node server per suite.
+  - `react-hook-form` + `@hookform/resolvers/zod` + a
+    `features/notary-lookup` form.
+  - Storybook 10 config with stories for `Logo` and
+    `NotaryLookupForm`.
+- Operator tooling: `scripts/mxkeys-backup.sh`,
+  `scripts/mxkeys-restore.sh`, `scripts/build-release.sh`
+  (reproducible: `CGO_ENABLED=0`, `-trimpath`, `-ldflags "-s -w"`,
+  `SOURCE_DATE_EPOCH` from `git log`, optional CycloneDX SBOM).
+- ADRs: 0006 (file header standard), 0007 (signing-key provider),
+  0008 (schema migrations), 0009 (landing stack), 0010 (file-size
+  policy).
+- Runbooks: `docs/runbook/backup-restore.md`,
   `docs/runbook/cluster-disaster-recovery.md`,
+  `docs/runbook/key-rotation.md`,
+  `docs/runbook/release.md`,
   `docs/runbook/schema-migration.md`.
+- `SECURITY.md` replaces the prior placeholder with scope,
+  reporting, severity classification, and documented security
+  properties plus limits.
 
 ### Changed
 
-- Go toolchain bumped from 1.22 to 1.26; `GOTOOLCHAIN` workaround for
-  govulncheck removed from CI and preflight.
-- Dockerfile bumped to `golang:1.26-alpine` + `alpine:3.21`.
+- Go toolchain bumped from 1.22 to 1.26. `GOTOOLCHAIN` workaround
+  for govulncheck removed from CI and the local preflight.
+- Dockerfile base images bumped to `golang:1.26-alpine` and
+  `alpine:3.21`.
 - README Go badge bumped to 1.26+.
-- Unified file headers across all tracked source, config, docs, shell,
-  and workflow files. Fields reduced to Project / Company / Maintainer /
-  Contact / Date / Status (Owner, Role, Support, Matrix fields removed).
-  See ADR-0006.
+- Unified file headers across tracked source, config, docs,
+  shell, and workflow files. Fields reduced to Project / Company /
+  Maintainer / Contact / Date / Status (Owner, Role, Support,
+  Matrix fields removed). See ADR-0006.
 - Landing: complete Feature-Sliced Design reorganization with
-  Zustand (mobile nav), Zod (env validation), CVA + clsx +
-  tailwind-merge (shared UI), TanStack Router and Query providers,
-  Sentry + ErrorBoundary, lazy i18n via dynamic imports. Main bundle
-  dropped from ~552 KB to ~301 KB; 22 locales ship as separate chunks
-  of 7-12 KB each. See ADR-0009.
-- Landing: `VITE_SITE_URL` Zod-validated env-driven site URL replaces
-  hardcoded `https://mxkeys.org` in `index.html`, `robots.txt`, and
-  `sitemap.xml`. A Vite plugin substitutes `__MXKEYS_SITE_URL__` and
-  `__MXKEYS_ENVIRONMENT__` placeholders at build/serve time.
-- Landing: `jsdom` replaced by `happy-dom` for vitest (resolves the
-  ESM-in-CJS error in `html-encoding-sniffer` on Node 20).
-- `raft.wal` format: CRC polynomial IEEE -> Castagnoli, 12-byte magic
-  prefix `MXKS_WAL_v2`. v1 never shipped outside the Phase 4 feature
-  branch; operators with existing WAL data on a pre-release snapshot
-  must start from an empty state dir.
-- File size cap: every production Go file now <= 250 lines. Seven
-  previously-oversized files split into focused modules.
+  Zustand (mobile nav), Zod (env and form validation), TanStack
+  Router and Query providers, Sentry + `AppErrorBoundary`, lazy
+  i18n via dynamic imports. Main bundle ~273 KB (gzip ~82 KB);
+  22 locales ship as separate chunks of 7 - 12 KB each. See
+  ADR-0009.
+- Landing: `VITE_SITE_URL` (Zod-validated) replaces hard-coded
+  `https://mxkeys.org` in `index.html`, `robots.txt`,
+  `sitemap.xml`. The `htmlEnvReplace` Vite plugin substitutes
+  `__MXKEYS_SITE_URL__` and `__MXKEYS_ENVIRONMENT__` at build
+  and serve time.
+- Landing: `jsdom` replaced by `happy-dom` for vitest.
+- `raft.wal` format: CRC polynomial IEEE to Castagnoli. Magic
+  bumped to `MXKS_WAL_v3` to carry the HMAC tag.
+- `InstallSnapshotRequest.Data` type changed to `[]byte`
+  (binary-safe via base64 over JSON).
+- File-size policy: target 250 - 300 lines, hard ceiling 500
+  lines. See ADR-0010. Earlier production files already split
+  below 300 stay as they are.
+- Coverage gate floors (see `scripts/coverage-gate.sh`): total
+  >= 50%; per-package floors for `internal/config`,
+  `zero/config`, `zero/log`, `zero/merkle`, `zero/raft`,
+  `keyprovider`, `cluster`, `server`, `keys`, `zero/canonical`,
+  `zero/metrics`, `storage/migrations`.
 
 ### Fixed
 
-- Critical: `cmd/mxkeys/main.go` was present on disk but never tracked
-  in git. Clones could not build without it. Now tracked.
-- staticcheck findings: SA9004 (incomplete const-group typing in
-  `middleware.go`), SA1012 (nil context in deliberate nil-safety test),
-  U1000 (unused `raft.persistEntries` helper, removed).
-- errcheck findings: `cmd/mxkeys-verify` JSON encoder, `cmd/mxkeys`
-  `srv.Close`, `internal/cluster/state.go` `fmt.Sscanf`,
-  `internal/zero/metrics/handler.go` `registry.WriteTo`.
+- `cmd/mxkeys/main.go` was present on disk but not tracked in
+  git. Clones could not build without it. Now tracked.
+- staticcheck findings: SA9004 in `middleware.go`, SA1012 in a
+  deliberate nil-context test, U1000 for the unused
+  `raft.persistEntries` helper (removed).
+- errcheck findings: `cmd/mxkeys-verify` JSON encoder,
+  `cmd/mxkeys` `srv.Close`, `internal/cluster/state.go`
+  `fmt.Sscanf`, `internal/zero/metrics/handler.go`
+  `registry.WriteTo`.
+- `internal/keys/fetcher_retry.go` and
+  `internal/keys/storage.go`: error classification now uses
+  typed `net.Error` / `*net.OpError` / `*net.DNSError` /
+  `*os.SyscallError` / `syscall.Errno` / `driver.ErrBadConn` /
+  `context.DeadlineExceeded` / `io.ErrUnexpectedEOF`. The
+  string-match fallback was removed.
+- Raft `Submit` moves WAL persistence out of `n.mu` so the
+  group-commit batcher can amortise fsync across concurrent
+  submissions. Index assignment stays serialised through the
+  lock; persist failure truncates the in-memory tail.
+- Transparency log default table is created by the migrations
+  runner (`sql/0002_transparency_log.sql`). The lazy-DDL path
+  remains for operators using a custom `transparency.table_name`
+  with a deprecation warning.
 
 ### Removed
 
 - `internal/zero/router` package: dead code, referenced only in
-  ADR-0002 prose. Routing has always been `http.ServeMux` in
-  production.
-- Pre-built binaries from the repository: `release/mxkeys-linux-amd64`,
-  `release/mxkeys-linux-arm64`, `release/checksums.sha256` (15 MiB
-  total). Artifacts now belong in GitHub Releases.
-- Hardcoded `https://mxkeys.org` fallback in live-interop tests and CI
-  scripts. `MXKEYS_LIVE_BASE_URL` is now required when
+  ADR-0002 prose. Routing is `http.ServeMux` in production.
+- Pre-built binaries from the repository:
+  `release/mxkeys-linux-amd64`, `release/mxkeys-linux-arm64`,
+  `release/checksums.sha256` (15 MiB total). Release artifacts
+  now ship via `scripts/build-release.sh` and GitHub Releases.
+- Hard-coded `https://mxkeys.org` fallback in live-interop tests
+  and CI scripts. `MXKEYS_LIVE_BASE_URL` is required when
   `MXKEYS_LIVE_TEST=1`; absent env var skips cleanly.
+- Shared UI kit `Button`, `Container`, `ExternalLink`, and the
+  `cn` helper in `landing/src/shared/`: no widget imported them,
+  and the variants did not match widget needs. `Logo` and
+  `TextField` remain.
 
 ### Infrastructure
 
-- Go module stays at the short `mxkeys` identifier by operator choice
-  (service, not a consumer-facing library). No module-path migration.
-- `scripts/coverage-gate.sh`: per-package floors documented in the
-  script so raises/drops are visible in diff review.
+- Go module path stays at `mxkeys`.
+- `scripts/coverage-gate.sh`: per-package floors tracked inline
+  so raises and drops are visible in diff review.
 - `scripts/fuzz-quick.sh`: table-driven target list, `FUZZTIME`
   tunable for local deep passes.
-- `scripts/errcheck-excludes.txt`: curated list of always-safe-to-ignore
-  sinks (`*.Close`, `fmt.Fprint*`).
-- Coverage gate: total >= 50%, per-package floors at
-  internal/config 80, zero/config 85, zero/log 80, zero/merkle 65,
-  zero/raft 60, keyprovider 65, cluster 60, server 55.
+- `scripts/errcheck-excludes.txt`: curated list of sinks safe to
+  ignore (`*.Close`, `fmt.Fprint*`).
+- `scripts/verify-github-branch-protection.sh`: required status
+  checks list tracks every job in `pr-gate.yml`.
 
 ## [0.2.0] - 2026-04-13
 

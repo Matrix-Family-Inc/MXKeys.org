@@ -129,8 +129,20 @@ func NewTransparencyLog(db *sql.DB, cfg TransparencyConfig) (*TransparencyLog, e
 	}
 
 	if cfg.Enabled {
-		if err := tl.initTable(); err != nil {
-			return nil, err
+		// The default table is created by internal/storage/migrations
+		// (see sql/0002_transparency_log.sql). Only invoke the legacy
+		// lazy-DDL path for operators who configured a non-default name;
+		// that path is deprecated and will be removed once a namespaced
+		// migration mechanism lands.
+		if tl.tableName != defaultTransparencyTableName {
+			log.Warn(
+				"Transparency log uses a non-default table name; lazy DDL path is deprecated",
+				"table", tl.tableName,
+				"deprecation", "will be removed in a future release",
+			)
+			if err := tl.initTable(); err != nil {
+				return nil, err
+			}
 		}
 		if err := tl.loadLastHash(); err != nil {
 			return nil, err
@@ -147,7 +159,12 @@ func NewTransparencyLog(db *sql.DB, cfg TransparencyConfig) (*TransparencyLog, e
 	return tl, nil
 }
 
-// initTable creates the transparency log table
+// defaultTransparencyTableName is the table created by the migrations
+// runner in sql/0002_transparency_log.sql.
+const defaultTransparencyTableName = "key_transparency_log"
+
+// initTable creates the transparency log table. Used only for non-default
+// table names (deprecated). The default name is owned by migrations.
 func (tl *TransparencyLog) initTable() error {
 	query := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (

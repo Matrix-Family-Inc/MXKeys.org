@@ -11,7 +11,6 @@ package raft
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -92,7 +91,11 @@ func SaveSnapshot(dir string, s Snapshot) error {
 	var hdr [20]byte
 	binary.LittleEndian.PutUint64(hdr[0:8], s.Meta.LastIncludedIndex)
 	binary.LittleEndian.PutUint64(hdr[8:16], s.Meta.LastIncludedTerm)
-	binary.LittleEndian.PutUint32(hdr[16:20], uint32(len(s.Data)))
+	// Snapshot size is bounded by available memory at snapshot
+	// creation time; truncation to uint32 would only matter for
+	// snapshots >4 GiB, which we do not support (chunked delivery
+	// caps streaming but not creation).
+	binary.LittleEndian.PutUint32(hdr[16:20], uint32(len(s.Data))) // #nosec G115
 	if _, err := f.Write(hdr[:]); err != nil {
 		closeRemove(f, tmpPath)
 		return fmt.Errorf("raft snapshot: write header: %w", err)
@@ -202,15 +205,31 @@ type SnapshotProvider func() ([]byte, error)
 // for the same (lastIndex, lastTerm) pair.
 type SnapshotInstaller func(data []byte, lastIncludedIndex, lastIncludedTerm uint64) error
 
-// InstallSnapshotRequest is sent by a leader to fast-forward a follower that
-// lags past the leader's truncated log prefix. Chunking is not currently
-// implemented: the entire snapshot is sent in one RPC.
+// InstallSnapshotRequest is sent by a leader to fast-forward a follower
+// that lags past the leader's truncated log prefix.
+//
+// Chunked transport: snapshots larger than snapshotChunkSize are split
+// into multiple RPCs. All RPCs in a run share the same (Term,
+// LastIncludedIndex, LastIncludedTerm) tuple. Offset advances
+// monotonically from 0 in units of Data length; the follower
+// concatenates Data in order. Done=true signals the last chunk, at
+// which point the follower applies the full buffer to its state
+// machine and persists it.
+//
+// Single-shot RPCs (Offset=0, Done=true) remain fully supported for
+// small snapshots and for backward compatibility with earlier builds.
 type InstallSnapshotRequest struct {
-	Term              uint64          `json:"term"`
-	LeaderID          string          `json:"leader_id"`
-	LastIncludedIndex uint64          `json:"last_included_index"`
-	LastIncludedTerm  uint64          `json:"last_included_term"`
-	Data              json.RawMessage `json:"data"`
+	Term              uint64 `json:"term"`
+	LeaderID          string `json:"leader_id"`
+	LastIncludedIndex uint64 `json:"last_included_index"`
+	LastIncludedTerm  uint64 `json:"last_included_term"`
+	Offset            uint64 `json:"offset"`
+	Done              bool   `json:"done"`
+	// Data is a chunk of the snapshot payload. Binary-safe: marshaled
+	// as base64 by encoding/json, which is why []byte and not
+	// json.RawMessage is the right type here because snapshots need not be
+	// valid JSON.
+	Data []byte `json:"data"`
 }
 
 // InstallSnapshotResponse acknowledges the install and returns the

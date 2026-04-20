@@ -7,6 +7,8 @@
  * Status: Updated
  */
 
+import path from 'node:path';
+
 import react from '@vitejs/plugin-react';
 import { loadEnv, type Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
@@ -32,6 +34,11 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {
     plugins: [react(), htmlEnvReplace(env)],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, 'src'),
+      },
+    },
     server: {
       port: parseInt(process.env.PORT || '3005'),
       host: '0.0.0.0',

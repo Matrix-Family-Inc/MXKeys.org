@@ -5,8 +5,8 @@ import "testing"
 // FuzzParseServerName exercises parseServerName with arbitrary inputs.
 // Invariants:
 //
-//  1. Must never panic (the function feeds DNS/SRV paths and must be
-//     robust against adversarial server_name parameters from /query).
+//  1. Must never panic. The function feeds DNS/SRV paths on inputs
+//     that originate from /query parameters.
 //  2. When isIP==true, the returned hostname must be a valid IP as parsed
 //     by net.ParseIP (caller decides whether to route via private-IP block).
 //  3. Returned port is either 0 or in the valid 1..65535 range; no other

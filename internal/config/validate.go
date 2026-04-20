@@ -10,6 +10,8 @@
 package config
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"regexp"
@@ -138,6 +140,98 @@ func (c *Config) Validate() error {
 		if c.Cluster.ConsensusMode != "crdt" && c.Cluster.ConsensusMode != "raft" {
 			return fmt.Errorf("cluster.consensus_mode must be 'crdt' or 'raft'")
 		}
+		if err := validateClusterTLS(c.Cluster.TLS); err != nil {
+			return err
+		}
+	}
+
+	if err := validateTrustedNotaries(c.Security.TrustedNotaries); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateTrustedNotaries checks that every pinned-notary entry has the
+// operator actually filled in: server_name, key_id, and a base64 public
+// key of the right ed25519 length. The example file ships
+// `public_key: "base64-encoded-public-key"` as an obvious placeholder;
+// copying the example verbatim used to boot a notary with a broken trust
+// pin that only failed later on first fetch. Fail fast here instead.
+func validateTrustedNotaries(notaries []TrustedNotary) error {
+	for i, n := range notaries {
+		label := fmt.Sprintf("trusted_notaries[%d]", i)
+		if strings.TrimSpace(n.ServerName) == "" {
+			return fmt.Errorf("%s.server_name is required", label)
+		}
+		if strings.TrimSpace(n.KeyID) == "" {
+			return fmt.Errorf("%s.key_id is required (for %q)", label, n.ServerName)
+		}
+		raw := strings.TrimSpace(n.PublicKey)
+		if raw == "" {
+			return fmt.Errorf("%s.public_key is required (for %q)", label, n.ServerName)
+		}
+		if isPlaceholderPublicKey(raw) {
+			return fmt.Errorf("%s.public_key is a placeholder (%q); set the real ed25519 public key for %s", label, raw, n.ServerName)
+		}
+		decoded, err := decodeNotaryPublicKey(raw)
+		if err != nil {
+			return fmt.Errorf("%s.public_key for %s: %w", label, n.ServerName, err)
+		}
+		if len(decoded) != ed25519.PublicKeySize {
+			return fmt.Errorf("%s.public_key for %s has length %d, want %d", label, n.ServerName, len(decoded), ed25519.PublicKeySize)
+		}
+	}
+	return nil
+}
+
+// decodeNotaryPublicKey accepts base64 in either raw-std or std encoding,
+// mirroring the runtime decoding in internal/server/server.go so validation
+// and runtime agree on what is acceptable.
+func decodeNotaryPublicKey(raw string) ([]byte, error) {
+	if b, err := base64.RawStdEncoding.DecodeString(raw); err == nil {
+		return b, nil
+	}
+	b, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, fmt.Errorf("invalid base64 public key")
+	}
+	return b, nil
+}
+
+// placeholderPublicKeys are obvious example strings that must never
+// survive into a real config. Case-insensitive, whitespace-trimmed match.
+var placeholderPublicKeys = map[string]struct{}{
+	"base64-encoded-public-key": {},
+	"replace-with-public-key":   {},
+	"your-public-key-here":      {},
+	"example":                   {},
+}
+
+func isPlaceholderPublicKey(raw string) bool {
+	_, ok := placeholderPublicKeys[strings.ToLower(strings.TrimSpace(raw))]
+	return ok
+}
+
+// validateClusterTLS ensures that when cluster TLS is enabled the three
+// mandatory paths are present, the min_version (if set) is recognized,
+// and that files exist on disk at startup (rather than deferring to the
+// first connection attempt).
+func validateClusterTLS(t ClusterTLSConfig) error {
+	if !t.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(t.CertFile) == "" {
+		return fmt.Errorf("cluster.tls.cert_file is required when cluster.tls.enabled=true")
+	}
+	if strings.TrimSpace(t.KeyFile) == "" {
+		return fmt.Errorf("cluster.tls.key_file is required when cluster.tls.enabled=true")
+	}
+	if strings.TrimSpace(t.CAFile) == "" {
+		return fmt.Errorf("cluster.tls.ca_file is required when cluster.tls.enabled=true")
+	}
+	if v := strings.TrimSpace(t.MinVersion); v != "" && v != "1.2" && v != "1.3" {
+		return fmt.Errorf("cluster.tls.min_version must be '1.2' or '1.3', got %q", v)
 	}
 	return nil
 }

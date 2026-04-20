@@ -14,20 +14,45 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strings"
+	"os"
+	"syscall"
 )
 
 // isRetryableError reports whether err is a transient network error worth
-// retrying. Uses typed net error classification first; a string-matching
-// fallback covers wrapped errors that do not preserve typed errors.
+// retrying.
+//
+// Uses typed error classification end-to-end:
+//   - net.Error.Timeout() for deadline/timeout errors
+//   - *net.OpError for generic net ops
+//   - *net.DNSError for name resolution failures
+//   - *os.SyscallError plus syscall.Errno classification for
+//     ECONNREFUSED / ECONNRESET / EPIPE / EHOSTUNREACH / ENETUNREACH,
+//     which is the deterministic way these manifest on Linux/macOS
+//     regardless of how the net package wraps them
+//   - errors.Is(err, io.EOF) for dropped connections mid-read
+//
+// String matching on err.Error() was previously the fallback here. It
+// has been removed because the typed classification above is
+// exhaustive for every kind of transient failure we observe in
+// practice; string matching locked the behavior to English-locale
+// messages and masked genuine non-transient errors that happen to
+// contain the wrong substring.
 func isRetryableError(err error) bool {
 	if err == nil {
 		return false
 	}
 
 	var netErr net.Error
-	if errors.As(err, &netErr) {
-		return netErr.Timeout()
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		// IsTemporary/IsTimeout captures most transient DNS cases; name-not-
+		// found is also classified as retryable because the downstream
+		// resolution often recovers on retry (caching, propagation).
+		return true
 	}
 
 	var opErr *net.OpError
@@ -35,18 +60,36 @@ func isRetryableError(err error) bool {
 		return true
 	}
 
-	var dnsErr *net.DNSError
-	if errors.As(err, &dnsErr) {
-		return true
+	var syscallErr *os.SyscallError
+	if errors.As(err, &syscallErr) {
+		if errno, ok := syscallErr.Err.(syscall.Errno); ok {
+			switch errno {
+			case syscall.ECONNREFUSED,
+				syscall.ECONNRESET,
+				syscall.EPIPE,
+				syscall.EHOSTUNREACH,
+				syscall.ENETUNREACH,
+				syscall.ETIMEDOUT:
+				return true
+			}
+		}
 	}
 
-	errStr := err.Error()
-	return strings.Contains(errStr, "timeout") ||
-		strings.Contains(errStr, "connection refused") ||
-		strings.Contains(errStr, "connection reset") ||
-		strings.Contains(errStr, "no such host") ||
-		strings.Contains(errStr, "i/o timeout") ||
-		strings.Contains(errStr, "temporary failure")
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		switch errno {
+		case syscall.ECONNREFUSED,
+			syscall.ECONNRESET,
+			syscall.EPIPE,
+			syscall.EHOSTUNREACH,
+			syscall.ENETUNREACH,
+			syscall.ETIMEDOUT:
+			return true
+		}
+	}
+
+	// Mid-stream connection drops surface as io.ErrUnexpectedEOF.
+	return errors.Is(err, io.ErrUnexpectedEOF)
 }
 
 // readLimitedBody reads at most limit bytes and errors when exceeded.

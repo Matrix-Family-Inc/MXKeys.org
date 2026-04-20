@@ -13,44 +13,59 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
+	"net"
+	"os"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"mxkeys/internal/zero/canonical"
 )
 
+// fakeTimeoutError implements net.Error with Timeout()=true, which is how
+// the standard library signals deadline/timeout errors through the
+// errors.As typing we rely on post-Phase3 audit.
+type fakeTimeoutError struct{}
+
+func (fakeTimeoutError) Error() string   { return "fake timeout" }
+func (fakeTimeoutError) Timeout() bool   { return true }
+func (fakeTimeoutError) Temporary() bool { return true }
+
+// TestIsRetryableError validates the typed-error classification that
+// replaced the prior string-matching fallback. Every case is a real
+// error type the net / os / syscall packages produce at runtime.
 func TestIsRetryableError(t *testing.T) {
 	tests := []struct {
-		errMsg    string
+		name      string
+		err       error
 		retryable bool
 	}{
-		{"connection timeout", true},
-		{"connection refused", true},
-		{"connection reset by peer", true},
-		{"no such host", true},
-		{"i/o timeout", true},
-		{"temporary failure in DNS", true},
-		{"invalid JSON", false},
-		{"server error", false},
+		{"nil", nil, false},
+		{"plain text (was matched by old string fallback, now ignored)",
+			errors.New("connection timeout"), false},
+		{"net.Error timeout", fakeTimeoutError{}, true},
+		{"net.OpError", &net.OpError{Op: "dial", Err: errors.New("x")}, true},
+		{"net.DNSError", &net.DNSError{Err: "no such host", Name: "example.test"}, true},
+		{"syscall ECONNREFUSED (wrapped in os.SyscallError)",
+			&os.SyscallError{Syscall: "connect", Err: syscall.ECONNREFUSED}, true},
+		{"syscall ECONNRESET bare", syscall.ECONNRESET, true},
+		{"syscall EPIPE bare", syscall.EPIPE, true},
+		{"syscall EHOSTUNREACH bare", syscall.EHOSTUNREACH, true},
+		{"io.ErrUnexpectedEOF", io.ErrUnexpectedEOF, true},
+		{"plain permanent error", errors.New("invalid signature"), false},
+		{"wrapped permanent", fmt.Errorf("decode: %w", errors.New("bad json")), false},
 	}
 
 	for _, tt := range tests {
-		err := &testError{msg: tt.errMsg}
-		result := isRetryableError(err)
-		if result != tt.retryable {
-			t.Errorf("isRetryableError(%q) = %v, want %v", tt.errMsg, result, tt.retryable)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isRetryableError(tt.err); got != tt.retryable {
+				t.Errorf("isRetryableError(%v) = %v, want %v", tt.err, got, tt.retryable)
+			}
+		})
 	}
-}
-
-type testError struct {
-	msg string
-}
-
-func (e *testError) Error() string {
-	return e.msg
 }
 
 func TestKeyErrorFormat(t *testing.T) {

@@ -15,6 +15,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"mxkeys/internal/zero/nettls"
 )
 
 var (
@@ -63,6 +65,12 @@ type Config struct {
 	HeartbeatInterval time.Duration
 	CommitTimeout     time.Duration
 	SharedSecret      string
+
+	// TLS configures transport-level encryption and mutual
+	// authentication for Raft peer traffic. When TLS.Enabled is false
+	// Raft uses plain TCP (backward-compatible default). Operators
+	// SHOULD enable TLS with mutual auth in every production cluster.
+	TLS nettls.Config
 }
 
 // Node represents a Raft node
@@ -90,6 +98,15 @@ type Node struct {
 	// from n.log (compacted) and must be served from disk via InstallSnapshot.
 	snapshotIndex uint64
 	snapshotTerm  uint64
+
+	// pendingSnapshot buffers InstallSnapshot chunks from the current
+	// leader while they arrive. Reset whenever a chunk arrives with
+	// Offset==0 (new transfer starts) or a different
+	// (LastIncludedIndex, LastIncludedTerm) tuple (leader moved on).
+	pendingSnapshot         []byte
+	pendingSnapshotIndex    uint64
+	pendingSnapshotTerm     uint64
+	pendingSnapshotExpected uint64 // next expected Offset
 
 	// Leader state
 	nextIndex  map[string]uint64
@@ -126,6 +143,8 @@ type Node struct {
 type MessageType string
 
 const (
+	MsgPreVote        MessageType = "pre_vote"
+	MsgPreVoteRes     MessageType = "pre_vote_response"
 	MsgRequestVote    MessageType = "request_vote"
 	MsgRequestVoteRes MessageType = "request_vote_response"
 	MsgAppendEntries  MessageType = "append_entries"
@@ -142,6 +161,29 @@ type RequestVoteRequest struct {
 
 // RequestVoteResponse is the response to a vote request
 type RequestVoteResponse struct {
+	Term        uint64 `json:"term"`
+	VoteGranted bool   `json:"vote_granted"`
+}
+
+// PreVoteRequest is the pre-vote extension (Ongaro thesis, 9.6). The
+// candidate probes peers without incrementing its own term so that a
+// partitioned or flapping node cannot disrupt a stable leader by
+// triggering an election that bumps everyone else's term. Only if a
+// majority of peers would grant a real vote does the candidate proceed
+// to startElection.
+//
+// Shape matches RequestVote exactly: peers compute the same "would I
+// vote yes?" condition in both cases, but the pre-vote path does not
+// mutate server state.
+type PreVoteRequest struct {
+	Term         uint64 `json:"term"`
+	CandidateId  string `json:"candidate_id"`
+	LastLogIndex uint64 `json:"last_log_index"`
+	LastLogTerm  uint64 `json:"last_log_term"`
+}
+
+// PreVoteResponse is the response to a pre-vote probe.
+type PreVoteResponse struct {
 	Term        uint64 `json:"term"`
 	VoteGranted bool   `json:"vote_granted"`
 }

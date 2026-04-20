@@ -34,7 +34,14 @@ func (n *Node) SetStateDir(stateDir string, syncOnAppend bool) error {
 		return nil
 	}
 
-	w, err := OpenWAL(WALOptions{Dir: stateDir, SyncOnAppend: syncOnAppend})
+	if n.config.SharedSecret == "" {
+		return fmt.Errorf("raft: SharedSecret is required to open the WAL (used to derive the WAL HMAC key)")
+	}
+	w, err := OpenWAL(WALOptions{
+		Dir:          stateDir,
+		SyncOnAppend: syncOnAppend,
+		HMACKey:      []byte(n.config.SharedSecret),
+	})
 	if err != nil {
 		return err
 	}
@@ -208,7 +215,8 @@ func (n *Node) CompactLog() error {
 	// Drop the in-memory prefix covered by the snapshot. logOffset becomes
 	// lastIdx so Index/offset arithmetic stays consistent.
 	if lastIdx > n.logOffset {
-		drop := int(lastIdx - n.logOffset)
+		// Bounded by len(n.log) in the subsequent clamp.
+		drop := int(lastIdx - n.logOffset) // #nosec G115
 		if drop > len(n.log) {
 			drop = len(n.log)
 		}

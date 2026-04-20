@@ -251,3 +251,16 @@ jobs:
       - name: Run short fuzz pass (30s per target)
         shell: bash
         run: bash ./scripts/fuzz-quick.sh
+
+  file-size:
+    name: file-size
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Needed so git ls-files has the full working tree.
+          fetch-depth: 1
+      - name: Enforce ADR-0010 file-size policy
+        shell: bash
+        run: bash ./scripts/file-size-lint.sh

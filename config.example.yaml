@@ -5,6 +5,13 @@ server:
   name: mxkeys.example.org
   port: 8448
   bind_address: "0.0.0.0"
+  # Graceful shutdown tuning. Both are Go-style durations (e.g. "45s", "2m").
+  # Defaults: shutdown_timeout=30s, predrain_delay=5s.
+  # predrain_delay is the pause after /_mxkeys/readyz starts returning
+  # 503 but before HTTP connections are drained, giving upstream load
+  # balancers time to propagate the "draining" state.
+  shutdown_timeout: 30s
+  predrain_delay: 5s
 
 database:
   url: postgres://mxkeys:password@localhost/mxkeys?sslmode=disable
@@ -21,6 +28,20 @@ keys:
   cache_ttl_hours: 1
   fetch_timeout_s: 30
   cleanup_hours: 6
+  # At-rest encryption for the signing key.
+  #
+  # Set passphrase_env to the name of an environment variable that holds
+  # the encryption passphrase. When set, the key is stored as an
+  # AES-256-GCM envelope (PBKDF2-HMAC-SHA256, 600k iterations) at
+  # <storage_path>/mxkeys_ed25519.key.enc. When left empty (the default)
+  # the key is stored as plaintext at 0600 for backward compatibility
+  # with pre-encryption installs.
+  #
+  # A legacy plaintext key is transparently upgraded on first start
+  # once this field is configured; the old file is removed after the
+  # encrypted copy is durable.
+  encryption:
+    passphrase_env: ""    # e.g. "MXKEYS_KEY_PASSPHRASE"
 
 trusted_servers:
   fallback:
@@ -48,13 +69,18 @@ security:
   #   - 10.0.0.0/8
   # enterprise_access_token: "replace-with-long-random-token"
 
-# Optional: Pin trusted notary keys for fallback servers
-trusted_notaries:
-  # One entry per trusted perspective notary.
-  # Public key may be base64 (raw/std encoding).
-  - server_name: matrix.org
-    key_id: ed25519:auto
-    public_key: "base64-encoded-public-key"
+# Optional: Pin trusted notary keys for fallback servers.
+# Leave the list empty until you have real pinned keys. Validation
+# refuses placeholder strings and non-ed25519 lengths at startup.
+trusted_notaries: []
+
+# Example of a real pinned entry once you have the key material:
+#
+# trusted_notaries:
+#   - server_name: matrix.org
+#     key_id: ed25519:auto
+#     public_key: "Nzxs2Mh0Fb+Uhv3uTE47iWBoCGY8oSa11BZX9S7W6RE"   # 32-byte ed25519 public key, base64
+
 
 trust_policy:
   enabled: false
@@ -90,3 +116,18 @@ cluster:
   # Raft persistence. Directory created with 0700 if missing.
   raft_state_dir: "/var/lib/mxkeys/raft"
   raft_sync_on_append: true
+
+  # Transport-level TLS for cluster traffic (both CRDT and Raft).
+  # Strongly recommended in production. When enabled the three file
+  # paths (cert/key/ca) are required and verified at startup.
+  # Set require_client_cert=true for mutual TLS (each node must
+  # present a certificate signed by the same CA). See
+  # docs/runbook/cluster-tls-rotation.md for key rotation.
+  tls:
+    enabled: false
+    cert_file: "/etc/mxkeys/cluster.crt"
+    key_file: "/etc/mxkeys/cluster.key"
+    ca_file: "/etc/mxkeys/cluster-ca.crt"
+    require_client_cert: true
+    min_version: "1.3"     # "1.2" or "1.3" (default "1.3")
+    server_name: ""        # optional SNI pin

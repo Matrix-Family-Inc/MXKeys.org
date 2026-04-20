@@ -12,7 +12,8 @@ package raft
 import (
 	"context"
 	"fmt"
-	"net"
+
+	"mxkeys/internal/zero/nettls"
 )
 
 // Start starts the Raft node.
@@ -29,7 +30,7 @@ func (n *Node) Start(ctx context.Context) error {
 	}
 
 	addr := fmt.Sprintf("%s:%d", n.config.BindAddress, n.config.BindPort)
-	listener, err := net.Listen("tcp", addr)
+	listener, err := nettls.Listen("tcp", addr, n.config.TLS)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
@@ -70,29 +71,61 @@ func (n *Node) Stop() error {
 }
 
 // Submit submits a command to the Raft cluster.
-// Leader-only: the command is appended to the log, persisted to WAL before
-// commit (durability precondition for linearizability), then replicated.
 //
-// Uses logLen() so the assigned Index accounts for any compacted prefix.
+// Durability + group-commit contract:
+//  1. Under n.mu we atomically reserve the next index AND append to
+//     n.log. This keeps log indices strictly monotonic even under
+//     concurrent Submits (without this step two callers could compute
+//     the same n.logLen()+1 and collide).
+//  2. We drop n.mu and block on WAL persistence. The WAL batcher
+//     amortizes the fsync across every Submit (and every follower-side
+//     append) whose window overlaps, so throughput grows with load
+//     instead of being capped by per-call fsync latency.
+//  3. On persist success we re-acquire n.mu, advance commitIndex, and
+//     replicate. On persist failure we re-acquire n.mu and truncate
+//     the in-memory entry (WAL never saw it), then return the error
+//     so the caller knows the submission did not land.
+//
+// Leadership change during step 2 is handled at commit time: the new
+// leader's AppendEntries will overwrite our in-memory tail and the
+// non-durable entry disappears.
 func (n *Node) Submit(ctx context.Context, command []byte) error {
 	n.mu.Lock()
 	if n.state != Leader {
 		n.mu.Unlock()
 		return ErrNotLeader
 	}
-
 	entry := LogEntry{
 		Index:   n.logLen() + 1,
 		Term:    n.currentTerm,
 		Command: command,
 	}
-	// Persist BEFORE making the entry visible to replication so a crash
-	// immediately after Submit cannot return success for an un-durable entry.
-	if err := n.persistEntry(entry); err != nil {
-		n.mu.Unlock()
-		return fmt.Errorf("raft: persist: %w", err)
-	}
+	// Publish into n.log under the lock to serialize index assignment.
+	// The entry is visible to replication; commitIndex will not advance
+	// past it until persist succeeds (enforced by the post-persist
+	// updateCommitIndex call below, which is the only caller on the
+	// leader's write path).
 	n.log = append(n.log, entry)
+	publishedLen := uint64(len(n.log))
+	n.mu.Unlock()
+
+	// Persist outside the lock. Concurrent Submits flow through the WAL
+	// batcher and share a single fsync per flush window.
+	if perr := n.persistEntry(entry); perr != nil {
+		n.mu.Lock()
+		// Truncate only if the tail we appended is still on top.
+		// A fresh leader's AppendEntries could have already rewritten
+		// the tail; leave that state alone.
+		if uint64(len(n.log)) == publishedLen &&
+			len(n.log) > 0 &&
+			n.log[len(n.log)-1].Index == entry.Index {
+			n.log = n.log[:len(n.log)-1]
+		}
+		n.mu.Unlock()
+		return fmt.Errorf("raft: persist: %w", perr)
+	}
+
+	n.mu.Lock()
 	n.updateCommitIndex()
 	n.mu.Unlock()
 

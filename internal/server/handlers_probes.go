@@ -35,9 +35,25 @@ func (s *Server) handleLiveness(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleReadiness is the readiness probe: can the service accept traffic?
-// Checks: database ping with 2s timeout, signing key loaded.
+//
+// Checks, in order:
+//  1. shuttingDown flag, set at the start of graceful shutdown so that
+//     orchestrators (Kubernetes, haproxy, an external LB) can drop the
+//     instance from rotation BEFORE in-flight requests are drained. This
+//     avoids the "50x burst during rolling restart" class of incidents.
+//  2. database ping with 2 s timeout.
+//  3. signing key loaded.
 func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
+	if s.shuttingDown.Load() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		writeJSON(w, map[string]interface{}{
+			"status": "draining",
+			"error":  "shutdown in progress",
+		})
+		return
+	}
 
 	pingCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()

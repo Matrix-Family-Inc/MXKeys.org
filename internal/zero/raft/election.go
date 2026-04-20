@@ -17,6 +17,13 @@ import (
 )
 
 // runElectionTimer runs the election timeout timer.
+//
+// When the timer expires without contact from a leader, the node first
+// probes the cluster with a pre-vote round. Only if a majority of
+// peers would grant a real vote does the node promote to Candidate and
+// start a real election (which bumps currentTerm). This prevents a
+// partitioned node from disrupting a stable leader just because its
+// own term counter ticked while it was unreachable.
 func (n *Node) runElectionTimer() {
 	defer n.wg.Done()
 
@@ -33,10 +40,87 @@ func (n *Node) runElectionTimer() {
 		n.mu.RLock()
 		shouldStart := n.state != Leader && time.Since(n.lastContact) >= timeout
 		n.mu.RUnlock()
-		if shouldStart {
+		if !shouldStart {
+			continue
+		}
+		if n.runPreVote() {
 			n.startElection()
 		}
 	}
+}
+
+// runPreVote performs a pre-vote round. Returns true if a majority of
+// peers (including self, which always agrees) would grant a vote at
+// the hypothetical next term. The node state is NOT mutated during
+// this phase.
+func (n *Node) runPreVote() bool {
+	n.mu.RLock()
+	peers := append([]string(nil), n.config.Peers...)
+	nextTerm := n.currentTerm + 1
+	lastLogIndex, lastLogTerm := n.lastLogIndexTerm()
+	electionTimeout := n.config.ElectionTimeout
+	n.mu.RUnlock()
+
+	if len(peers) == 0 {
+		// Single-node degenerate case; no pre-vote necessary.
+		return true
+	}
+
+	needed := (len(peers)+1)/2 + 1
+	grants := 1 // self
+
+	results := make(chan bool, len(peers))
+	for _, peer := range peers {
+		go func(p string) {
+			ok := n.sendPreVote(p, nextTerm, lastLogIndex, lastLogTerm)
+			results <- ok
+		}(peer)
+	}
+
+	deadline := time.After(electionTimeout)
+	for i := 0; i < len(peers); i++ {
+		select {
+		case granted := <-results:
+			if granted {
+				grants++
+				if grants >= needed {
+					return true
+				}
+			}
+		case <-deadline:
+			return grants >= needed
+		case <-n.stopCh:
+			return false
+		}
+	}
+	return grants >= needed
+}
+
+// sendPreVote dispatches a single pre-vote probe. Unlike requestVote,
+// does NOT update local state even if the peer's term response is
+// higher than ours. Pre-vote is informational only.
+func (n *Node) sendPreVote(peer string, term, lastLogIndex, lastLogTerm uint64) bool {
+	req := PreVoteRequest{
+		Term:         term,
+		CandidateId:  n.config.NodeID,
+		LastLogIndex: lastLogIndex,
+		LastLogTerm:  lastLogTerm,
+	}
+	resp, err := n.sendRPC(peer, MsgPreVote, req)
+	if err != nil {
+		return false
+	}
+	var voteResp PreVoteResponse
+	if err := json.Unmarshal(resp.Payload, &voteResp); err != nil {
+		return false
+	}
+	// If the peer's currentTerm is higher than our hypothetical term,
+	// our pre-vote is irrelevant: we will not win an election at that
+	// term anyway.
+	if voteResp.Term > term {
+		return false
+	}
+	return voteResp.VoteGranted
 }
 
 // startElection starts a new election.

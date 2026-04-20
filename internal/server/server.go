@@ -10,19 +10,49 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"sync/atomic"
 	"time"
 
 	"mxkeys/internal/cluster"
 	"mxkeys/internal/config"
 	"mxkeys/internal/keys"
+	"mxkeys/internal/keys/keyprovider"
 	"mxkeys/internal/storage/migrations"
 	"mxkeys/internal/zero/log"
+	"mxkeys/internal/zero/nettls"
 )
+
+// buildKeyProvider constructs the signing-key provider described by cfg.
+// When cfg.Keys.EncryptionPassphraseEnv is non-empty, the named
+// environment variable supplies the passphrase used by the file-backed
+// provider to encrypt the on-disk key with AES-256-GCM. An unset
+// environment variable when encryption was requested is a hard error:
+// half-configured encryption is dangerous (operators may believe the
+// key is encrypted when it is not) and must fail closed at startup.
+func buildKeyProvider(cfg *config.Config) (keyprovider.Provider, error) {
+	pcfg := keyprovider.Config{
+		Kind:        keyprovider.KindFile,
+		StoragePath: cfg.Keys.StoragePath,
+	}
+	if envName := cfg.Keys.EncryptionPassphraseEnv; envName != "" {
+		secret := os.Getenv(envName)
+		if secret == "" {
+			return nil, fmt.Errorf("keys.encryption.passphrase_env=%q but the environment variable is empty; at-rest encryption requires a non-empty passphrase", envName)
+		}
+		pcfg.Passphrase = []byte(secret)
+		log.Info("Signing key at-rest encryption enabled", "passphrase_env", envName)
+	} else {
+		log.Warn("Signing key at-rest encryption disabled; key is stored as plaintext at 0600 (set keys.encryption.passphrase_env to enable)")
+	}
+	return keyprovider.New(pcfg)
+}
 
 // Server is the HTTP server
 type Server struct {
@@ -37,7 +67,17 @@ type Server struct {
 	trustPolicy           *keys.TrustPolicy
 	cluster               *cluster.Cluster
 	enterpriseAccessToken string
+
+	// shuttingDown is set atomically at the start of graceful shutdown
+	// and is read by the readiness probe. When true, /_mxkeys/readyz
+	// returns 503 so that upstream load balancers and orchestrators
+	// (Kubernetes, haproxy, ...) remove the instance from rotation
+	// before ongoing HTTP requests are drained.
+	shuttingDown atomic.Bool
 }
+
+// IsShuttingDown reports whether graceful shutdown has been initiated.
+func (s *Server) IsShuttingDown() bool { return s.shuttingDown.Load() }
 
 // New creates a new server
 func New(cfg *config.Config) (*Server, error) {
@@ -73,17 +113,21 @@ func New(cfg *config.Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode trusted notaries: %w", err)
 	}
-	notary, err := keys.NewNotary(
-		db,
-		cfg.Server.Name,
-		cfg.Keys.StoragePath,
-		cfg.Keys.ValidityHours,
-		cfg.Keys.CacheTTLHours,
-		cfg.TrustedServers.Fallback,
-		fetchTimeout,
-		trustedNotaries,
-		cfg.Security.MaxSignaturesPerKey,
-	)
+
+	provider, err := buildKeyProvider(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build key provider: %w", err)
+	}
+	notary, err := keys.NewNotaryWithConfig(context.Background(), db, keys.NotaryConfig{
+		ServerName:          cfg.Server.Name,
+		KeyProvider:         provider,
+		ValidityHours:       cfg.Keys.ValidityHours,
+		CacheTTLHours:       cfg.Keys.CacheTTLHours,
+		FallbackServers:     cfg.TrustedServers.Fallback,
+		FetchTimeout:        fetchTimeout,
+		TrustedNotaries:     trustedNotaries,
+		MaxSignaturesPerKey: cfg.Security.MaxSignaturesPerKey,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create notary: %w", err)
 	}
@@ -171,6 +215,15 @@ func New(cfg *config.Config) (*Server, error) {
 			SharedSecret:     cfg.Cluster.SharedSecret,
 			RaftStateDir:     cfg.Cluster.RaftStateDir,
 			RaftSyncOnAppend: cfg.Cluster.RaftSyncOnAppend,
+			TLS: nettls.Config{
+				Enabled:           cfg.Cluster.TLS.Enabled,
+				CertFile:          cfg.Cluster.TLS.CertFile,
+				KeyFile:           cfg.Cluster.TLS.KeyFile,
+				CAFile:            cfg.Cluster.TLS.CAFile,
+				RequireClientCert: cfg.Cluster.TLS.RequireClientCert,
+				MinVersion:        cfg.Cluster.TLS.MinVersion,
+				ServerName:        cfg.Cluster.TLS.ServerName,
+			},
 		}
 		c, err := cluster.NewCluster(clusterCfg)
 		if err != nil {

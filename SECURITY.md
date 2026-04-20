@@ -1,146 +1,122 @@
+Project: MXKeys
+Company: Matrix Family Inc. (https://matrix.family)
+Maintainer: Brabus
+Contact: dev@matrix.family
+Date: Mon Apr 20 2026 UTC
+Status: Updated
+
 # Security Policy
+
+MXKeys is a Matrix federation-key notary. Signing-key compromise
+compromises every homeserver that trusts the notary. Treat it as
+identity-critical infrastructure.
+
+## Scope
+
+In scope for security reports:
+
+- Go source under `cmd/` and `internal/`.
+- Cryptographic code: ed25519 signing, canonical JSON, HMAC-SHA256
+  over cluster RPCs and WAL records, AES-256-GCM + PBKDF2 for
+  at-rest key encryption, TLS for cluster transport.
+- On-disk formats: `MXKENC01` key envelope, WAL v3, Raft snapshot,
+  transparency log schema.
+- HTTP surface: `/_matrix/key/v2/*`, `/_mxkeys/*`, CRDT and Raft
+  replication RPCs.
+
+Out of scope:
+
+- Vulnerabilities in upstream dependencies (report upstream; we can
+  coordinate if needed).
+- Denial-of-service that requires root on the host or physical
+  access to disk.
+- Third-party forks that diverge from this repository.
+
+## Reporting
+
+Send reports privately. Do not open a public GitHub issue or post
+in a public Matrix room until a disclosure date is agreed.
+
+- Email: `dev@matrix.family`
+- Subject prefix: `[mxkeys-security]`
+- Required contents: affected version or commit SHA, reproduction
+  or proof-of-concept, environment details, impact assessment,
+  preferred disclosure timeline.
+
+Acknowledgement target: 72 hours. If that target is missed,
+resend the report and copy the maintainer directly. If a further
+72 hours pass without response, open a private GitHub security
+advisory draft.
+
+## Handling
+
+1. Report received. Acknowledged within 72 hours.
+2. Reproduction and severity classified on a private branch.
+3. Fix developed and reviewed privately; reporter may review the
+   draft.
+4. Release prepared; CVE requested when applicable.
+5. Disclosure date agreed with the reporter. Public advisory,
+   CHANGELOG entry, and release notes land on that date.
+
+No fixed turnaround is published. Fix-to-release cycles are
+measured in days for critical bugs and weeks for lower severity.
+
+## Severity
+
+- **Critical**: attacker forges a notary signature, reads the
+  on-disk signing key, bypasses TLS or mTLS on the cluster
+  transport, or causes a node to accept forged Raft traffic.
+- **High**: attacker crashes the service, corrupts the WAL or
+  snapshot, exhausts resources through a single unauthenticated
+  request, or poisons the transparency log.
+- **Moderate/Low**: information disclosure without signing-key
+  impact, rate-limit bypass requiring heavy traffic, bugs whose
+  exploitability depends on operator misconfiguration.
+
+## Security Properties
+
+See `docs/threat-model.md` for full analysis. Summary of what
+this release provides:
+
+- **Signing-key confidentiality**: the ed25519 key may be stored
+  encrypted at rest as an `MXKENC01` envelope (AES-256-GCM,
+  PBKDF2-HMAC-SHA256 at 600 000 iterations) when
+  `keys.encryption.passphrase_env` is set. Otherwise the key is
+  stored at 0600 as plaintext.
+- **Cluster confidentiality**: TLS with optional mutual auth
+  covers both CRDT and Raft transports. When TLS is disabled,
+  cluster traffic carries HMAC-SHA256 over canonical JSON but is
+  not encrypted.
+- **WAL integrity**: every record carries CRC32C (bit rot) and
+  HMAC-SHA256 (intentional tampering). A CRC-valid but HMAC-
+  invalid record surfaces as `ErrWALTampered`.
+- **Log compaction / catch-up**: Raft snapshots stream in 512 KiB
+  chunks. Each chunk carries the `(LastIncludedIndex,
+  LastIncludedTerm)` tuple so a leader change mid-transfer is
+  detected.
+- **Election stability**: Raft pre-vote prevents a partitioned or
+  flapping node from forcing a new election on a healthy leader.
+- **Graceful shutdown**: SIGTERM flips `/_mxkeys/readyz` to 503,
+  waits `predrain_delay` for load-balancer propagation, drains
+  HTTP, stops the cluster, closes the DB handle. A second signal
+  forces exit.
+
+Explicit limits:
+
+- No HSM path is shipped. The KMS provider is a stub; operators
+  who need HSM integration extend `internal/keys/keyprovider`.
+- Root on the host defeats the at-rest encryption: the passphrase
+  env var is readable from `/proc/<pid>/environ`. Defense in depth
+  is operator-controlled: systemd `LoadCredential`, Kubernetes
+  `Secret` mounts, or an external vault.
 
 ## Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+- `1.x` is the first supported line. Security fixes backport to
+  the most recent minor release.
+- Pre-1.0 tags are not supported.
 
-## Reporting a Vulnerability
+## Credit
 
-If you discover a security vulnerability in MXKeys, please report it responsibly:
-
-1. **Do NOT** open a public GitHub issue
-2. Send details to: **security@matrix.family** or **@support:matrix.family**
-3. Include:
-   - Description of the vulnerability
-   - Steps to reproduce
-   - Potential impact
-   - Suggested fix (if any)
-
-We will respond within 48 hours and work with you to:
-- Confirm the vulnerability
-- Develop a fix
-- Coordinate disclosure
-
-## Security Model
-
-MXKeys implements several security measures:
-
-### Cryptographic Verification
-- Ed25519 signature verification for all server keys
-- Canonical JSON per Matrix specification
-- Key length validation (32 bytes for public keys, 64 bytes for signatures)
-
-### Input Validation
-- Server name format and length validation
-- Key ID format validation (ed25519:*)
-- Request body size limits (1MB max)
-- Maximum servers per query (configurable, default 100)
-
-### Rate Limiting
-- Per-IP token bucket rate limiting
-- Separate limits for query endpoint
-- Configurable via config.yaml
-
-### Network Security
-- TLS 1.2+ required for outbound connections
-- Connection timeouts enforced
-- Concurrent fetch limits (semaphore)
-
-### DoS Protection
-- Circuit breaker for failing upstreams
-- Negative caching for resolution/fetch errors
-- Request body size limits
-
-## Hardening Recommendations
-
-### Production Deployment
-
-1. **Run as non-root user**
-   ```bash
-   useradd -r -s /bin/false mxkeys
-   chown mxkeys:mxkeys /var/lib/mxkeys
-   ```
-
-2. **Use PostgreSQL with SSL**
-   ```yaml
-   database:
-     url: postgres://mxkeys:pass@db/mxkeys?sslmode=verify-full
-   ```
-
-3. **Enable JSON logging for SIEM**
-   ```yaml
-   logging:
-     format: json
-   ```
-
-4. **Configure firewall**
-   ```bash
-   ufw allow 8448/tcp
-   ```
-
-5. **Use reverse proxy with TLS termination**
-   ```nginx
-   server {
-       listen 443 ssl http2;
-       ssl_certificate /etc/letsencrypt/live/mxkeys.example.org/fullchain.pem;
-       ssl_certificate_key /etc/letsencrypt/live/mxkeys.example.org/privkey.pem;
-       
-       location / {
-           proxy_pass http://127.0.0.1:8448;
-           proxy_set_header X-Real-IP $remote_addr;
-           proxy_set_header X-Request-ID $request_id;
-       }
-   }
-   ```
-
-### Docker Deployment
-
-1. **Use read-only root filesystem**
-   ```yaml
-   security_opt:
-     - no-new-privileges:true
-   read_only: true
-   tmpfs:
-     - /tmp
-   ```
-
-2. **Drop capabilities**
-   ```yaml
-   cap_drop:
-     - ALL
-   ```
-
-3. **Resource limits**
-   ```yaml
-   deploy:
-     resources:
-       limits:
-         cpus: '1'
-         memory: 256M
-   ```
-
-## Dependencies
-
-MXKeys uses minimal external dependencies:
-
-| Dependency | Purpose | Security |
-|------------|---------|----------|
-| github.com/lib/pq | PostgreSQL driver | Maintained, widely used |
-| golang.org/x/sync | Singleflight | Official Go package |
-| golang.org/x/time | Rate limiter | Official Go package |
-
-All other functionality is implemented internally in `internal/zero/` packages.
-
-## Audit
-
-The codebase is designed for auditability:
-- No hidden network calls
-- No external service dependencies beyond PostgreSQL
-- Deterministic behavior
-- Structured logging with request IDs
-
-## License
-
-Apache 2.0 - see LICENSE file.
+Reporters of verified issues are credited by name in the release
+notes and the GitHub security advisory unless they opt out.
