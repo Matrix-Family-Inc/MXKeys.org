@@ -145,19 +145,6 @@ func (n *Node) persistEntry(entry LogEntry) error {
 	return n.wal.Append(entry)
 }
 
-// persistEntries durably stores a slice of entries in order.
-func (n *Node) persistEntries(entries []LogEntry) error {
-	if n.wal == nil {
-		return nil
-	}
-	for _, e := range entries {
-		if err := n.wal.Append(e); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // truncateLogAfter drops log entries with Index > lastKeepIndex from both
 // the in-memory slice and the WAL. Used when a follower's tail conflicts
 // with the leader's view of history.

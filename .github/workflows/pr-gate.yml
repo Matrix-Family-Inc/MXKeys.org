@@ -2,8 +2,8 @@
 # Company: Matrix Family Inc. (https://matrix.family)
 # Maintainer: Brabus
 # Contact: dev@matrix.family
-# Date: Sun Mar 15 2026 UTC
-# Status: Created
+# Date: Mon Apr 20 2026 UTC
+# Status: Updated
 
 name: PR Gate
 
@@ -183,3 +183,71 @@ jobs:
           set -euo pipefail
           package_dirs="$(bash ./scripts/go-package-list.sh dirs | tr '\n' ' ')"
           "$(go env GOPATH)/bin/gosec" -severity high ${package_dirs}
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run coverage with gate
+        shell: bash
+        run: bash ./scripts/coverage-gate.sh
+
+  staticcheck:
+    name: staticcheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+      - name: Run staticcheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages="$(bash ./scripts/go-package-list.sh | tr '\n' ' ')"
+          "$(go env GOPATH)/bin/staticcheck" ${packages}
+
+  errcheck:
+    name: errcheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install errcheck
+        run: go install github.com/kisielk/errcheck@latest
+      - name: Run errcheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages="$(bash ./scripts/go-package-list.sh | tr '\n' ' ')"
+          # -ignoretests: test code routinely uses defer Close and explicit
+          # t.Fatalf on the happy path; the CI focus is production hygiene.
+          "$(go env GOPATH)/bin/errcheck" -ignoretests -exclude=./scripts/errcheck-excludes.txt ${packages}
+
+  fuzz-quick:
+    name: fuzz-quick
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run short fuzz pass (30s per target)
+        shell: bash
+        run: bash ./scripts/fuzz-quick.sh

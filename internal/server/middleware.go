@@ -25,7 +25,7 @@ type contextKey string
 
 const (
 	requestIDKey       contextKey = "request_id"
-	maxRequestIDLength            = 128
+	maxRequestIDLength int        = 128
 )
 
 var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:/-]{1,128}$`)
