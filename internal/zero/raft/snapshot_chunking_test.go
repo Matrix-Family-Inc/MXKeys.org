@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"testing"
 	"time"
 )
@@ -31,11 +32,19 @@ func TestInstallSnapshotChunkingReassembles(t *testing.T) {
 	// once with the concatenated bytes.
 	var got []byte
 	var calls int
-	n.SetSnapshotInstaller(func(data []byte, idx, term uint64) error {
+	n.SetSnapshotInstaller(func(r io.Reader, size int64, idx, term uint64) error {
 		calls++
-		got = append([]byte(nil), data...)
+		buf, err := io.ReadAll(r)
+		if err != nil {
+			t.Errorf("installer read: %v", err)
+			return err
+		}
+		got = buf
 		if idx != 42 || term != 3 {
 			t.Errorf("installer got (idx=%d, term=%d), want (42, 3)", idx, term)
+		}
+		if int64(len(buf)) != size {
+			t.Errorf("installer size mismatch: read %d, size arg %d", len(buf), size)
 		}
 		return nil
 	})
@@ -82,8 +91,12 @@ func TestInstallSnapshotResetsOnOffsetZero(t *testing.T) {
 	n.currentTerm = 1
 
 	var installerData []byte
-	n.SetSnapshotInstaller(func(data []byte, idx, term uint64) error {
-		installerData = append([]byte(nil), data...)
+	n.SetSnapshotInstaller(func(r io.Reader, _ int64, _, _ uint64) error {
+		buf, err := io.ReadAll(r)
+		if err != nil {
+			return err
+		}
+		installerData = buf
 		return nil
 	})
 
@@ -122,8 +135,9 @@ func TestInstallSnapshotRejectsGappedOffset(t *testing.T) {
 	n.currentTerm = 1
 
 	called := false
-	n.SetSnapshotInstaller(func(data []byte, idx, term uint64) error {
+	n.SetSnapshotInstaller(func(r io.Reader, _ int64, _, _ uint64) error {
 		called = true
+		_, _ = io.Copy(io.Discard, r)
 		return nil
 	})
 
@@ -174,7 +188,10 @@ func TestInstallSnapshotResponseSuccessContract(t *testing.T) {
 	t.Run("done chunk with installer success returns success=true", func(t *testing.T) {
 		n := NewNode(Config{NodeID: "f", ElectionTimeout: 300 * time.Millisecond})
 		n.currentTerm = 1
-		n.SetSnapshotInstaller(func([]byte, uint64, uint64) error { return nil })
+		n.SetSnapshotInstaller(func(r io.Reader, _ int64, _, _ uint64) error {
+			_, _ = io.Copy(io.Discard, r)
+			return nil
+		})
 
 		req := InstallSnapshotRequest{
 			Term: 1, LeaderID: "L", LastIncludedIndex: 5, LastIncludedTerm: 1,
@@ -190,7 +207,10 @@ func TestInstallSnapshotResponseSuccessContract(t *testing.T) {
 	t.Run("done chunk with installer error returns success=false", func(t *testing.T) {
 		n := NewNode(Config{NodeID: "f", ElectionTimeout: 300 * time.Millisecond})
 		n.currentTerm = 1
-		n.SetSnapshotInstaller(func([]byte, uint64, uint64) error { return errors.New("boom") })
+		n.SetSnapshotInstaller(func(r io.Reader, _ int64, _, _ uint64) error {
+			_, _ = io.Copy(io.Discard, r)
+			return errors.New("boom")
+		})
 
 		req := InstallSnapshotRequest{
 			Term: 1, LeaderID: "L", LastIncludedIndex: 5, LastIncludedTerm: 1,
@@ -206,7 +226,10 @@ func TestInstallSnapshotResponseSuccessContract(t *testing.T) {
 	t.Run("non-done chunk buffered returns success=true", func(t *testing.T) {
 		n := NewNode(Config{NodeID: "f", ElectionTimeout: 300 * time.Millisecond})
 		n.currentTerm = 1
-		n.SetSnapshotInstaller(func([]byte, uint64, uint64) error { return nil })
+		n.SetSnapshotInstaller(func(r io.Reader, _ int64, _, _ uint64) error {
+			_, _ = io.Copy(io.Discard, r)
+			return nil
+		})
 
 		req := InstallSnapshotRequest{
 			Term: 1, LeaderID: "L", LastIncludedIndex: 5, LastIncludedTerm: 1,

@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
 	"net"
 	"os"
 	"sync"
@@ -72,18 +73,16 @@ type Config struct {
 	CommitTimeout     time.Duration
 	SharedSecret      string
 
-	// AdvertiseAddr is the dialable "host:port" other Raft nodes
-	// should use to reach this node. It is embedded by the leader in
-	// every AppendEntries / InstallSnapshot RPC so followers learn a
-	// concrete forwarding endpoint (see Propose). Empty means "use
-	// BindAddress:BindPort"; that fallback only works when BindAddress
-	// is a real interface address, not a wildcard.
+	// AdvertiseAddr is the dialable "host:port" peers use to reach
+	// this node. Leader embeds it in every AE / InstallSnapshot so
+	// followers learn a concrete forward endpoint (see Propose).
+	// Empty falls back to BindAddress:BindPort; that only works
+	// when BindAddress is a real interface, not a wildcard.
 	AdvertiseAddr string
 
-	// TLS configures transport-level encryption and mutual
-	// authentication for Raft peer traffic. When TLS.Enabled is false
-	// Raft uses plain TCP (backward-compatible default). Operators
-	// SHOULD enable TLS with mutual auth in every production cluster.
+	// TLS configures transport encryption and mutual auth for Raft
+	// peer traffic. TLS.Enabled=false keeps plain TCP (backward-
+	// compatible). Production SHOULD enable TLS with mutual auth.
 	TLS nettls.Config
 }
 
@@ -99,36 +98,35 @@ type Node struct {
 	commitIndex uint64
 	lastApplied uint64
 
-	// logOffset is the number of entries logically present in the log but
+	// logOffset is the count of entries logically present but
 	// absent from the in-memory slice. Invariant:
-	//     n.log[i].Index == n.logOffset + uint64(i) + 1
-	// Grows monotonically only via CompactLog/InstallSnapshot after those
-	// operations successfully persist a snapshot that covers the dropped
-	// prefix. Always equals snapshotIndex when non-zero.
+	//   n.log[i].Index == n.logOffset + uint64(i) + 1
+	// Grows monotonically via CompactLog/InstallSnapshot once the
+	// covering snapshot is persisted. Equals snapshotIndex when
+	// non-zero.
 	logOffset uint64
 
-	// snapshotIndex is the highest Raft log index reflected in the latest
-	// persisted snapshot. Entries with Index <= snapshotIndex may be absent
-	// from n.log (compacted) and must be served from disk via InstallSnapshot.
+	// snapshotIndex is the highest log index reflected in the
+	// latest persisted snapshot; entries with Index <= snapshotIndex
+	// may be absent from n.log and are served from disk.
 	snapshotIndex uint64
 	snapshotTerm  uint64
 
-	// pendingSnapshot* hold the state of an in-flight InstallSnapshot
-	// transfer. Exactly one is active at a time; Offset==0 or a
-	// differing (LastIncludedIndex, LastIncludedTerm) tuple resets.
-	//
-	// Memory: when stateDir != "" every chunk is streamed to
-	// pendingSnapshotFile (stateDir/raft.snapshot.recv) so follower
-	// RAM stays O(snapshotChunkSize) regardless of total size. With
-	// stateDir == "" (in-memory mode, tests) chunks land in
-	// pendingSnapshot []byte. LoadFromDisk removes a stale recv file
-	// so a crash mid-transfer cannot leak bytes into the next one.
+	// pendingSnapshot* hold the in-flight InstallSnapshot transfer
+	// state. Exactly one is active at a time; Offset==0 or a
+	// differing (index, term) tuple resets. When stateDir != ""
+	// chunks stream to pendingSnapshotFile (stateDir/raft.snapshot
+	// .recv) keeping RAM at O(snapshotChunkSize). With stateDir==""
+	// (in-memory mode, tests) chunks buffer in pendingSnapshot. See
+	// pending_snapshot.go for the full lifecycle and
+	// cleanupStalePendingSnapshot for crash recovery.
 	pendingSnapshot         []byte
 	pendingSnapshotFile     *os.File
 	pendingSnapshotPath     string
 	pendingSnapshotIndex    uint64
 	pendingSnapshotTerm     uint64
-	pendingSnapshotExpected uint64 // next expected Offset = bytes accumulated so far
+	pendingSnapshotExpected uint64      // next expected Offset = bytes accumulated so far
+	pendingSnapshotCRC      hash.Hash32 // incremental Castagnoli CRC over data chunks
 
 	// Leader state
 	nextIndex  map[string]uint64
@@ -152,6 +150,15 @@ type Node struct {
 	// Persistence
 	wal      *WAL
 	stateDir string
+
+	// snapMu serialises every writer of raft.snapshot on disk and
+	// the matching in-memory (snapshotIndex, snapshotTerm,
+	// logOffset) bookkeeping: CompactLog and every
+	// handleInstallSnapshot. Without it two snapshot writers could
+	// roll the persisted state backwards or trash the spill file.
+	// Lock order: snapMu before n.mu; never held while taking an
+	// application-level lock.
+	snapMu sync.Mutex
 
 	// Callbacks
 	onStateChange     func(State)

@@ -90,7 +90,7 @@ func (n *Node) LoadFromDisk() error {
 	// known-empty state instead of inheriting partial bytes.
 	cleanupStalePendingSnapshot(n.stateDir)
 
-	snap, err := LoadSnapshot(n.stateDir)
+	f, meta, err := LoadSnapshotReader(n.stateDir)
 	switch {
 	case errors.Is(err, ErrNoSnapshot):
 		// Nothing persisted yet. Carry on to WAL replay.
@@ -98,26 +98,28 @@ func (n *Node) LoadFromDisk() error {
 		return fmt.Errorf("raft: load snapshot: %w", err)
 	default:
 		if n.snapshotInstaller != nil {
-			if err := n.snapshotInstaller(snap.Data, snap.Meta.LastIncludedIndex, snap.Meta.LastIncludedTerm); err != nil {
-				return fmt.Errorf("raft: install snapshot: %w", err)
+			if ierr := n.snapshotInstaller(f, meta.Size, meta.LastIncludedIndex, meta.LastIncludedTerm); ierr != nil {
+				_ = f.Close()
+				return fmt.Errorf("raft: install snapshot: %w", ierr)
 			}
 		}
+		_ = f.Close()
 		n.mu.Lock()
-		n.snapshotIndex = snap.Meta.LastIncludedIndex
-		n.snapshotTerm = snap.Meta.LastIncludedTerm
+		n.snapshotIndex = meta.LastIncludedIndex
+		n.snapshotTerm = meta.LastIncludedTerm
 		// logOffset starts at the snapshot boundary so subsequent WAL
 		// entries (Index > snapshotIndex) index correctly into n.log.
-		n.logOffset = snap.Meta.LastIncludedIndex
-		n.commitIndex = snap.Meta.LastIncludedIndex
-		n.lastApplied = snap.Meta.LastIncludedIndex
-		if snap.Meta.LastIncludedTerm > n.currentTerm {
-			n.currentTerm = snap.Meta.LastIncludedTerm
+		n.logOffset = meta.LastIncludedIndex
+		n.commitIndex = meta.LastIncludedIndex
+		n.lastApplied = meta.LastIncludedIndex
+		if meta.LastIncludedTerm > n.currentTerm {
+			n.currentTerm = meta.LastIncludedTerm
 		}
 		n.mu.Unlock()
 		log.Info("Raft snapshot loaded",
-			"last_included_index", snap.Meta.LastIncludedIndex,
-			"last_included_term", snap.Meta.LastIncludedTerm,
-			"size", snap.Meta.Size,
+			"last_included_index", meta.LastIncludedIndex,
+			"last_included_term", meta.LastIncludedTerm,
+			"size", meta.Size,
 		)
 	}
 
@@ -171,33 +173,39 @@ func (n *Node) truncateLogAfter(lastKeepIndex uint64) error {
 	return n.wal.TruncateAfter(lastKeepIndex)
 }
 
-// CompactLog produces a new on-disk snapshot at the index the state
-// machine has actually reached, truncates the WAL prefix, and drops
-// the in-memory log prefix covered by the snapshot. Requires a
-// registered SnapshotProvider.
+// CompactLog persists a new on-disk snapshot at the index the
+// state machine reached, truncates the WAL prefix, and drops the
+// covered in-memory log prefix. Requires a registered
+// SnapshotProvider.
 //
-// Atomicity invariant: the snapshot file's LastIncludedIndex is set
-// to the index returned by the provider (captured by the application
-// under its own lock atomically with the payload). CompactLog never
-// substitutes its own notion of lastApplied for this value. That
-// guarantees two replicas which applied the same log prefix produce
-// byte-identical snapshot files at the same LastIncludedIndex.
+// Atomicity: LastIncludedIndex is whatever the provider returned
+// (captured by the application under its own lock together with
+// the payload). Two replicas at the same applied prefix therefore
+// produce byte-identical files at the same LastIncludedIndex.
 //
-// Validation: the provider's index must be strictly above the
-// current snapshotIndex (otherwise there is nothing new to compact)
-// and at or below the node's commitIndex and logLen (otherwise the
-// application is reporting history the leader has not yet committed,
-// which is a bug on the application side).
+// Concurrency: n.snapMu serialises this method with every
+// handleInstallSnapshot, so no other snapshot writer can interleave
+// its SaveSnapshot between our validation and persist; raft.snapshot
+// on disk never rolls back. The defensive post-persist re-check is
+// a belt-and-suspenders guard for future snapMu-exempt writers.
 //
-// After CompactLog the in-memory slice contains only entries with
-// Index > snapshotIndex. logOffset advances to snapshotIndex so the
-// invariant n.log[i].Index == n.logOffset + i + 1 holds. Subsequent
-// index arithmetic must go through logLen/sliceIndex/entryAt rather
-// than dereferencing n.log with the raw absolute index.
+// Post-compact: in-memory log holds only Index > snapshotIndex,
+// logOffset advances to snapshotIndex.
 func (n *Node) CompactLog() error {
 	if n.stateDir == "" || n.snapshotProvider == nil {
 		return fmt.Errorf("raft: compaction requires state dir and snapshot provider")
 	}
+
+	// Serialise with any concurrent handleInstallSnapshot BEFORE we
+	// call the application's provider. The provider captures state
+	// under its own locks; if we did not hold snapMu here, an
+	// InstallSnapshot handler could complete its full install (and
+	// persist raft.snapshot with a strictly newer LastIncludedIndex)
+	// while we were still inside the provider. Our later SaveSnapshot
+	// would then overwrite the newer on-disk file with our older
+	// payload.
+	n.snapMu.Lock()
+	defer n.snapMu.Unlock()
 
 	data, appliedIdx, err := n.snapshotProvider()
 	if err != nil {
@@ -208,9 +216,9 @@ func (n *Node) CompactLog() error {
 	}
 
 	// Validate the reported index against the node's current view
-	// before we commit the snapshot to disk. Everything below runs
-	// under n.mu so applyLoop and AE paths cannot move the goalposts
-	// between the check and the truncate.
+	// before we commit the snapshot to disk. Under snapMu no other
+	// writer can move snapshotIndex/commitIndex between this check
+	// and the persist below.
 	n.mu.Lock()
 	if appliedIdx <= n.snapshotIndex {
 		n.mu.Unlock()
@@ -240,10 +248,11 @@ func (n *Node) CompactLog() error {
 	}
 
 	n.mu.Lock()
-	// Re-validate under the lock: a concurrent InstallSnapshot could
-	// have bumped snapshotIndex past appliedIdx while we were saving.
-	// In that case the freshly-saved file is older than what is now
-	// in memory; leave the in-memory/WAL state alone.
+	// snapMu excludes every other snapshot writer, so this check
+	// should always hold after a successful SaveSnapshot. The guard
+	// remains as a defensive assertion: if some future change
+	// introduces another writer that bypasses snapMu, we must not
+	// roll raft.snapshot back in memory.
 	if appliedIdx <= n.snapshotIndex {
 		n.mu.Unlock()
 		log.Info("Raft compaction superseded by concurrent install",

@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"mxkeys/internal/zero/log"
@@ -91,16 +92,19 @@ func (c *Cluster) snapshotKeyState() ([]byte, uint64, error) {
 	return data, lastApplied, nil
 }
 
-// installKeySnapshot implements raft.SnapshotInstaller. It replaces
-// the LWW cache with the snapshot contents AND advances the apply
-// counter so the next snapshotKeyState call reports an index at
-// least as high as the snapshot's LastIncludedIndex.
+// installKeySnapshot implements raft.SnapshotInstaller. It streams
+// the snapshot bytes from r, decodes them via json.NewDecoder (so
+// no intermediate full-size []byte is materialised on the Go heap
+// beyond the decoded result itself), replaces the LWW cache with
+// the decoded contents, and advances the apply counter so the next
+// snapshotKeyState call reports an index at least as high as the
+// snapshot's LastIncludedIndex.
 //
 // Must be idempotent for the same (lastIndex, lastTerm) pair: Raft
 // may call this during startup (LoadFromDisk) and again when a
 // leader pushes an InstallSnapshot for the same tuple.
-func (c *Cluster) installKeySnapshot(data []byte, lastIncludedIndex, lastIncludedTerm uint64) error {
-	if len(data) == 0 {
+func (c *Cluster) installKeySnapshot(r io.Reader, size int64, lastIncludedIndex, lastIncludedTerm uint64) error {
+	if size == 0 {
 		c.state.mu.Lock()
 		c.state.keys = make(map[string]map[string]*KeyEntry)
 		if lastIncludedIndex > c.state.raftLastApplied {
@@ -116,7 +120,7 @@ func (c *Cluster) installKeySnapshot(data []byte, lastIncludedIndex, lastInclude
 	}
 
 	var snap keyStateSnapshot
-	if err := json.Unmarshal(data, &snap); err != nil {
+	if err := json.NewDecoder(r).Decode(&snap); err != nil {
 		return fmt.Errorf("cluster: decode key snapshot: %w", err)
 	}
 	if snap.Version != keySnapshotVersion {

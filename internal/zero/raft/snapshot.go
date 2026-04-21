@@ -67,6 +67,41 @@ func snapshotFilePath(dir string) string {
 	return filepath.Join(dir, snapshotFileName)
 }
 
+// snapshotHeaderSize is the byte length of the on-disk prefix that
+// precedes the data portion of a raft.snapshot file:
+//
+//	[4 magic][8 last_index][8 last_term][4 data_len][4 data_crc]
+//
+// Split out so the pending-transfer spill file can write a matching
+// header up front and finalise data_len/data_crc at the terminus
+// without recomputing the format in two places.
+const snapshotHeaderSize = 28
+
+// snapshotHeaderLenOffset is the byte offset of the data_len field
+// within the header, used by the spill path to patch in the real
+// length once the transfer is done.
+const snapshotHeaderLenOffset = 20
+
+// snapshotHeaderCRCOffset is the byte offset of the data_crc field
+// within the header; written together with the length at finalise
+// time.
+const snapshotHeaderCRCOffset = 24
+
+// syncSnapshotDir fsyncs a directory after a rename so the directory
+// entry change is durable. Failures are logged rather than returned:
+// the rename already happened atomically, a crash before the fsync
+// simply means the (non-durable) directory update is re-done on the
+// next filesystem sync. Callers on a fatal-rollback path should log
+// additionally.
+func syncSnapshotDir(dir string) {
+	d, err := os.Open(dir)
+	if err != nil {
+		return
+	}
+	_ = d.Sync()
+	_ = d.Close()
+}
+
 // SaveSnapshot writes meta+data atomically to dir/raft.snapshot.
 // Format (little-endian):
 //
@@ -139,59 +174,9 @@ func SaveSnapshot(dir string, s Snapshot) error {
 	return nil
 }
 
-// LoadSnapshot reads dir/raft.snapshot. Returns ErrNoSnapshot when the file
-// is missing, ErrSnapshotCorrupt when its CRC or magic fails.
-func LoadSnapshot(dir string) (*Snapshot, error) {
-	path := snapshotFilePath(dir)
-	f, err := os.Open(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, ErrNoSnapshot
-		}
-		return nil, fmt.Errorf("raft snapshot: open: %w", err)
-	}
-	defer f.Close()
-
-	var magic [4]byte
-	if _, err := io.ReadFull(f, magic[:]); err != nil {
-		return nil, ErrSnapshotCorrupt
-	}
-	if magic != snapshotMagic {
-		return nil, ErrSnapshotCorrupt
-	}
-
-	var hdr [20]byte
-	if _, err := io.ReadFull(f, hdr[:]); err != nil {
-		return nil, ErrSnapshotCorrupt
-	}
-	lastIdx := binary.LittleEndian.Uint64(hdr[0:8])
-	lastTerm := binary.LittleEndian.Uint64(hdr[8:16])
-	dataLen := binary.LittleEndian.Uint32(hdr[16:20])
-
-	var crcBuf [4]byte
-	if _, err := io.ReadFull(f, crcBuf[:]); err != nil {
-		return nil, ErrSnapshotCorrupt
-	}
-	expectedCRC := binary.LittleEndian.Uint32(crcBuf[:])
-
-	data := make([]byte, dataLen)
-	if _, err := io.ReadFull(f, data); err != nil {
-		return nil, ErrSnapshotCorrupt
-	}
-
-	if crc32.Checksum(data, walCRC) != expectedCRC {
-		return nil, ErrSnapshotCorrupt
-	}
-
-	return &Snapshot{
-		Meta: SnapshotMeta{
-			LastIncludedIndex: lastIdx,
-			LastIncludedTerm:  lastTerm,
-			Size:              int64(dataLen),
-		},
-		Data: data,
-	}, nil
-}
+// The LoadSnapshot / LoadSnapshotReader / readSnapshotHeader reader
+// helpers live in snapshot_load.go to keep this file focused on the
+// write side.
 
 // closeRemove is a cleanup helper used by SaveSnapshot failure paths.
 func closeRemove(f *os.File, path string) {
@@ -217,9 +202,19 @@ func closeRemove(f *os.File, path string) {
 type SnapshotProvider func() (data []byte, lastAppliedIndex uint64, err error)
 
 // SnapshotInstaller installs state-machine bytes received via
-// InstallSnapshot RPC or loaded from disk during startup. Must be idempotent
-// for the same (lastIndex, lastTerm) pair.
-type SnapshotInstaller func(data []byte, lastIncludedIndex, lastIncludedTerm uint64) error
+// InstallSnapshot RPC or loaded from disk during startup. The
+// installer reads the payload from r; size is the total number of
+// bytes the reader will yield (after that point the reader signals
+// io.EOF). Must be idempotent for the same (lastIncludedIndex,
+// lastIncludedTerm) pair: Raft may invoke it during startup
+// (LoadFromDisk) and again when a leader sends InstallSnapshot for
+// the same tuple.
+//
+// Streaming contract: the reader is valid only while the installer
+// call is running. The installer MUST NOT retain r, or read from
+// r after returning. The raft layer takes ownership of the
+// underlying resource again as soon as the call returns.
+type SnapshotInstaller func(r io.Reader, size int64, lastIncludedIndex, lastIncludedTerm uint64) error
 
 // InstallSnapshotRequest is sent by a leader to fast-forward a follower
 // that lags past the leader's truncated log prefix.
