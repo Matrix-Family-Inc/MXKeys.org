@@ -41,3 +41,4 @@ coverage.html
 # Internal-only artifacts
 docs/release-100-checklist.md
 matrix-family-info.md
+-project_info
