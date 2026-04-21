@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestValidConfigPasses(t *testing.T) {
@@ -386,6 +387,50 @@ func TestValidateRaftRequiresStateDir(t *testing.T) {
 	cfg.Cluster.RaftStateDir = "/var/lib/mxkeys/raft"
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("raft mode with raft_state_dir should pass: %v", err)
+	}
+}
+
+func TestValidateRaftCompactionTunables(t *testing.T) {
+	// Zero values MUST be accepted; they mean "use the built-in
+	// default" on the cluster side.
+	cfg := validConfig()
+	cfg.Cluster.Enabled = true
+	cfg.Cluster.ConsensusMode = "raft"
+	cfg.Cluster.RaftStateDir = "/var/lib/mxkeys/raft"
+	cfg.Cluster.RaftCompactionInterval = 0
+	cfg.Cluster.RaftCompactionLogThreshold = 0
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("zero compaction tunables must fall back to defaults, got %v", err)
+	}
+
+	// Negative values MUST be rejected on both knobs.
+	cfg.Cluster.RaftCompactionInterval = -1 * time.Second
+	if err := cfg.Validate(); err == nil ||
+		!strings.Contains(err.Error(), "raft_compaction_interval") {
+		t.Fatalf("negative interval must be rejected, got %v", err)
+	}
+	cfg.Cluster.RaftCompactionInterval = 0
+	cfg.Cluster.RaftCompactionLogThreshold = -5
+	if err := cfg.Validate(); err == nil ||
+		!strings.Contains(err.Error(), "raft_compaction_log_threshold") {
+		t.Fatalf("negative threshold must be rejected, got %v", err)
+	}
+
+	// Sub-second interval MUST be rejected; the ticker floor keeps
+	// the loop from going pathological under a config typo like
+	// "5ms".
+	cfg.Cluster.RaftCompactionLogThreshold = 0
+	cfg.Cluster.RaftCompactionInterval = 500 * time.Millisecond
+	if err := cfg.Validate(); err == nil ||
+		!strings.Contains(err.Error(), ">= 1s") {
+		t.Fatalf("sub-second interval must be rejected, got %v", err)
+	}
+
+	// A legitimate override (2s / 32) MUST pass.
+	cfg.Cluster.RaftCompactionInterval = 2 * time.Second
+	cfg.Cluster.RaftCompactionLogThreshold = 32
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("legitimate override must pass, got %v", err)
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"net"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var safeSQLIdentifierPattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
@@ -146,6 +147,19 @@ func (c *Config) Validate() error {
 		// letting a mis-configured operator boot an ephemeral quorum.
 		if c.Cluster.ConsensusMode == "raft" && strings.TrimSpace(c.Cluster.RaftStateDir) == "" {
 			return fmt.Errorf("cluster.raft_state_dir is required when cluster.consensus_mode=raft")
+		}
+		// Compaction tunables: a negative / sub-second interval or a
+		// negative threshold is almost certainly a config typo. Zero
+		// keeps the built-in default, which is the documented way to
+		// opt out of an override.
+		if c.Cluster.RaftCompactionInterval < 0 {
+			return fmt.Errorf("cluster.raft_compaction_interval must be >= 0 (got %s)", c.Cluster.RaftCompactionInterval)
+		}
+		if c.Cluster.RaftCompactionInterval > 0 && c.Cluster.RaftCompactionInterval < time.Second {
+			return fmt.Errorf("cluster.raft_compaction_interval must be >= 1s when set (got %s)", c.Cluster.RaftCompactionInterval)
+		}
+		if c.Cluster.RaftCompactionLogThreshold < 0 {
+			return fmt.Errorf("cluster.raft_compaction_log_threshold must be >= 0 (got %d)", c.Cluster.RaftCompactionLogThreshold)
 		}
 		if err := validateClusterTLS(c.Cluster.TLS); err != nil {
 			return err

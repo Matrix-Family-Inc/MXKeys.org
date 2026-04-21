@@ -154,6 +154,18 @@ type ClusterConfig struct {
 	// RaftSyncOnAppend fsyncs the WAL after every append (durability for
 	// power-loss). Default true.
 	RaftSyncOnAppend bool
+	// RaftCompactionInterval is how often the background compaction
+	// loop checks the in-memory log length and triggers CompactLog
+	// when it crosses the threshold. Zero falls back to the built-in
+	// default (30s) so existing deployments keep working unchanged.
+	// Operators tuning high-throughput or low-throughput clusters
+	// (or tests / smoke harnesses that want compaction to fire
+	// quickly) set this explicitly.
+	RaftCompactionInterval time.Duration
+	// RaftCompactionLogThreshold is the in-memory log length that
+	// triggers a compaction attempt. Zero falls back to the built-in
+	// default (1024).
+	RaftCompactionLogThreshold int
 	// TLS configures transport-level encryption and optional mutual
 	// authentication for cluster traffic. Disabled by default for
 	// backward compatibility.
