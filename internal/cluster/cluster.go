@@ -55,6 +55,14 @@ type ClusterConfig struct {
 	RaftStateDir string
 	// RaftSyncOnAppend fsyncs the Raft WAL after each append. Default true.
 	RaftSyncOnAppend bool
+	// RaftCompactionInterval overrides the compaction-loop ticker
+	// period. Zero means "use the built-in default"
+	// (defaultCompactionCheckInterval in snapshot.go).
+	RaftCompactionInterval time.Duration
+	// RaftCompactionLogThreshold overrides the in-memory log length
+	// that triggers compaction. Zero means "use the built-in default"
+	// (defaultCompactionLogThreshold in snapshot.go).
+	RaftCompactionLogThreshold int
 
 	// TLS configures transport-level encryption and mutual
 	// authentication for cluster traffic (both CRDT and Raft).

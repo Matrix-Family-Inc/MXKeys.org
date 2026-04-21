@@ -117,6 +117,14 @@ cluster:
   raft_state_dir: "/var/lib/mxkeys/raft"
   raft_sync_on_append: true
 
+  # Raft log compaction tuning. Leave empty to keep the built-in
+  # defaults (30s interval, 1024 entries). Tune up for
+  # write-heavy clusters (compact less often), tune down for
+  # recovery-sensitive deployments (keep the WAL shorter).
+  # raft_compaction_interval must be >= 1s when set.
+  # raft_compaction_interval: "30s"
+  # raft_compaction_log_threshold: 1024
+
   # Transport-level TLS for cluster traffic (both CRDT and Raft).
   # Strongly recommended in production. When enabled the three file
   # paths (cert/key/ca) are required and verified at startup.

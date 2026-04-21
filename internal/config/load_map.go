@@ -215,6 +215,14 @@ func applyClusterMap(config *Config, m map[string]interface{}) {
 	if zeroconfig.Has(m, "cluster.raft_sync_on_append") {
 		config.Cluster.RaftSyncOnAppend = zeroconfig.GetBool(m, "cluster.raft_sync_on_append")
 	}
+	if v := zeroconfig.GetString(m, "cluster.raft_compaction_interval"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			config.Cluster.RaftCompactionInterval = d
+		}
+	}
+	if v := zeroconfig.GetInt(m, "cluster.raft_compaction_log_threshold"); v > 0 {
+		config.Cluster.RaftCompactionLogThreshold = v
+	}
 	if zeroconfig.Has(m, "cluster.tls.enabled") {
 		config.Cluster.TLS.Enabled = zeroconfig.GetBool(m, "cluster.tls.enabled")
 	}

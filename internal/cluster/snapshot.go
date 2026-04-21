@@ -26,17 +26,40 @@ import (
 // current build cannot interpret. Bump on any incompatible change.
 const keySnapshotVersion uint32 = 1
 
-// compactionCheckInterval is how often raftCompactionLoop evaluates
-// whether the log is long enough to benefit from CompactLog. Short
-// enough to keep the log bounded under steady write traffic, long
-// enough to avoid work when the cluster is idle.
-const compactionCheckInterval = 30 * time.Second
+// defaultCompactionCheckInterval is the built-in compaction ticker
+// period used when ClusterConfig.RaftCompactionInterval is zero.
+// Short enough to keep the log bounded under steady write traffic,
+// long enough to avoid work when the cluster is idle. Operators
+// tuning for high-throughput or low-throughput clusters override
+// this via cluster.raft_compaction_interval.
+const defaultCompactionCheckInterval = 30 * time.Second
 
-// compactionLogThreshold is the in-memory log length that triggers a
-// compaction attempt. Picked conservatively so that a lagging
-// follower is always served via AppendEntries (cheap) rather than
-// InstallSnapshot (expensive) under normal operation.
-const compactionLogThreshold = 1024
+// defaultCompactionLogThreshold is the built-in in-memory log length
+// that triggers a compaction attempt when
+// ClusterConfig.RaftCompactionLogThreshold is zero. Picked
+// conservatively so that a lagging follower is normally served via
+// AppendEntries (cheap) rather than InstallSnapshot (expensive).
+const defaultCompactionLogThreshold = 1024
+
+// effectiveCompactionInterval returns the configured interval or
+// the built-in default when unset. Zero or negative values fall
+// back to the default (validation already rejects the sub-second
+// case).
+func (c *Cluster) effectiveCompactionInterval() time.Duration {
+	if c.config.RaftCompactionInterval > 0 {
+		return c.config.RaftCompactionInterval
+	}
+	return defaultCompactionCheckInterval
+}
+
+// effectiveCompactionLogThreshold returns the configured threshold
+// or the built-in default when unset.
+func (c *Cluster) effectiveCompactionLogThreshold() int {
+	if c.config.RaftCompactionLogThreshold > 0 {
+		return c.config.RaftCompactionLogThreshold
+	}
+	return defaultCompactionLogThreshold
+}
 
 // ErrUnsupportedSnapshotVersion signals that installKeySnapshot was
 // handed a payload from an incompatible build.
@@ -166,18 +189,19 @@ func (c *Cluster) InstalledSnapshotIndex() uint64 {
 }
 
 // raftCompactionLoop periodically evaluates the Raft in-memory log
-// and triggers CompactLog when it grows beyond compactionLogThreshold.
+// and triggers CompactLog when it grows beyond the effective
+// compaction-log threshold (see effectiveCompactionLogThreshold).
 // Compaction snapshots the current cache via snapshotKeyState,
 // truncates the WAL prefix, and drops the in-memory log prefix
 // covered by the snapshot.
 //
 // Without this loop the WAL grows unbounded and recovery time scales
 // linearly with total history. With it, recovery is bounded by the
-// snapshot size plus the most recent compactionLogThreshold entries.
+// snapshot size plus the most recent threshold-worth of entries.
 func (c *Cluster) raftCompactionLoop(ctx context.Context) {
 	defer c.wg.Done()
 
-	t := time.NewTicker(compactionCheckInterval)
+	t := time.NewTicker(c.effectiveCompactionInterval())
 	defer t.Stop()
 
 	for {
@@ -201,7 +225,7 @@ func (c *Cluster) maybeCompactRaftLog() {
 	}
 	stats := c.raftNode.Stats()
 	logLen, _ := stats["log_length"].(int)
-	if logLen < compactionLogThreshold {
+	if logLen < c.effectiveCompactionLogThreshold() {
 		return
 	}
 	if c.raftNode.LastApplied() == 0 {
