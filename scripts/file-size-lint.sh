@@ -9,7 +9,7 @@
 # Enforce the file-size policy from ADR-0010:
 #   - target: 250-300 lines per file
 #   - warn at 300 lines
-#   - fail at 500 lines (hard ceiling)
+#   - fail at 400 lines (hard ceiling)
 #
 # Scope: Go, TypeScript, and shell source files that are tracked in
 # git. Generated files, vendored directories, node_modules, and test
