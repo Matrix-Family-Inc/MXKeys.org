@@ -41,7 +41,10 @@ func TestInvalidServerNames(t *testing.T) {
 		"invalid..com",
 		"server name with spaces",
 		"server\ttab",
-		"пример.рф",
+		// Raw Cyrillic IDN "example.rf" - must be punycoded before
+		// reaching the validator; kept as \u escapes so the source
+		// file stays ASCII-only.
+		"\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444",
 	}
 
 	for _, name := range invalidNames {
