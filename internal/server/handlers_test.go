@@ -247,7 +247,10 @@ func TestValidateKeyQueryServerKeys(t *testing.T) {
 		{
 			name: "unicode hostname must be punycode",
 			serverMap: map[string]map[string]keys.KeyCriteria{
-				"пример.рф": {"ed25519:keyA": {}},
+				// Raw Cyrillic IDN ("example.rf"); the validator
+				// must reject any non-ASCII hostname. Written as
+				// \u escapes to keep the source file ASCII-only.
+				"\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444": {"ed25519:keyA": {}},
 			},
 			wantErr: true,
 		},
