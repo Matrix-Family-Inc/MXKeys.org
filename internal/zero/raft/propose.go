@@ -59,6 +59,13 @@ type ForwardProposalResponse struct {
 // to the cluster because non-leader callers get ErrNotLeader with no
 // fallback.
 func (n *Node) Propose(ctx context.Context, command []byte) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	n.mu.RLock()
 	isLeader := n.state == Leader
 	leaderAddr := n.leaderAddr
@@ -72,7 +79,11 @@ func (n *Node) Propose(ctx context.Context, command []byte) error {
 	}
 
 	req := ForwardProposalRequest{Command: append([]byte(nil), command...)}
-	resp, err := n.sendRPC(leaderAddr, MsgForwardProposal, req)
+	// ctx is threaded into sendRPCCtx so Cluster.Stop() (via
+	// proposeCtx → stopCh cancel) or any other caller-initiated
+	// cancel tears the forwarded RPC down immediately instead of
+	// waiting out the net.Conn deadline.
+	resp, err := n.sendRPCCtx(ctx, leaderAddr, MsgForwardProposal, req)
 	if err != nil {
 		return fmt.Errorf("raft: forward proposal to %s: %w", leaderAddr, err)
 	}
