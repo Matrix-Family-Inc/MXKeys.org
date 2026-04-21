@@ -8,6 +8,34 @@ No breaking changes to the Matrix federation API contract.
 
 ### Added
 
+- `raft.LoadSnapshotReader` now performs a streaming Castagnoli
+  CRC pre-verification of the full data portion before returning
+  the reader to the caller
+  (`internal/zero/raft/snapshot_load.go`). Corruption of any
+  kind - flipped bytes in the payload, a tampered CRC header
+  field, a truncated file - is caught with `ErrSnapshotCorrupt`
+  instead of being silently fed to the state-machine installer.
+  The pre-verify uses `streamBufSize` (64 KiB) chunks through
+  `hash/crc32`, so peak memory stays O(chunk) even for a
+  256 MiB snapshot; the second pass by the installer runs hot
+  through the OS page cache. Closes the integrity regression
+  introduced when `LoadFromDisk` moved from `LoadSnapshot`
+  (which buffered + verified) to `LoadSnapshotReader`
+  (which previously only checked magic + header).
+- `raft.countingReader` is a new observability wrapper used by
+  both `LoadFromDisk` and `handleInstallSnapshot`. It reports
+  how many bytes the installer actually consumed from the
+  payload; a short read logs a `Warn` with `read` / `expected`
+  so a broken installer that stops mid-stream is visible to
+  operators. Integrity is already established by the CRC
+  verify, so short reads are advisory rather than fatal.
+- Integrity tests: `TestLoadSnapshotReaderRejectsPayloadCorruption`,
+  `TestLoadSnapshotReaderRejectsTruncatedPayload`,
+  `TestLoadSnapshotReaderRejectsTamperedCRCField`,
+  `TestLoadSnapshotReaderAcceptsValidFile`,
+  `TestCountingReaderCountsExactBytes`
+  (`internal/zero/raft/snapshot_integrity_test.go`) pin the
+  new contract.
 - `raft.Node.snapMu` (`internal/zero/raft/raft.go`): serialises
   every writer of raft.snapshot on disk and the matching in-memory
   snapshotIndex/snapshotTerm/logOffset bookkeeping.
@@ -408,6 +436,14 @@ No breaking changes to the Matrix federation API contract.
   forwarding endpoint on every heartbeat and cause Propose to
   return `ErrNoLeader` even though leadership was healthy.
   Populated addresses still overwrite stale ones.
+- Raft startup restore (`LoadFromDisk`) no longer trusts the
+  on-disk snapshot without verifying its payload CRC. The
+  streaming-installer migration in the previous commit replaced
+  `LoadSnapshot` (which verified) with `LoadSnapshotReader`
+  (which did not). A single flipped byte, a tampered CRC field,
+  or a truncation could slip through to the state machine on
+  restart. The new pre-verify closes that window with
+  `ErrSnapshotCorrupt` before any byte reaches the installer.
 - Raft `CompactLog` and `handleInstallSnapshot` no longer race on
   disk state. Before this commit CompactLog released the lock
   between pre-validation and `SaveSnapshot`, letting an
