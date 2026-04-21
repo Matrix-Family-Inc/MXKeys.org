@@ -12,6 +12,7 @@ package raft
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 )
@@ -153,4 +154,111 @@ func TestSnapshotChunkSizeIsWithinWALLimit(t *testing.T) {
 	if snapshotChunkSize >= walMaxRecord {
 		t.Fatalf("snapshotChunkSize %d >= walMaxRecord %d", snapshotChunkSize, walMaxRecord)
 	}
+}
+
+// TestInstallSnapshotResponseSuccessContract exercises the Success flag
+// across every terminal branch of handleInstallSnapshot. This is the
+// protocol-level guard that prevents the leader from advancing
+// nextIndex/matchIndex on a follower that did not actually install the
+// snapshot.
+func TestInstallSnapshotResponseSuccessContract(t *testing.T) {
+	decode := func(msg *RPCMessage) InstallSnapshotResponse {
+		t.Helper()
+		var resp InstallSnapshotResponse
+		if err := json.Unmarshal(msg.Payload, &resp); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		return resp
+	}
+
+	t.Run("done chunk with installer success returns success=true", func(t *testing.T) {
+		n := NewNode(Config{NodeID: "f", ElectionTimeout: 300 * time.Millisecond})
+		n.currentTerm = 1
+		n.SetSnapshotInstaller(func([]byte, uint64, uint64) error { return nil })
+
+		req := InstallSnapshotRequest{
+			Term: 1, LeaderID: "L", LastIncludedIndex: 5, LastIncludedTerm: 1,
+			Offset: 0, Done: true, Data: []byte("state"),
+		}
+		payload, _ := json.Marshal(req)
+		resp := decode(n.handleInstallSnapshot(&RPCMessage{Type: MsgInstallSnapshot, Payload: payload}))
+		if !resp.Success {
+			t.Fatalf("expected success=true for clean Done install, got %+v", resp)
+		}
+	})
+
+	t.Run("done chunk with installer error returns success=false", func(t *testing.T) {
+		n := NewNode(Config{NodeID: "f", ElectionTimeout: 300 * time.Millisecond})
+		n.currentTerm = 1
+		n.SetSnapshotInstaller(func([]byte, uint64, uint64) error { return errors.New("boom") })
+
+		req := InstallSnapshotRequest{
+			Term: 1, LeaderID: "L", LastIncludedIndex: 5, LastIncludedTerm: 1,
+			Offset: 0, Done: true, Data: []byte("state"),
+		}
+		payload, _ := json.Marshal(req)
+		resp := decode(n.handleInstallSnapshot(&RPCMessage{Type: MsgInstallSnapshot, Payload: payload}))
+		if resp.Success {
+			t.Fatalf("expected success=false when installer errors, got %+v", resp)
+		}
+	})
+
+	t.Run("non-done chunk buffered returns success=true", func(t *testing.T) {
+		n := NewNode(Config{NodeID: "f", ElectionTimeout: 300 * time.Millisecond})
+		n.currentTerm = 1
+		n.SetSnapshotInstaller(func([]byte, uint64, uint64) error { return nil })
+
+		req := InstallSnapshotRequest{
+			Term: 1, LeaderID: "L", LastIncludedIndex: 5, LastIncludedTerm: 1,
+			Offset: 0, Done: false, Data: []byte("partial"),
+		}
+		payload, _ := json.Marshal(req)
+		resp := decode(n.handleInstallSnapshot(&RPCMessage{Type: MsgInstallSnapshot, Payload: payload}))
+		if !resp.Success {
+			t.Fatalf("expected success=true for buffered chunk, got %+v", resp)
+		}
+		if resp.BytesStored != uint64(len(req.Data)) {
+			t.Fatalf("bytes_stored = %d, want %d", resp.BytesStored, len(req.Data))
+		}
+	})
+
+	t.Run("offset gap returns success=false", func(t *testing.T) {
+		n := NewNode(Config{NodeID: "f", ElectionTimeout: 300 * time.Millisecond})
+		n.currentTerm = 1
+
+		first := InstallSnapshotRequest{
+			Term: 1, LeaderID: "L", LastIncludedIndex: 5, LastIncludedTerm: 1,
+			Offset: 0, Done: false, Data: []byte("ok"),
+		}
+		payload, _ := json.Marshal(first)
+		_ = n.handleInstallSnapshot(&RPCMessage{Type: MsgInstallSnapshot, Payload: payload})
+
+		gapped := first
+		gapped.Offset = 100
+		gapped.Done = true
+		gapped.Data = []byte("gap")
+		payload, _ = json.Marshal(gapped)
+		resp := decode(n.handleInstallSnapshot(&RPCMessage{Type: MsgInstallSnapshot, Payload: payload}))
+		if resp.Success {
+			t.Fatalf("expected success=false for gapped offset, got %+v", resp)
+		}
+	})
+
+	t.Run("stale term returns success=false", func(t *testing.T) {
+		n := NewNode(Config{NodeID: "f", ElectionTimeout: 300 * time.Millisecond})
+		n.currentTerm = 5
+
+		req := InstallSnapshotRequest{
+			Term: 1, LeaderID: "L", LastIncludedIndex: 5, LastIncludedTerm: 1,
+			Offset: 0, Done: true, Data: []byte("state"),
+		}
+		payload, _ := json.Marshal(req)
+		resp := decode(n.handleInstallSnapshot(&RPCMessage{Type: MsgInstallSnapshot, Payload: payload}))
+		if resp.Success {
+			t.Fatalf("expected success=false for stale leader term, got %+v", resp)
+		}
+		if resp.Term != 5 {
+			t.Fatalf("expected response term=5 (follower's current), got %d", resp.Term)
+		}
+	})
 }

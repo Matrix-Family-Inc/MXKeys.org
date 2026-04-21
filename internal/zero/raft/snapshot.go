@@ -240,8 +240,29 @@ type InstallSnapshotRequest struct {
 
 // InstallSnapshotResponse acknowledges the install and returns the
 // follower's current term.
+//
+// Success semantics (production Raft contract):
+//
+//   - A non-Done chunk ACKs with Success=true only when the follower
+//     accepted the chunk into its pending-snapshot buffer (no term,
+//     offset, or tuple mismatch).
+//   - A Done chunk ACKs with Success=true only when the follower also
+//     successfully applied the reassembled payload via the registered
+//     SnapshotInstaller and persisted it to disk.
+//   - Success=false on any rejection (stale term, offset gap, decode
+//     error, installer error, save error). The leader MUST NOT advance
+//     nextIndex/matchIndex for the peer on Success=false; it should
+//     retry the snapshot from offset 0 on the next replication pass.
+//
+// BytesStored is the number of payload bytes the follower currently
+// has buffered for the (LastIncludedIndex, LastIncludedTerm) tuple
+// after processing this chunk. The leader uses it to detect silent
+// buffer resets (e.g. after the follower observed a gap and dropped
+// the partial transfer) and restart from offset 0.
 type InstallSnapshotResponse struct {
-	Term uint64 `json:"term"`
+	Term        uint64 `json:"term"`
+	Success     bool   `json:"success"`
+	BytesStored uint64 `json:"bytes_stored,omitempty"`
 }
 
 // MsgInstallSnapshot is the RPC type for InstallSnapshot.

@@ -3,8 +3,8 @@
  * Company: Matrix Family Inc. (https://matrix.family)
  * Maintainer: Brabus
  * Contact: dev@matrix.family
- * Date: Wed Apr 08 2026 UTC
- * Status: Created
+ * Date: Tue Apr 21 2026 UTC
+ * Status: Updated
  */
 
 package cluster
@@ -84,15 +84,22 @@ func (c *Cluster) startRaft(ctx context.Context) error {
 	})
 
 	// Attach persistent state so committed log entries survive restart.
-	// An empty state dir retains the legacy in-memory mode for backward
-	// compatibility with existing deployments that have not configured one.
-	if c.config.RaftStateDir != "" {
-		if err := node.SetStateDir(c.config.RaftStateDir, c.config.RaftSyncOnAppend); err != nil {
-			return fmt.Errorf("failed to attach raft state dir %q: %w", c.config.RaftStateDir, err)
-		}
-	} else {
-		log.Warn("Raft running without persistent state (cluster.raft_state_dir unset); committed entries will not survive restart")
+	// RaftStateDir is mandatory for consensus_mode=raft; Validate()
+	// enforces this, and we reject the empty case here too as a
+	// defense-in-depth guard against callers that bypass config validation.
+	if c.config.RaftStateDir == "" {
+		return fmt.Errorf("cluster.raft_state_dir is required when cluster.consensus_mode=raft")
 	}
+	if err := node.SetStateDir(c.config.RaftStateDir, c.config.RaftSyncOnAppend); err != nil {
+		return fmt.Errorf("failed to attach raft state dir %q: %w", c.config.RaftStateDir, err)
+	}
+	// Wire state-machine snapshot callbacks BEFORE Start so that
+	// LoadFromDisk (invoked inside Start) can restore the cache from a
+	// persisted snapshot, and so that log compaction has a provider to
+	// call when it runs.
+	node.SetSnapshotProvider(c.snapshotKeyState)
+	node.SetSnapshotInstaller(c.installKeySnapshot)
+
 	node.SetOnStateChange(func(state raft.State) {
 		switch state {
 		case raft.Leader, raft.Follower:
@@ -122,22 +129,33 @@ func (c *Cluster) startRaft(ctx context.Context) error {
 	c.raftNode = node
 	c.setLocalState(NodeStateHealthy)
 
+	c.wg.Add(1)
+	go c.raftCompactionLoop(ctx)
+
 	log.Info("Cluster started",
 		"node_id", c.nodeID,
 		"bind_address", fmt.Sprintf("%s:%d", c.config.BindAddress, c.config.BindPort),
 		"advertise_address", fmt.Sprintf("%s:%d", c.advertiseAddress(), c.advertisePort()),
 		"consensus_mode", c.consensusMode(),
 		"tls_enabled", c.config.TLS.Enabled,
+		"raft_state_dir", c.config.RaftStateDir,
 	)
 	return nil
 }
 
 func (c *Cluster) stopRaft() error {
 	c.setLocalState(NodeStateLeaving)
+	// Signal the compaction loop to wind down even when Stop() is
+	// invoked independently of the startup context cancellation. The
+	// Cluster uses stopOnce so a second close here cannot race with
+	// stopCRDT on the same instance.
+	close(c.stopCh)
 	if c.raftNode == nil {
+		c.wg.Wait()
 		return nil
 	}
 	err := c.raftNode.Stop()
+	c.wg.Wait()
 	log.Info("Cluster stopped", "node_id", c.nodeID, "consensus_mode", c.consensusMode())
 	return err
 }

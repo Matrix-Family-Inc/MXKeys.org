@@ -140,6 +140,13 @@ func (c *Config) Validate() error {
 		if c.Cluster.ConsensusMode != "crdt" && c.Cluster.ConsensusMode != "raft" {
 			return fmt.Errorf("cluster.consensus_mode must be 'crdt' or 'raft'")
 		}
+		// Raft mode demands a durable state directory. Silently degrading
+		// to in-memory would contradict the durability guarantees stated
+		// in docs/architecture.md and docs/adr/0001. Fail fast instead of
+		// letting a mis-configured operator boot an ephemeral quorum.
+		if c.Cluster.ConsensusMode == "raft" && strings.TrimSpace(c.Cluster.RaftStateDir) == "" {
+			return fmt.Errorf("cluster.raft_state_dir is required when cluster.consensus_mode=raft")
+		}
 		if err := validateClusterTLS(c.Cluster.TLS); err != nil {
 			return err
 		}

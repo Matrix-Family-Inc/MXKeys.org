@@ -21,7 +21,20 @@ import (
 	"mxkeys/internal/zero/log"
 )
 
-// BroadcastKeyUpdate broadcasts a key update to all nodes.
+// BroadcastKeyUpdate publishes a key update to the cluster.
+//
+// Consensus contract:
+//
+//   - In "crdt" mode the update is eagerly applied to the local LWW
+//     state and gossiped to peers. Every node is free to write; LWW
+//     on (Timestamp, Hash) resolves conflicts.
+//   - In "raft" mode writes go through the replicated log. The local
+//     cache is NOT populated before Submit: if this node is not the
+//     leader, or Submit fails for any reason, we must not expose a
+//     cached entry that never replicated. The apply callback wired in
+//     startRaft is the single path that writes into c.state.keys; it
+//     runs on every replica (including the leader) once the entry is
+//     committed.
 func (c *Cluster) BroadcastKeyUpdate(serverName, keyID, keyData string, validUntilTS int64) {
 	if !c.config.Enabled {
 		return
@@ -37,8 +50,6 @@ func (c *Cluster) BroadcastKeyUpdate(serverName, keyID, keyData string, validUnt
 		Hash:         hashKeyEntry(serverName, keyID, keyData),
 	}
 
-	c.storeEntry(entry, false)
-
 	if c.consensusMode() == "raft" {
 		if c.raftNode == nil {
 			return
@@ -52,13 +63,20 @@ func (c *Cluster) BroadcastKeyUpdate(serverName, keyID, keyData string, validUnt
 			log.Warn("Failed to marshal raft key update", "server", serverName, "key_id", keyID, "error", err)
 			return
 		}
+		// Strict Raft semantics: do not touch local state until the
+		// entry is committed. Submit only succeeds on the leader; on a
+		// follower it returns ErrNotLeader and we surface that via a
+		// warning. The committed entry reaches every replica through
+		// the apply callback registered in startRaft.
 		if err := c.raftNode.Submit(context.Background(), command); err != nil {
 			log.Warn("Failed to replicate key update via raft", "server", serverName, "key_id", keyID, "error", err)
 		}
 		return
 	}
 
-	// Broadcast to peers.
+	// CRDT path: local-first write plus gossip.
+	c.storeEntry(entry, false)
+
 	payload, err := json.Marshal(entry)
 	if err != nil {
 		log.Warn("Failed to marshal key update", "server", serverName, "key_id", keyID, "error", err)

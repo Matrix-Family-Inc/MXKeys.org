@@ -369,6 +369,26 @@ func TestValidateClusterTLS(t *testing.T) {
 	}
 }
 
+func TestValidateRaftRequiresStateDir(t *testing.T) {
+	cfg := validConfig()
+	cfg.Cluster.Enabled = true
+	cfg.Cluster.ConsensusMode = "raft"
+	cfg.Cluster.RaftStateDir = ""
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatalf("raft mode without raft_state_dir must fail validation")
+	}
+	if !strings.Contains(err.Error(), "cluster.raft_state_dir is required") {
+		t.Fatalf("unexpected error %q", err.Error())
+	}
+
+	cfg.Cluster.RaftStateDir = "/var/lib/mxkeys/raft"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("raft mode with raft_state_dir should pass: %v", err)
+	}
+}
+
 func TestValidateAllowsIncompleteClusterWhenDisabled(t *testing.T) {
 	cfg := validConfig()
 	cfg.Cluster.Enabled = false
