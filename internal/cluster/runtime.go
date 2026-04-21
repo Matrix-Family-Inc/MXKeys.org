@@ -115,13 +115,44 @@ func (c *Cluster) startRaft(ctx context.Context) error {
 		var cmd raftCommand
 		if err := json.Unmarshal(entry.Command, &cmd); err != nil {
 			log.Warn("Failed to decode raft command", "error", err)
+			// Apply counter must advance even for malformed commands:
+			// raft considers them applied once lastApplied++, and
+			// snapshotKeyState must not pretend they did not happen.
+			c.state.mu.Lock()
+			if entry.Index > c.state.raftLastApplied {
+				c.state.raftLastApplied = entry.Index
+			}
+			c.state.mu.Unlock()
 			return
 		}
 		switch cmd.Type {
 		case "key_update":
+			// Hold c.state.mu across BOTH the LWW merge AND the
+			// raftLastApplied bump so the snapshot provider observes
+			// an atomic (payload, index) pair. Without this pairing
+			// compaction could persist an index that lags the payload
+			// or vice versa.
+			c.state.mu.Lock()
+			changed := false
 			if cmd.Entry != nil {
-				c.storeEntry(cmd.Entry, true)
+				changed = c.storeEntryLocked(cmd.Entry)
 			}
+			if entry.Index > c.state.raftLastApplied {
+				c.state.raftLastApplied = entry.Index
+			}
+			c.state.mu.Unlock()
+
+			if changed && cmd.Entry != nil && c.onKeyReceived != nil {
+				if data, err := json.Marshal(cmd.Entry); err == nil {
+					c.onKeyReceived(cmd.Entry.ServerName, data)
+				}
+			}
+		default:
+			c.state.mu.Lock()
+			if entry.Index > c.state.raftLastApplied {
+				c.state.raftLastApplied = entry.Index
+			}
+			c.state.mu.Unlock()
 		}
 	})
 	if err := node.Start(ctx); err != nil {

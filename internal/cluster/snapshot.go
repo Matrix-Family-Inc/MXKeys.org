@@ -50,14 +50,22 @@ type keyStateSnapshot struct {
 	Keys    map[string]map[string]KeyEntry `json:"keys"`
 }
 
-// snapshotKeyState implements raft.SnapshotProvider. It produces a
-// deterministic JSON serialization of the LWW key cache.
+// snapshotKeyState implements raft.SnapshotProvider. It returns a
+// deterministic JSON serialization of the LWW key cache together
+// with the raft log index those bytes reflect.
 //
-// Determinism matters: two replicas at the same commit index must
-// produce byte-identical snapshots so that (LastIncludedIndex,
-// payload) remain consistent across the cluster for replay and
-// audit. encoding/json sorts map keys for us, so JSON is sufficient.
-func (c *Cluster) snapshotKeyState() ([]byte, error) {
+// Atomicity: both the cloned map and c.state.raftLastApplied are
+// captured under a single c.state.mu.RLock. The apply callback in
+// startRaft updates keys and raftLastApplied under c.state.mu.Lock,
+// so the provider observes a coherent point-in-time (payload,
+// index) pair. Without this pairing the snapshot file's
+// LastIncludedIndex could lag the payload by an arbitrary number of
+// applied entries, breaking per-index snapshot determinism.
+//
+// Determinism across replicas: encoding/json sorts map keys, so two
+// replicas that have applied the same log prefix produce byte-
+// identical payloads at the same index.
+func (c *Cluster) snapshotKeyState() ([]byte, uint64, error) {
 	c.state.mu.RLock()
 	snap := keyStateSnapshot{
 		Version: keySnapshotVersion,
@@ -73,17 +81,20 @@ func (c *Cluster) snapshotKeyState() ([]byte, error) {
 		}
 		snap.Keys[serverName] = clone
 	}
+	lastApplied := c.state.raftLastApplied
 	c.state.mu.RUnlock()
 
 	data, err := json.Marshal(snap)
 	if err != nil {
-		return nil, fmt.Errorf("cluster: marshal key snapshot: %w", err)
+		return nil, 0, fmt.Errorf("cluster: marshal key snapshot: %w", err)
 	}
-	return data, nil
+	return data, lastApplied, nil
 }
 
 // installKeySnapshot implements raft.SnapshotInstaller. It replaces
-// the LWW cache with the snapshot contents.
+// the LWW cache with the snapshot contents AND advances the apply
+// counter so the next snapshotKeyState call reports an index at
+// least as high as the snapshot's LastIncludedIndex.
 //
 // Must be idempotent for the same (lastIndex, lastTerm) pair: Raft
 // may call this during startup (LoadFromDisk) and again when a
@@ -92,6 +103,9 @@ func (c *Cluster) installKeySnapshot(data []byte, lastIncludedIndex, lastInclude
 	if len(data) == 0 {
 		c.state.mu.Lock()
 		c.state.keys = make(map[string]map[string]*KeyEntry)
+		if lastIncludedIndex > c.state.raftLastApplied {
+			c.state.raftLastApplied = lastIncludedIndex
+		}
 		c.state.mu.Unlock()
 		log.Info("Cluster key snapshot installed (empty)",
 			"last_included_index", lastIncludedIndex,
@@ -120,6 +134,9 @@ func (c *Cluster) installKeySnapshot(data []byte, lastIncludedIndex, lastInclude
 
 	c.state.mu.Lock()
 	c.state.keys = rebuilt
+	if lastIncludedIndex > c.state.raftLastApplied {
+		c.state.raftLastApplied = lastIncludedIndex
+	}
 	c.state.mu.Unlock()
 
 	log.Info("Cluster key snapshot installed",

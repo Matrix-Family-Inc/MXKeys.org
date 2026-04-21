@@ -140,8 +140,12 @@ func TestCompactLogProducesSnapshotAndTrimsWAL(t *testing.T) {
 	}
 	defer func() { _ = n.wal.Close() }()
 
-	n.SetSnapshotProvider(func() ([]byte, error) {
-		return []byte("state-bytes"), nil
+	n.SetSnapshotProvider(func() ([]byte, uint64, error) {
+		// Caller's test harness seeds lastApplied=3 below; returning
+		// that index here matches the new provider atomicity
+		// contract (the application is the sole source of truth for
+		// "which index the payload reflects").
+		return []byte("state-bytes"), 3, nil
 	})
 
 	// Manually seed the log past the snapshot we'll create; CompactLog
@@ -213,7 +217,7 @@ func TestSubmitAfterCompactionUsesCorrectIndex(t *testing.T) {
 	}
 	defer func() { _ = n.wal.Close() }()
 
-	n.SetSnapshotProvider(func() ([]byte, error) { return []byte("state"), nil })
+	n.SetSnapshotProvider(func() ([]byte, uint64, error) { return []byte("state"), 3, nil })
 
 	// Seed three entries + compact.
 	n.mu.Lock()

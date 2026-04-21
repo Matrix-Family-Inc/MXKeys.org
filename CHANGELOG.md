@@ -8,6 +8,40 @@ No breaking changes to the Matrix federation API contract.
 
 ### Added
 
+- Atomic snapshot capture contract for Raft state machines. The
+  `raft.SnapshotProvider` signature now returns
+  `(data []byte, lastAppliedIndex uint64, err error)`. The
+  application MUST capture both fields under the same lock that
+  serialises `onApply` writes. `CompactLog` persists the
+  provider-reported index verbatim (not the raft layer's current
+  `lastApplied`) after validating it is strictly above the current
+  snapshot boundary and at or below the commit index. Two replicas
+  that have applied the same log prefix now produce byte-identical
+  snapshot files at the same `LastIncludedIndex`.
+- `cluster.CRDTState.raftLastApplied` (`internal/cluster/cluster.go`):
+  the apply callback in `startRaft` updates both the LWW cache and
+  this counter under a single `c.state.mu.Lock`, so the
+  provider observes a coherent (payload, index) pair.
+- `cluster.storeEntryLocked` / `cluster.applyEntryLocked`
+  (`internal/cluster/state.go`): caller-holds-lock variants of the
+  LWW merge, used by the apply callback to avoid a second lock
+  acquisition. Public `storeEntry` is now a thin wrapper.
+- Shutdown-aware contexts for raft-mode application writes.
+  `raft.Node.ctxWithStop` (`internal/zero/raft/context.go`) derives
+  a timeout-bounded context that also cancels on stopCh close,
+  used by `driveInstallSnapshot` and `handleForwardProposal`.
+  `cluster.Cluster.proposeCtx` (`internal/cluster/propose_ctx.go`)
+  does the same for `BroadcastKeyUpdate` against the cluster's
+  own stopCh. Shutdown no longer waits on the full
+  `CommitTimeout` for an in-flight snapshot stream or forwarded
+  proposal to drain.
+- `internal/cluster/cluster_raft_e2e_test.go`:
+  `TestRaftClusterEndToEndWriteCompactRestart` exercises the full
+  production path (`BroadcastKeyUpdate` on a follower → Propose
+  forward → leader Submit → commit → onApply on every replica →
+  CompactLog → restart one node from its state directory →
+  `GetCachedKey` returns the original entry). Locks in the
+  atomicity contract and restart durability end to end.
 - Automatic InstallSnapshot catch-up in production (see Fixed).
   `sendAppendEntries` now detects peers whose `nextIndex` sits at or
   below the leader's snapshot boundary and switches to
@@ -246,6 +280,23 @@ No breaking changes to the Matrix federation API contract.
   longer reflects the tail position, so the previous formula placed
   `nextIndex` below the real tail and forced the new leader into
   the same stuck-on-compacted-prefix loop described above.
+- Raft snapshot payload and `LastIncludedIndex` are no longer
+  captured out of step. `CompactLog` previously read
+  `n.lastApplied` under an RLock, released the lock, and only
+  then called the provider; any `onApply` that ran in the
+  intervening window caused the payload to reflect indices past
+  the recorded boundary. Two replicas racing compaction at the
+  same nominal index could produce byte-differing snapshot
+  files, silently breaking the per-index determinism the audit
+  model depends on. The new provider contract (see
+  **Added**) forces the application to capture data and index
+  under a single lock; `CompactLog` trusts the result and
+  validates it against its own log view before persisting.
+- `cluster.BroadcastKeyUpdate` and `raft.driveInstallSnapshot` /
+  `handleForwardProposal` no longer block shutdown for the full
+  `CommitTimeout`. They now run under contexts that cancel on
+  stopCh close, so `Cluster.Stop()` / `Node.Stop()` evict
+  in-flight proposals and snapshot streams immediately.
 - Raft `BroadcastKeyUpdate` in cluster mode now transparently
   forwards follower-originated writes to the leader. Before this
   fix a fetch served by a follower was pinned to that node's
