@@ -22,22 +22,28 @@ import (
 //
 //  1. Reject when the leader's term is stale.
 //  2. Refresh currentTerm and fall back to follower on higher leader term.
-//  3. Accumulate req.Data into pendingSnapshot (chunking). A chunk with
-//     req.Offset == 0 resets the buffer so a retry or a new leader
+//  3. Accumulate req.Data into the active transfer (chunking). A chunk
+//     with req.Offset == 0 resets the buffer so a retry or a new leader
 //     snapshots cleanly. A chunk whose (LastIncludedIndex, Term) tuple
 //     differs from the current buffered transfer also resets.
-//  4. When req.Done == true the accumulated buffer is installed:
+//  4. When req.Done == true the accumulated payload is installed:
 //     invoke the registered SnapshotInstaller, persist to disk,
 //     truncate any local log entries whose Index <= LastIncludedIndex,
 //     and advance commitIndex / lastApplied.
 //
+// Memory bound: when stateDir != "" the in-flight payload is streamed
+// to stateDir/raft.snapshot.recv so the follower holds only one
+// chunk in memory at a time regardless of total snapshot size. See
+// pending_snapshot.go for the spill lifecycle and ErrPendingSnapshotOverflow
+// for the maxSnapshotSize cap.
+//
 // Success flag contract:
 //   - Success=true only when the chunk was accepted (non-Done) or
 //     fully installed and persisted (Done).
-//   - Success=false on stale term, offset gap, installer error, or
-//     snapshot save error. The leader MUST treat Success=false as a
-//     rejection and NOT advance nextIndex/matchIndex; it should retry
-//     from offset 0.
+//   - Success=false on stale term, offset gap, overflow, installer
+//     error, or snapshot save error. The leader MUST treat
+//     Success=false as a rejection and NOT advance
+//     nextIndex/matchIndex; it should retry from offset 0.
 func (n *Node) handleInstallSnapshot(msg *RPCMessage) *RPCMessage {
 	var req InstallSnapshotRequest
 	if err := json.Unmarshal(msg.Payload, &req); err != nil {
@@ -70,31 +76,48 @@ func (n *Node) handleInstallSnapshot(msg *RPCMessage) *RPCMessage {
 	}
 	n.lastContact = time.Now()
 
-	// Reset buffer on Offset==0 OR when the leader has moved to a
-	// newer snapshot while we were mid-stream.
+	// Reset the transfer on Offset==0 OR when the leader has moved to
+	// a newer snapshot while we were mid-stream. beginPendingSnapshot
+	// closes and truncates the spill file so no stale bytes carry
+	// over.
 	newTransfer := req.Offset == 0 ||
 		req.LastIncludedIndex != n.pendingSnapshotIndex ||
 		req.LastIncludedTerm != n.pendingSnapshotTerm
 	if newTransfer {
-		n.pendingSnapshot = n.pendingSnapshot[:0]
-		n.pendingSnapshotIndex = req.LastIncludedIndex
-		n.pendingSnapshotTerm = req.LastIncludedTerm
-		n.pendingSnapshotExpected = 0
+		if err := n.beginPendingSnapshot(req.LastIncludedIndex, req.LastIncludedTerm); err != nil {
+			log.Warn("Raft begin pending snapshot failed",
+				"last_index", req.LastIncludedIndex,
+				"error", err,
+			)
+			response.Term = n.currentTerm
+			n.mu.Unlock()
+			return n.wrapResponse(MsgInstallSnapshotRes, response)
+		}
 	}
 
 	// Enforce monotonically-advancing offset. Any gap or backtrack is
-	// treated as a retransmit need; we discard the partial buffer and
-	// surface our current (fresh) term so the leader resets at 0.
+	// treated as a retransmit need; we discard the partial transfer
+	// and surface our current (fresh) term so the leader resets at 0.
 	if req.Offset != n.pendingSnapshotExpected {
-		n.pendingSnapshot = n.pendingSnapshot[:0]
-		n.pendingSnapshotExpected = 0
+		n.resetPendingSnapshot()
 		response.Term = n.currentTerm
 		response.BytesStored = 0
 		n.mu.Unlock()
 		return n.wrapResponse(MsgInstallSnapshotRes, response)
 	}
-	n.pendingSnapshot = append(n.pendingSnapshot, req.Data...)
-	n.pendingSnapshotExpected += uint64(len(req.Data))
+	if err := n.appendPendingSnapshot(req.Data); err != nil {
+		// Overflow past maxSnapshotSize or a spill-file write failure.
+		// Either way the transfer is unrecoverable; reset and reject.
+		log.Warn("Raft pending snapshot append failed",
+			"last_index", req.LastIncludedIndex,
+			"error", err,
+		)
+		n.resetPendingSnapshot()
+		response.Term = n.currentTerm
+		response.BytesStored = 0
+		n.mu.Unlock()
+		return n.wrapResponse(MsgInstallSnapshotRes, response)
+	}
 
 	// Mid-stream: ACK with Success=true so the leader continues sending
 	// the next chunk.
@@ -106,11 +129,20 @@ func (n *Node) handleInstallSnapshot(msg *RPCMessage) *RPCMessage {
 		return n.wrapResponse(MsgInstallSnapshotRes, response)
 	}
 
-	// Final chunk: capture what we need, then drop n.mu to run the
-	// installer callback (which may take its own locks).
-	data := append([]byte(nil), n.pendingSnapshot...)
-	n.pendingSnapshot = n.pendingSnapshot[:0]
-	n.pendingSnapshotExpected = 0
+	// Final chunk: drain the transfer into a transient buffer, then
+	// drop n.mu to run the installer callback (which may take its
+	// own locks).
+	data, err := n.drainPendingSnapshot()
+	if err != nil {
+		log.Warn("Raft drain pending snapshot failed",
+			"last_index", req.LastIncludedIndex,
+			"error", err,
+		)
+		n.resetPendingSnapshot()
+		response.Term = n.currentTerm
+		n.mu.Unlock()
+		return n.wrapResponse(MsgInstallSnapshotRes, response)
+	}
 	installer := n.snapshotInstaller
 	stateDir := n.stateDir
 	n.mu.Unlock()
@@ -123,10 +155,10 @@ func (n *Node) handleInstallSnapshot(msg *RPCMessage) *RPCMessage {
 				"bytes", len(data),
 				"error", err,
 			)
-			n.mu.RLock()
+			n.mu.Lock()
+			n.resetPendingSnapshot()
 			response.Term = n.currentTerm
-			response.Success = false
-			n.mu.RUnlock()
+			n.mu.Unlock()
 			return n.wrapResponse(MsgInstallSnapshotRes, response)
 		}
 	}
@@ -145,10 +177,10 @@ func (n *Node) handleInstallSnapshot(msg *RPCMessage) *RPCMessage {
 			// survive a crash; reject so the leader retries rather than
 			// advancing match/next on a best-effort install.
 			log.Warn("Raft snapshot save failed", "error", err)
-			n.mu.RLock()
+			n.mu.Lock()
+			n.resetPendingSnapshot()
 			response.Term = n.currentTerm
-			response.Success = false
-			n.mu.RUnlock()
+			n.mu.Unlock()
 			return n.wrapResponse(MsgInstallSnapshotRes, response)
 		}
 	}
@@ -172,13 +204,29 @@ func (n *Node) handleInstallSnapshot(msg *RPCMessage) *RPCMessage {
 	if req.LastIncludedIndex > n.logOffset {
 		n.logOffset = req.LastIncludedIndex
 	}
+	// Successful install: drop the spill file now that raft.snapshot
+	// is the authoritative copy.
+	n.resetPendingSnapshot()
 	response.Term = n.currentTerm
 	response.Success = true
 	response.BytesStored = uint64(len(data))
 	n.mu.Unlock()
 
 	if n.wal != nil {
-		_ = n.wal.TruncateBefore(req.LastIncludedIndex + 1)
+		// WAL prefix truncation is bookkeeping: the snapshot
+		// supersedes every entry up to LastIncludedIndex so any
+		// left-behind WAL record below that boundary is redundant
+		// but not incorrect (LoadFromDisk skips Index <=
+		// snapshotIndex during replay). A failure here does NOT
+		// invalidate the install we just persisted; log at Warn so
+		// disk pressure or permission issues are visible to
+		// operators rather than silenced.
+		if err := n.wal.TruncateBefore(req.LastIncludedIndex + 1); err != nil {
+			log.Warn("Raft WAL truncate after InstallSnapshot failed",
+				"snapshot_index", req.LastIncludedIndex,
+				"error", err,
+			)
+		}
 	}
 	return n.wrapResponse(MsgInstallSnapshotRes, response)
 }

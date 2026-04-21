@@ -84,6 +84,12 @@ func (n *Node) LoadFromDisk() error {
 		return nil
 	}
 
+	// A previous transfer that crashed mid-stream may have left a
+	// spill file behind. Remove it before the node accepts new
+	// InstallSnapshot chunks so the next transfer starts from a
+	// known-empty state instead of inheriting partial bytes.
+	cleanupStalePendingSnapshot(n.stateDir)
+
 	snap, err := LoadSnapshot(n.stateDir)
 	switch {
 	case errors.Is(err, ErrNoSnapshot):

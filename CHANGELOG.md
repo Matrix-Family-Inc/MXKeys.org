@@ -8,6 +8,19 @@ No breaking changes to the Matrix federation API contract.
 
 ### Added
 
+- Disk-backed spill for incoming InstallSnapshot transfers.
+  `internal/zero/raft/pending_snapshot.go` streams each chunk into
+  `stateDir/raft.snapshot.recv` so follower RAM stays
+  O(`snapshotChunkSize`) regardless of total snapshot size, instead
+  of holding the whole in-flight payload (up to 256 MiB) in a
+  growing `[]byte`. The in-memory path is retained only for
+  `stateDir == ""` in-memory raft mode used by tests. New error
+  `ErrPendingSnapshotOverflow` makes the `maxSnapshotSize` cap
+  explicit: a chunk append that would cross the cap is rejected
+  with `Success=false` before any write hits disk or memory.
+- `LoadFromDisk` cleans any stale `raft.snapshot.recv` left by a
+  crashed mid-transfer so a fresh transfer on the next startup
+  never inherits partial bytes.
 - `raft.Node.sendRPCCtx`
   (`internal/zero/raft/network.go`): a context-aware variant of
   `sendRPC` that closes the underlying TCP connection when the
@@ -337,6 +350,15 @@ No breaking changes to the Matrix federation API contract.
   forwarding endpoint on every heartbeat and cause Propose to
   return `ErrNoLeader` even though leadership was healthy.
   Populated addresses still overwrite stale ones.
+- WAL `TruncateBefore` failure after a successful
+  `InstallSnapshot` no longer silently ignored. Previously the
+  follower discarded the error (`_ = n.wal.TruncateBefore(...)`);
+  now it logs a `Warn` with `snapshot_index` and the underlying
+  error. The install itself remains committed (the snapshot
+  supersedes every entry up to `LastIncludedIndex` and
+  `LoadFromDisk` skips stale records on replay), but disk
+  pressure and permission issues are now visible to operators
+  rather than buried.
 - `internal/cluster/cluster_raft_e2e_test.go`:
   `TestRaftClusterEndToEndWriteCompactRestart` now restarts the
   node that actually compacted (the leader at the time of
