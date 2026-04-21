@@ -2,7 +2,7 @@ Project: MXKeys
 Company: Matrix Family Inc. (https://matrix.family)
 Maintainer: Brabus
 Contact: dev@matrix.family
-Date: Mon Apr 20 2026 UTC
+Date: Wed Apr 22 2026 UTC
 Status: Updated
 
 # MXKeys Architecture
@@ -80,10 +80,56 @@ Client
   -> PostgreSQL cache
   -> resolver (.well-known -> SRV -> fallback)
   -> upstream fetch and signature verification
-  -> perspective signature
+  -> raw-preserving perspective signature attach
   -> storage/cache update
   -> response with server_keys + failures
 ```
+
+## Notary Reply Integrity (raw-preserving pipeline)
+
+The reply pipeline preserves the origin-delivered
+`/_matrix/key/v2/server` payload byte-for-byte from upstream fetch
+all the way through to the `/_matrix/key/v2/query` response this
+notary returns. This is what lets a downstream client verify the
+origin self-signature end-to-end against our reply, not just the
+perspective signature this notary adds.
+
+Moving pieces:
+
+- `ServerKeysResponse.Raw []byte` (`internal/keys/types.go`) carries
+  the origin canonical JSON through cache, DB, cluster replication,
+  and the wire response. A custom `MarshalJSON` emits `Raw`
+  verbatim when populated so the query wire format keeps origin
+  canonical form intact.
+- `internal/keys/fetcher_direct.go` captures origin bytes into
+  `Raw` immediately after self-signature verification.
+- `internal/keys/notary_raw_response.go` holds
+  `AttachNotarySignature(raw, notary, keyID, priv)`. It parses
+  `raw` into a generic map with `UseNumber` (preserves
+  `valid_until_ts` and other integers byte-exactly), attaches the
+  notary's signature under `signatures[<notary>][<key_id>]`
+  without reshaping any other field, and returns canonical JSON
+  bytes. Presence/absence of `old_verify_keys` and any future
+  Matrix schema extension survive the round-trip.
+- `internal/keys/notary_query.go` prefers `AttachNotarySignature`
+  when `Raw` is present; the struct-based `addNotarySignature`
+  stays as a fallback for legacy rows and notary-fallback fetches
+  where raw bytes are not available.
+- Storage: `server_key_responses.raw_response BYTEA` (migration
+  `0003_raw_server_response.sql`). Legacy NULL rows transparently
+  fall back to the struct-based path until the next successful
+  fetch backfills the column.
+- Cluster replication moves `raw_response` between peers
+  verbatim, so any node that has the raw bytes can serve a
+  signature-verifiable notary reply. There is no leader-only hot
+  spot for federation reads.
+
+Regression guard: unit tests under `notary_raw_response_test.go`
+cover origin signatures surviving `old_verify_keys` being
+omitted / empty / populated, notary-signature validity, and
+bad-input rejection. End-to-end proof lives in the 3-node smoke
+test against live Synapse A/B in `test_servers/` (see the
+`federation_edge_test` harness under `mfos.sdk`).
 
 ## Cache and Persistence
 

@@ -10,7 +10,7 @@ Status: Updated
 ## Core Set
 
 - `federation-behavior.md` — normative public API and request/response behavior
-- `architecture.md` — runtime architecture and data flow
+- `../ARCHITECTURE.md` — runtime architecture and data flow (top-level)
 - `deployment.md` — deployment and operational guide
 - `build.md` — build, verification, and reproducibility commands
 - `threat-model.md` — security assumptions, risks, and controls
@@ -34,7 +34,7 @@ Status: Updated
 ## Usage
 
 Read `federation-behavior.md` for the stable public contract.
-Read `architecture.md` and `deployment.md` for implementation and operations.
+Read `../ARCHITECTURE.md` and `deployment.md` for implementation and operations.
 Use `build.md` for local verification and CI-parity commands.
 Consult `runbook/` for step-by-step operator procedures.
 

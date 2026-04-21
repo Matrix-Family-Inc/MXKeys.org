@@ -143,7 +143,7 @@ func (c *Config) Validate() error {
 		}
 		// Raft mode demands a durable state directory. Silently degrading
 		// to in-memory would contradict the durability guarantees stated
-		// in docs/architecture.md and docs/adr/0001. Fail fast instead of
+		// in ARCHITECTURE.md and docs/adr/0001. Fail fast instead of
 		// letting a mis-configured operator boot an ephemeral quorum.
 		if c.Cluster.ConsensusMode == "raft" && strings.TrimSpace(c.Cluster.RaftStateDir) == "" {
 			return fmt.Errorf("cluster.raft_state_dir is required when cluster.consensus_mode=raft")
