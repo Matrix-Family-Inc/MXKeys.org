@@ -29,6 +29,28 @@ import (
 	"mxkeys/internal/zero/nettls"
 )
 
+// runKeyProvider calls LoadOrGenerate on the provider so the key is
+// available before the notary reads it, and surfaces a WARN log when
+// the file-backed mlock(2) call failed. An mlock failure does not
+// prevent startup: it is informational for the operator. mlock
+// requires CAP_IPC_LOCK or a sufficient RLIMIT_MEMLOCK, which some
+// container runtimes do not grant by default.
+func runKeyProvider(p keyprovider.Provider) error {
+	if _, _, err := p.LoadOrGenerate(context.Background()); err != nil {
+		return err
+	}
+	if fp, ok := p.(*keyprovider.FileProvider); ok {
+		if err := fp.MlockErr(); err != nil {
+			log.Warn(
+				"Signing-key pages could not be locked into RAM; the seed may be paged to swap",
+				"error", err,
+				"hint", "grant CAP_IPC_LOCK or raise RLIMIT_MEMLOCK, or disable swap",
+			)
+		}
+	}
+	return nil
+}
+
 // buildKeyProvider constructs the signing-key provider described by cfg.
 // When cfg.Keys.EncryptionPassphraseEnv is non-empty, the named
 // environment variable supplies the passphrase used by the file-backed
@@ -117,6 +139,9 @@ func New(cfg *config.Config) (*Server, error) {
 	provider, err := buildKeyProvider(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build key provider: %w", err)
+	}
+	if err := runKeyProvider(provider); err != nil {
+		return nil, fmt.Errorf("failed to load signing key: %w", err)
 	}
 	notary, err := keys.NewNotaryWithConfig(context.Background(), db, keys.NotaryConfig{
 		ServerName:          cfg.Server.Name,

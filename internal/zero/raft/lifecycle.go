@@ -158,6 +158,23 @@ func (n *Node) Term() uint64 {
 	return n.currentTerm
 }
 
+// CommitIndex returns the highest log index known to be committed.
+// Observers (integration tests, operator tooling) use this to wait
+// for replication to converge without peeking into internals.
+func (n *Node) CommitIndex() uint64 {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.commitIndex
+}
+
+// LastApplied returns the highest log index that has been passed to
+// the state machine via SetOnApply.
+func (n *Node) LastApplied() uint64 {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.lastApplied
+}
+
 // SetOnStateChange sets callback for state changes.
 func (n *Node) SetOnStateChange(fn func(State)) {
 	n.onStateChange = fn

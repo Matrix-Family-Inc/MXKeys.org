@@ -29,17 +29,7 @@ func (n *Node) logLen() uint64 {
 // below the compaction boundary (already in a snapshot) or past the tail.
 // Valid absolute indices are in [logOffset+1, logOffset+len(log)].
 func (n *Node) sliceIndex(absoluteIndex uint64) (int, bool) {
-	if absoluteIndex == 0 || absoluteIndex <= n.logOffset {
-		return -1, false
-	}
-	// The guard above (absoluteIndex <= n.logOffset → return) ensures
-	// the difference is positive and bounded by len(n.log), so the
-	// uint64→int narrowing is always safe.
-	slot := int(absoluteIndex - n.logOffset - 1) // #nosec G115 -- bounded by len(n.log)
-	if slot >= len(n.log) {
-		return -1, false
-	}
-	return slot, true
+	return offsetToSlot(absoluteIndex, n.logOffset, len(n.log))
 }
 
 // entryAt returns the log entry at the given absolute index. Returns false
@@ -92,8 +82,13 @@ func (n *Node) truncateSliceAfter(lastKeepIndex uint64) {
 		n.log = n.log[:0]
 		return
 	}
-	slot := int(lastKeepIndex - n.logOffset) // #nosec G115 -- guarded above
-	if slot < len(n.log) {
-		n.log = n.log[:slot]
+	// Route the uint64 -> int narrowing through offsetToSlot so the
+	// conversion happens at exactly one site in the package. The
+	// "end-exclusive" semantics of slice[:n] map to "slot for
+	// lastKeepIndex + 1" returned as the keep count.
+	slot, ok := offsetToSlot(lastKeepIndex+1, n.logOffset, len(n.log))
+	if !ok {
+		return
 	}
+	n.log = n.log[:slot]
 }

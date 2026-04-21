@@ -45,14 +45,14 @@ func (w *WAL) appendLocked(entry LogEntry) error {
 	if err != nil {
 		return fmt.Errorf("raft wal: marshal: %w", err)
 	}
-	if len(payload) > walMaxRecord {
-		return fmt.Errorf("raft wal: record too large: %d > %d", len(payload), walMaxRecord)
+	payloadLen, err := lenUint32("raft wal record", payload, walMaxRecord)
+	if err != nil {
+		return err
 	}
 
 	// Header layout (40 bytes): len(4) || crc32c(4) || hmac_sha256(32).
-	// Payload length fits in uint32 by the walMaxRecord guard above.
 	var hdr [walHeaderSize]byte
-	binary.LittleEndian.PutUint32(hdr[0:4], uint32(len(payload))) // #nosec G115 -- bounded by walMaxRecord
+	binary.LittleEndian.PutUint32(hdr[0:4], payloadLen)
 	binary.LittleEndian.PutUint32(hdr[4:8], crc32.Checksum(payload, walCRC))
 
 	// HMAC covers the len+crc prefix and the payload. Binding the
@@ -130,7 +130,11 @@ func (w *WAL) writeBatchLocked(items []walItem) error {
 		}
 	}
 	if w.syncAll {
-		if err := w.file.Sync(); err != nil {
+		sync := w.file.Sync
+		if syncHookForTest != nil {
+			sync = func() error { return syncHookForTest(w.file) }
+		}
+		if err := sync(); err != nil {
 			return fmt.Errorf("raft wal: fsync: %w", err)
 		}
 	}

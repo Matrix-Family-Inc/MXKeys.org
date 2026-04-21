@@ -17,21 +17,21 @@ packages="$(bash ./scripts/go-package-list.sh | tr '\n' ' ')"
 package_dirs="$(bash ./scripts/go-package-list.sh dirs | tr '\n' ' ')"
 
 STEP=0
-TOTAL=16
+TOTAL=18
 step() {
   STEP=$((STEP + 1))
   echo
   echo "==> [${STEP}/${TOTAL}] $*"
 }
 
-step "go test (unit)"
-go test -count=1 ${packages}
+step "go test (unit, shuffled)"
+go test -count=1 -shuffle=on ${packages}
 
 step "go test -race"
-go test -race -count=1 ${packages}
+go test -race -count=1 -shuffle=on ${packages}
 
-step "integration tests"
-go test -tags=integration -race -count=1 ./tests/integration/...
+step "integration tests (shuffled)"
+go test -tags=integration -race -count=1 -shuffle=on ./tests/integration/...
 
 step "go vet"
 go vet ${packages}
@@ -110,6 +110,21 @@ step "frontend test"
 
 step "frontend build"
 (cd landing && bun run build)
+
+step "storybook build"
+# Storybook 10 requires Node >= 20.19 / 22.12. When the local host
+# ships an older Node, we skip rather than fail so the preflight
+# still completes; CI runs Node 22 unconditionally.
+NODE_VER="$(node --version 2>/dev/null | tr -d v)"
+NODE_MAJOR="${NODE_VER%%.*}"
+NODE_MINOR="$(echo "${NODE_VER}" | awk -F. '{print $2}')"
+if [[ -z "${NODE_VER}" ]]; then
+  echo "node not on PATH; skipping storybook:build."
+elif (( NODE_MAJOR < 20 )) || (( NODE_MAJOR == 20 && NODE_MINOR < 19 )); then
+  echo "storybook:build requires Node >= 20.19 (have ${NODE_VER}); skipping."
+else
+  (cd landing && bun run storybook:build)
+fi
 
 if [[ "${MXKEYS_LIVE_TEST:-0}" == "1" ]]; then
   if [[ -z "${MXKEYS_LIVE_BASE_URL:-}" ]]; then

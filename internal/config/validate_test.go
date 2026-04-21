@@ -323,13 +323,24 @@ func TestValidateClusterTLS(t *testing.T) {
 			errMatch: "min_version must be",
 		},
 		{
-			name: "min_version 1.2 accepted",
+			name: "min_version 1.2 rejected (cluster is TLS 1.3 only)",
 			mutate: func(c *Config) {
 				c.Cluster.TLS.Enabled = true
 				c.Cluster.TLS.CertFile = "/c"
 				c.Cluster.TLS.KeyFile = "/k"
 				c.Cluster.TLS.CAFile = "/ca"
 				c.Cluster.TLS.MinVersion = "1.2"
+			},
+			errMatch: "does not support TLS 1.2",
+		},
+		{
+			name: "min_version 1.3 accepted",
+			mutate: func(c *Config) {
+				c.Cluster.TLS.Enabled = true
+				c.Cluster.TLS.CertFile = "/c"
+				c.Cluster.TLS.KeyFile = "/k"
+				c.Cluster.TLS.CAFile = "/ca"
+				c.Cluster.TLS.MinVersion = "1.3"
 			},
 			errMatch: "",
 		},

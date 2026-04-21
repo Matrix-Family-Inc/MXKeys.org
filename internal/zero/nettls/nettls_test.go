@@ -289,17 +289,11 @@ func TestValidateRejectsMissingFiles(t *testing.T) {
 	}
 }
 
-// TestConfigMinVersionDefaulting accepts blank or recognised values
-// and rejects nothing at the config layer (defaults kick in later).
-func TestConfigMinVersionDefaulting(t *testing.T) {
-	for _, in := range []string{"", "1.2", "1.3"} {
-		if minVersion(in) == 0 {
-			t.Fatalf("minVersion(%q) = 0", in)
-		}
-	}
-	// Unknown strings fall back to 1.3, never to an insecure level.
-	if got := minVersion("sslv3"); got != tls.VersionTLS13 {
-		t.Fatalf("expected unknown to default to TLS 1.3, got %x", got)
+// TestTLSMinVersionIs13 pins the cluster transport to TLS 1.3. Any
+// refactor that relaxes this constant is a security regression.
+func TestTLSMinVersionIs13(t *testing.T) {
+	if tlsMinVersion != tls.VersionTLS13 {
+		t.Fatalf("tlsMinVersion = %#x, want TLS 1.3 (%#x)", tlsMinVersion, tls.VersionTLS13)
 	}
 }
 

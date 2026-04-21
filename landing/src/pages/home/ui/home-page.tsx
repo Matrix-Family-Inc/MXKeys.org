@@ -16,6 +16,7 @@ import { HowItWorksSection } from '../../../widgets/how-it-works';
 import { IntegrationSection } from '../../../widgets/integration';
 import { LandingFooter } from '../../../widgets/landing-footer';
 import { LandingHeader } from '../../../widgets/landing-header';
+import { NotaryLookupSection } from '../../../widgets/notary-lookup';
 
 /**
  * HomePage composes every marketing widget in the canonical order the
@@ -31,6 +32,7 @@ export function HomePage() {
         <AboutSection />
         <FeaturesSection />
         <HowItWorksSection />
+        <NotaryLookupSection />
         <ApiSection />
         <IntegrationSection />
         <EcosystemSection />

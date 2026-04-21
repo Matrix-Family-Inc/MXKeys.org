@@ -45,9 +45,10 @@ type FileProvider struct {
 	storagePath string
 	passphrase  []byte // nil = plaintext mode
 
-	mu      sync.RWMutex
-	loaded  bool
-	private ed25519.PrivateKey
+	mu       sync.RWMutex
+	loaded   bool
+	private  ed25519.PrivateKey
+	mlockErr error
 }
 
 func newFileProvider(storagePath string) (*FileProvider, error) {
@@ -100,8 +101,7 @@ func (f *FileProvider) LoadOrGenerate(ctx context.Context) (ed25519.PrivateKey, 
 	// encrypted material without a passphrase is safer than guessing).
 	if len(f.passphrase) > 0 {
 		if priv, err := f.loadEncrypted(encPath); err == nil {
-			f.private = priv
-			f.loaded = true
+			f.mlockErr = f.install(priv)
 			return priv, KeyID, nil
 		} else if !os.IsNotExist(err) {
 			return nil, "", err
@@ -118,8 +118,7 @@ func (f *FileProvider) LoadOrGenerate(ctx context.Context) (ed25519.PrivateKey, 
 			// Best-effort scrub of the plaintext file; its sensitive
 			// contents now live encrypted at rest.
 			_ = os.Remove(plainPath)
-			f.private = priv
-			f.loaded = true
+			f.mlockErr = f.install(priv)
 			return priv, KeyID, nil
 		} else if !os.IsNotExist(err) {
 			return nil, "", fmt.Errorf("keyprovider file: read legacy: %w", err)
@@ -132,8 +131,7 @@ func (f *FileProvider) LoadOrGenerate(ctx context.Context) (ed25519.PrivateKey, 
 		if err := f.writeEncrypted(encPath, priv); err != nil {
 			return nil, "", err
 		}
-		f.private = priv
-		f.loaded = true
+		f.mlockErr = f.install(priv)
 		return priv, KeyID, nil
 	}
 
@@ -155,8 +153,7 @@ func (f *FileProvider) LoadOrGenerate(ctx context.Context) (ed25519.PrivateKey, 
 		if err := os.Chmod(plainPath, 0600); err != nil {
 			return nil, "", fmt.Errorf("keyprovider file: chmod key: %w", err)
 		}
-		f.private = priv
-		f.loaded = true
+		f.mlockErr = f.install(priv)
 		return priv, KeyID, nil
 	} else if !os.IsNotExist(err) {
 		return nil, "", fmt.Errorf("keyprovider file: read: %w", err)
@@ -169,8 +166,7 @@ func (f *FileProvider) LoadOrGenerate(ctx context.Context) (ed25519.PrivateKey, 
 	if err := writeAtomic(plainPath, priv, 0600); err != nil {
 		return nil, "", fmt.Errorf("keyprovider file: write: %w", err)
 	}
-	f.private = priv
-	f.loaded = true
+	f.mlockErr = f.install(priv)
 	return priv, KeyID, nil
 }
 
@@ -272,6 +268,32 @@ func writeAtomic(path string, data []byte, perm os.FileMode) error {
 		return err
 	}
 	return nil
+}
+
+// install stores the private key on the provider and makes a best-
+// effort mlock(2) call so the backing bytes never land in a swap
+// file. Any mlock failure is returned to the caller; the server
+// code turns it into a WARN log rather than a fatal error because
+// mlock requires CAP_IPC_LOCK or RLIMIT_MEMLOCK headroom that some
+// container runtimes do not grant by default.
+func (f *FileProvider) install(priv ed25519.PrivateKey) (mlockErr error) {
+	f.private = priv
+	f.loaded = true
+	if err := mlockBestEffort([]byte(priv)); err != nil {
+		return err
+	}
+	return nil
+}
+
+// MlockErr returns the error, if any, from the most recent best-
+// effort mlock call on the loaded private key. nil means the key's
+// pages are locked into RAM; a non-nil value means they are not
+// (operator has no CAP_IPC_LOCK or RLIMIT_MEMLOCK). The server
+// surfaces this through a WARN log at startup.
+func (f *FileProvider) MlockErr() error {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.mlockErr
 }
 
 // parsePrivateKey accepts either a full 64-byte ed25519 private key or a

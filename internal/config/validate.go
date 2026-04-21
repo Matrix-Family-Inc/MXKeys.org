@@ -230,8 +230,8 @@ func validateClusterTLS(t ClusterTLSConfig) error {
 	if strings.TrimSpace(t.CAFile) == "" {
 		return fmt.Errorf("cluster.tls.ca_file is required when cluster.tls.enabled=true")
 	}
-	if v := strings.TrimSpace(t.MinVersion); v != "" && v != "1.2" && v != "1.3" {
-		return fmt.Errorf("cluster.tls.min_version must be '1.2' or '1.3', got %q", v)
+	if v := strings.TrimSpace(t.MinVersion); v != "" && v != "1.3" {
+		return fmt.Errorf("cluster.tls.min_version must be '1.3' (or empty); the cluster transport does not support TLS 1.2")
 	}
 	return nil
 }

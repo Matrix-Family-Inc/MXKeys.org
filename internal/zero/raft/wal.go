@@ -100,8 +100,8 @@ var ErrWALTampered = errors.New("raft wal: record HMAC mismatch (tampered)")
 var ErrWALClosed = errors.New("raft wal: closed")
 
 // ErrWALLegacyFormat is returned when OpenWAL encounters the v2
-// on-disk format. Operators upgrade with the documented walctl tool.
-var ErrWALLegacyFormat = errors.New("raft wal: legacy v2 format; run 'mxkeys walctl upgrade' or rebuild from snapshot")
+// on-disk format. Operators upgrade offline with mxkeys-walctl.
+var ErrWALLegacyFormat = errors.New("raft wal: legacy v2 format; run 'mxkeys-walctl upgrade --dir <state-dir>' offline, or rebuild from snapshot")
 
 // WAL is an append-only log of Raft LogEntry bytes.
 //
@@ -139,6 +139,11 @@ type walItem struct {
 	entry LogEntry
 	done  chan error
 }
+
+// syncHookForTest, when set, replaces the real file.Sync() call in the
+// batch flush path. Production code never sets it; tests use it to
+// simulate fsync failure and verify the persist-failure path.
+var syncHookForTest func(*os.File) error
 
 // WALOptions controls WAL construction.
 type WALOptions struct {
