@@ -8,6 +8,64 @@ No breaking changes to the Matrix federation API contract.
 
 ### Added
 
+- `raft.Node.snapMu` (`internal/zero/raft/raft.go`): serialises
+  every writer of raft.snapshot on disk and the matching in-memory
+  snapshotIndex/snapshotTerm/logOffset bookkeeping.
+  `CompactLog` and every `handleInstallSnapshot` invocation
+  acquire it. Fixes the CompactLog vs InstallSnapshot and
+  InstallSnapshot vs InstallSnapshot races: the persisted file
+  and the pending-transfer spill state can no longer interleave.
+  Lock order: snapMu → n.mu; never held while taking an
+  application-level lock.
+- `raft.SnapshotInstaller` is now streaming:
+  `func(r io.Reader, size int64, lastIncludedIndex,
+  lastIncludedTerm uint64) error`. The installer consumes the
+  snapshot payload directly from a reader backed by the spill
+  file (or a bytes.Reader in the in-memory test path). No full
+  `[]byte` of the payload is ever materialised on the Go heap,
+  so peak transient RAM at install time is O(streaming decoder
+  buffer) + O(decoded state), not O(payload size) as before.
+  Breaking API change for pre-1.0.0; every call site in the
+  repository is updated.
+- Spill file is now the final snapshot format from first byte.
+  `beginPendingSnapshot` writes the SaveSnapshot header
+  (magic + last_index + last_term + placeholder length + placeholder
+  CRC) up front; `appendPendingSnapshot` feeds data bytes plus an
+  incremental Castagnoli CRC; `finalizePendingSnapshot` patches the
+  real length and CRC into the header and fsyncs. On installer
+  success the spill file is atomically renamed to raft.snapshot,
+  replacing the previous SaveSnapshot pass that copied bytes
+  through RAM.
+- `raft.LoadSnapshotReader` (`internal/zero/raft/snapshot_load.go`):
+  opens raft.snapshot and returns a reader positioned at the
+  start of the data portion plus the metadata, without
+  buffering the payload. `LoadFromDisk` now uses it so the
+  startup restore path also stays at O(chunk) peak RAM.
+- `raft.readSnapshotHeader` centralises the magic + header + CRC
+  field decoding shared by `LoadSnapshot`, `LoadSnapshotReader`,
+  and `SaveSnapshot` (via `snapshotHeaderSize`,
+  `snapshotHeaderLenOffset`, `snapshotHeaderCRCOffset`
+  constants).
+- Monotonicity guard in `handleInstallSnapshot`: an
+  `InstallSnapshot` whose `LastIncludedIndex` is at or below the
+  current `snapshotIndex` is ACKed idempotently with
+  `Success=true` without invoking the installer or touching
+  the spill file. Prevents a stale leader or a reordered
+  concurrent install from rolling the persisted snapshot
+  backwards.
+- `cluster.installKeySnapshot` consumes the snapshot from an
+  `io.Reader` via `json.NewDecoder` so the cluster-side installer
+  never allocates a parallel full-size byte buffer.
+- Concurrency tests: `TestCompactLogSerializesWithInstallSnapshot`
+  blocks the provider inside `CompactLog` to verify
+  `handleInstallSnapshot` cannot complete its persist while we
+  hold snapMu, and asserts the final on-disk
+  `LastIncludedIndex` reflects the strictly higher of the two
+  parallel writers (not the older one).
+  `TestConcurrentInstallSnapshotHandlersDoNotTrashSpillFile`
+  drives two InstallSnapshot RPCs in parallel and asserts the
+  monotonicity guard plus serialisation preserve the final
+  file at the higher index.
 - Disk-backed spill for incoming InstallSnapshot transfers.
   `internal/zero/raft/pending_snapshot.go` streams each chunk into
   `stateDir/raft.snapshot.recv` so follower RAM stays
@@ -350,6 +408,27 @@ No breaking changes to the Matrix federation API contract.
   forwarding endpoint on every heartbeat and cause Propose to
   return `ErrNoLeader` even though leadership was healthy.
   Populated addresses still overwrite stale ones.
+- Raft `CompactLog` and `handleInstallSnapshot` no longer race on
+  disk state. Before this commit CompactLog released the lock
+  between pre-validation and `SaveSnapshot`, letting an
+  InstallSnapshot handler finish its own persist in the gap; the
+  stale CompactLog then renamed its older-index file on top of the
+  newer one. Likewise two concurrent InstallSnapshot handlers
+  shared the `pendingSnapshot*` fields and the single
+  `raft.snapshot.recv` file, so one could reset or remove the
+  other's in-flight transfer during the installer/persist window.
+  `snapMu` serialises both contours, the monotonicity guard
+  idempotently ACKs older indices, and the spill is renamed
+  atomically to become raft.snapshot. Both failure modes are
+  pinned by `TestCompactLogSerializesWithInstallSnapshot` and
+  `TestConcurrentInstallSnapshotHandlersDoNotTrashSpillFile`.
+- Raft follower peak RAM during a large `InstallSnapshot` is now
+  O(chunk). Previously `drainPendingSnapshot` read the entire
+  spill file into a transient `[]byte` so the installer could
+  consume it, and `SaveSnapshot` wrote it back to disk through
+  RAM; together they allocated up to `maxSnapshotSize` (256 MiB)
+  twice per transfer. The streaming installer + in-place
+  spill-as-snapshot-format eliminate both allocations.
 - WAL `TruncateBefore` failure after a successful
   `InstallSnapshot` no longer silently ignored. Previously the
   follower discarded the error (`_ = n.wal.TruncateBefore(...)`);

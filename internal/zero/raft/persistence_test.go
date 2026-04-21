@@ -2,6 +2,7 @@ package raft
 
 import (
 	"encoding/json"
+	"io"
 	"testing"
 )
 
@@ -93,9 +94,13 @@ func TestLoadFromDiskRestoresSnapshotThenReplaysTail(t *testing.T) {
 	}
 	defer func() { _ = n.wal.Close() }()
 
-	n.SetSnapshotInstaller(func(data []byte, lastIncludedIndex, lastIncludedTerm uint64) error {
+	n.SetSnapshotInstaller(func(r io.Reader, _ int64, lastIncludedIndex, lastIncludedTerm uint64) error {
 		installerCalls++
-		installed.data = append([]byte(nil), data...)
+		buf, err := io.ReadAll(r)
+		if err != nil {
+			return err
+		}
+		installed.data = buf
 		installed.lastIdx = lastIncludedIndex
 		installed.lastTerm = lastIncludedTerm
 		return nil

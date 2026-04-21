@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"path/filepath"
 	"sync"
@@ -398,7 +399,10 @@ func TestRaftAutomaticInstallSnapshotCatchUp(t *testing.T) {
 			n.appliedMu.Unlock()
 			return append([]byte(nil), payload...), idx, nil
 		})
-		n.raft.SetSnapshotInstaller(func(data []byte, _, _ uint64) error {
+		n.raft.SetSnapshotInstaller(func(r io.Reader, _ int64, _, _ uint64) error {
+			if _, err := io.Copy(io.Discard, r); err != nil {
+				return err
+			}
 			installed[i].Add(1)
 			return nil
 		})
@@ -483,7 +487,10 @@ func TestRaftAutomaticInstallSnapshotCatchUp(t *testing.T) {
 	reborn.SetSnapshotProvider(func() ([]byte, uint64, error) {
 		return append([]byte(nil), payload...), 0, nil
 	})
-	reborn.SetSnapshotInstaller(func(data []byte, _, _ uint64) error {
+	reborn.SetSnapshotInstaller(func(r io.Reader, _ int64, _, _ uint64) error {
+		if _, err := io.Copy(io.Discard, r); err != nil {
+			return err
+		}
 		installed[victimIdx].Add(1)
 		return nil
 	})
@@ -590,7 +597,14 @@ func TestRaftInstallSnapshotStreamsLargePayload(t *testing.T) {
 			n.appliedMu.Unlock()
 			return append([]byte(nil), payload...), idx, nil
 		})
-		n.raft.SetSnapshotInstaller(func(data []byte, idx, term uint64) error {
+		n.raft.SetSnapshotInstaller(func(r io.Reader, size int64, _, _ uint64) error {
+			data, err := io.ReadAll(r)
+			if err != nil {
+				return err
+			}
+			if int64(len(data)) != size {
+				return fmt.Errorf("installer read %d bytes, size arg %d", len(data), size)
+			}
 			if len(data) != len(payload) {
 				return fmt.Errorf("size mismatch: got %d want %d", len(data), len(payload))
 			}

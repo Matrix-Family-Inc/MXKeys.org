@@ -4,7 +4,7 @@
  * Maintainer: Brabus
  * Contact: dev@matrix.family
  * Date: Tue Apr 21 2026 UTC
- * Status: Created
+ * Status: Updated
  */
 
 package raft
@@ -12,6 +12,7 @@ package raft
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,6 +23,14 @@ import (
 // mirroring what pending_snapshot.go uses at runtime.
 func spillPath(stateDir string) string {
 	return filepath.Join(stateDir, pendingSnapshotFileName)
+}
+
+// discardInstaller is the boring installer used by tests that do
+// not care about the payload: it drains the reader so the
+// handler's read-counter stays honest and returns nil.
+func discardInstaller(r io.Reader, _ int64, _, _ uint64) error {
+	_, err := io.Copy(io.Discard, r)
+	return err
 }
 
 // sendChunk is a local helper mirroring the integration harness:
@@ -58,11 +67,12 @@ func TestInstallSnapshotSpillsChunksToDisk(t *testing.T) {
 		t.Fatalf("SetStateDir: %v", err)
 	}
 	t.Cleanup(func() { _ = n.wal.Close() })
-	n.SetSnapshotInstaller(func([]byte, uint64, uint64) error { return nil })
+	n.SetSnapshotInstaller(discardInstaller)
 	n.currentTerm = 1
 
-	// First non-final chunk opens the spill file and writes the
-	// chunk body to disk. The in-memory buffer MUST stay empty.
+	// First non-final chunk opens the spill file, writes the
+	// SaveSnapshot header prefix, and appends the chunk body. The
+	// in-memory buffer MUST stay empty.
 	resp := sendChunk(t, n, InstallSnapshotRequest{
 		Term: 1, LeaderID: "L", LastIncludedIndex: 10, LastIncludedTerm: 1,
 		Offset: 0, Done: false, Data: []byte("first-"),
@@ -91,17 +101,20 @@ func TestInstallSnapshotSpillsChunksToDisk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat spill file: %v", err)
 	}
-	if info.Size() != int64(len("first-")) {
-		t.Fatalf("spill file size = %d, want %d", info.Size(), len("first-"))
+	// Spill file layout: header (snapshotHeaderSize) + data payload.
+	want := int64(snapshotHeaderSize + len("first-"))
+	if info.Size() != want {
+		t.Fatalf("spill file size = %d, want %d (header %d + data %d)",
+			info.Size(), want, snapshotHeaderSize, len("first-"))
 	}
 }
 
-// TestInstallSnapshotSpillFileRemovedOnSuccess ensures the spill
-// file is deleted once raft.snapshot on disk has become the
-// authoritative copy. Leaving raft.snapshot.recv around would
-// confuse the next transfer's offset=0 reset into inheriting
-// stale bytes.
-func TestInstallSnapshotSpillFileRemovedOnSuccess(t *testing.T) {
+// TestInstallSnapshotSpillBecomesFinalOnSuccess ensures that the
+// spill file's byte layout matches raft.snapshot so the Done=true
+// terminus can atomically rename it into place. After the final
+// chunk, raft.snapshot must exist with the right metadata and the
+// spill file must be gone.
+func TestInstallSnapshotSpillBecomesFinalOnSuccess(t *testing.T) {
 	dir := t.TempDir()
 	n := NewNode(Config{
 		NodeID:          "f",
@@ -112,11 +125,11 @@ func TestInstallSnapshotSpillFileRemovedOnSuccess(t *testing.T) {
 		t.Fatalf("SetStateDir: %v", err)
 	}
 	t.Cleanup(func() { _ = n.wal.Close() })
-	n.SetSnapshotInstaller(func([]byte, uint64, uint64) error { return nil })
+	n.SetSnapshotInstaller(discardInstaller)
 	n.currentTerm = 1
 
 	// Two chunks: second Done=true. After this the spill file must
-	// be gone and raft.snapshot must exist.
+	// be gone and raft.snapshot must exist with matching meta.
 	_ = sendChunk(t, n, InstallSnapshotRequest{
 		Term: 1, LeaderID: "L", LastIncludedIndex: 10, LastIncludedTerm: 1,
 		Offset: 0, Done: false, Data: []byte("head-"),
@@ -132,8 +145,15 @@ func TestInstallSnapshotSpillFileRemovedOnSuccess(t *testing.T) {
 	if _, err := os.Stat(spillPath(dir)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("spill file must be removed on successful install, stat err = %v", err)
 	}
-	if _, err := LoadSnapshot(dir); err != nil {
-		t.Fatalf("raft.snapshot must exist after success, LoadSnapshot: %v", err)
+	snap, err := LoadSnapshot(dir)
+	if err != nil {
+		t.Fatalf("LoadSnapshot after successful install: %v", err)
+	}
+	if snap.Meta.LastIncludedIndex != 10 || snap.Meta.LastIncludedTerm != 1 {
+		t.Fatalf("persisted meta mismatch: %+v", snap.Meta)
+	}
+	if string(snap.Data) != "head-tail" {
+		t.Fatalf("persisted data = %q, want %q", snap.Data, "head-tail")
 	}
 }
 
@@ -151,7 +171,8 @@ func TestInstallSnapshotSpillFileRemovedOnInstallerError(t *testing.T) {
 		t.Fatalf("SetStateDir: %v", err)
 	}
 	t.Cleanup(func() { _ = n.wal.Close() })
-	n.SetSnapshotInstaller(func([]byte, uint64, uint64) error {
+	n.SetSnapshotInstaller(func(r io.Reader, _ int64, _, _ uint64) error {
+		_, _ = io.Copy(io.Discard, r)
 		return errors.New("installer rejected")
 	})
 	n.currentTerm = 1
@@ -165,6 +186,11 @@ func TestInstallSnapshotSpillFileRemovedOnInstallerError(t *testing.T) {
 	}
 	if _, err := os.Stat(spillPath(dir)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("spill file must be removed on installer error, stat err = %v", err)
+	}
+	// raft.snapshot MUST NOT exist either: a rejected install must
+	// leave the disk in its pre-install state.
+	if _, err := LoadSnapshot(dir); !errors.Is(err, ErrNoSnapshot) {
+		t.Fatalf("raft.snapshot must not exist after installer error, LoadSnapshot err = %v", err)
 	}
 }
 
@@ -184,7 +210,7 @@ func TestInstallSnapshotRejectsOverflow(t *testing.T) {
 		t.Fatalf("SetStateDir: %v", err)
 	}
 	t.Cleanup(func() { _ = n.wal.Close() })
-	n.SetSnapshotInstaller(func([]byte, uint64, uint64) error { return nil })
+	n.SetSnapshotInstaller(discardInstaller)
 	n.currentTerm = 1
 
 	// Start a transfer just short of the cap, then try to append a

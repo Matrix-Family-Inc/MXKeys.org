@@ -10,6 +10,7 @@
 package cluster
 
 import (
+	"bytes"
 	"errors"
 	"testing"
 	"time"
@@ -55,7 +56,7 @@ func TestSnapshotKeyStateRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewCluster(dst): %v", err)
 	}
-	if err := dst.installKeySnapshot(data, 7, 3); err != nil {
+	if err := dst.installKeySnapshot(bytes.NewReader(data), int64(len(data)), 7, 3); err != nil {
 		t.Fatalf("installKeySnapshot: %v", err)
 	}
 
@@ -84,7 +85,7 @@ func TestInstallKeySnapshotRejectsUnknownVersion(t *testing.T) {
 	}
 	// Hand-crafted payload with Version=99.
 	payload := []byte(`{"v":99,"keys":{}}`)
-	err = c.installKeySnapshot(payload, 1, 1)
+	err = c.installKeySnapshot(bytes.NewReader(payload), int64(len(payload)), 1, 1)
 	if err == nil {
 		t.Fatalf("expected unsupported-version error, got nil")
 	}
@@ -106,7 +107,7 @@ func TestInstallKeySnapshotEmptyPayloadResetsCache(t *testing.T) {
 		Timestamp: time.Now(), NodeID: "dst", Hash: "h",
 	}, false)
 
-	if err := c.installKeySnapshot(nil, 5, 2); err != nil {
+	if err := c.installKeySnapshot(bytes.NewReader(nil), 0, 5, 2); err != nil {
 		t.Fatalf("installKeySnapshot(empty): %v", err)
 	}
 	if got := c.GetCachedKey("srv", "k"); got != nil {
