@@ -49,7 +49,7 @@ fi
 for target in ${TARGETS}; do
   goos="${target%/*}"
   goarch="${target#*/}"
-  for bin in mxkeys mxkeys-verify; do
+  for bin in mxkeys mxkeys-verify mxkeys-walctl; do
     out="${DIST}/${bin}-${VERSION}-${goos}-${goarch}"
     echo "==> ${out}"
     CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" \

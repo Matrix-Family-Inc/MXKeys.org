@@ -66,6 +66,13 @@ const (
 	// to weaken the KDF.
 	minPBKDF2Iterations = 10_000
 
+	// maxPBKDF2Iterations is an upper bound that lets the encoder
+	// store the count in a 4-byte header field without concern
+	// for a wrap-around on unusual platforms. 10^8 is well above
+	// the tolerable wall time for human-interactive decryption
+	// and orders of magnitude above the current default.
+	maxPBKDF2Iterations = 100_000_000
+
 	// aesKeyLen is the KEK length for AES-256-GCM.
 	aesKeyLen = 32
 )
@@ -125,11 +132,13 @@ func encryptKeyWithIterations(plaintext, passphrase []byte, iterations int) ([]b
 		return nil, fmt.Errorf("keyprovider: gcm: %w", err)
 	}
 
+	if iterations < 0 || iterations > int(maxPBKDF2Iterations) {
+		return nil, fmt.Errorf("keyprovider: iterations %d out of range [%d, %d]",
+			iterations, minPBKDF2Iterations, maxPBKDF2Iterations)
+	}
 	header := make([]byte, encHeaderLen)
 	copy(header[0:encMagicLen], encMagic)
-	// iterations is validated to be > minPBKDF2Iterations and
-	// practically bounded by runtime feasibility (< 10^9); uint32 fits.
-	binary.BigEndian.PutUint32(header[encIterationsOffset:encSaltOffset], uint32(iterations)) // #nosec G115
+	binary.BigEndian.PutUint32(header[encIterationsOffset:encSaltOffset], uint32(iterations))
 	copy(header[encSaltOffset:encNonceOffset], salt)
 	copy(header[encNonceOffset:encHeaderLen], nonce)
 

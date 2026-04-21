@@ -129,5 +129,5 @@ cluster:
     key_file: "/etc/mxkeys/cluster.key"
     ca_file: "/etc/mxkeys/cluster-ca.crt"
     require_client_cert: true
-    min_version: "1.3"     # "1.2" or "1.3" (default "1.3")
+    min_version: "1.3"     # only "1.3" is accepted; the field stays for forward compatibility
     server_name: ""        # optional SNI pin

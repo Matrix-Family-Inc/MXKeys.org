@@ -33,13 +33,13 @@ hard budget.
 
 - **Target**: 250 - 300 lines. This is the first question when a
   file grows: is it still one responsibility.
-- **Ceiling**: 500 lines. Files above this limit require a top-of-
-  file comment that states the reason (usually: cohesion cost of
-  splitting exceeds the navigation benefit).
+- **Ceiling**: 400 lines. Files above this limit require a top-of-
+  file comment that states the reason (cohesion cost of splitting
+  exceeds the navigation benefit).
 - **Scope**: tracked source, test, and doc files edited by humans.
   Generated code, fixtures, and vendored data are exempt.
 - **Enforcement**: `scripts/file-size-lint.sh` warns at 300 lines
-  and fails at 500 lines. It runs in the `file-size` CI job and is
+  and fails at 400 lines. It runs in the `file-size` CI job and is
   in the required status checks for `main`.
 
 ## Consequences
@@ -47,8 +47,8 @@ hard budget.
 - Source files keep local cohesion. A 320-line file holding one
   algorithm is preferred to two 170-line files that a reader has
   to alternate between.
-- The 500-line ceiling still rejects files that accumulate
-  unrelated responsibilities.
+- The 400-line ceiling rejects files that accumulate unrelated
+  responsibilities while leaving room for coherent test tables.
 - Files already split below 300 lines in earlier passes stay as
   they are. They are recombined only if a reader finds the split
   confusing.
@@ -59,7 +59,7 @@ hard budget.
 
 - **Strict 250 - 300 cap**. Rejected. Over-split code was harder
   to read and refactor.
-- **No cap**. Rejected. Files above ~500 lines accumulate
+- **No cap**. Rejected. Files above ~400 lines accumulate
   unrelated concerns.
 - **Lint-only enforcement without review judgement**. Kept as
   lint, not sole gate; code review still applies the cohesion

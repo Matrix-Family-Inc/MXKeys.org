@@ -9,3 +9,4 @@
 
 export { NotaryLookupForm } from './ui/notary-lookup-form';
 export { notaryLookupSchema, type NotaryLookupInput } from './model/schema';
+export { useVerifyServer } from './model/query';

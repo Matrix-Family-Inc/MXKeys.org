@@ -59,8 +59,10 @@ type Config struct {
 	// server. Recommended for every production deployment.
 	RequireClientCert bool
 
-	// MinVersion is "1.2" or "1.3". Empty or unknown values default
-	// to 1.3.
+	// MinVersion is kept for forward compatibility but is ignored:
+	// the cluster transport is TLS 1.3 only. Operators running
+	// legacy peers that cannot speak TLS 1.3 must upgrade them
+	// before enabling cluster TLS here.
 	MinVersion string
 
 	// ServerName is the SNI / expected CN for dial-side verification.
@@ -97,16 +99,12 @@ func (c Config) Validate() error {
 	return nil
 }
 
-func minVersion(name string) uint16 {
-	switch name {
-	case "1.2":
-		return tls.VersionTLS12
-	case "", "1.3":
-		return tls.VersionTLS13
-	default:
-		return tls.VersionTLS13
-	}
-}
+// tlsMinVersion is the single TLS version floor this package
+// configures. Cluster transport is greenfield: there is no legacy
+// peer to preserve, and TLS 1.2 adds a materially larger attack
+// surface (ciphersuite selection, renegotiation, ...) for no
+// interop benefit.
+const tlsMinVersion = tls.VersionTLS13
 
 // loadCAPool reads a PEM bundle and returns a CertPool ready for use
 // as ClientCAs or RootCAs.
@@ -140,13 +138,9 @@ func ServerConfig(c Config) (*tls.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	// #nosec G402 -- minVersion() resolves unknown input to TLS 1.3 and
-	// the only explicitly permitted downgrade is TLS 1.2, which remains
-	// supported for operators who must bridge to legacy peers. gosec
-	// cannot inspect the function and warns unconditionally.
 	cfg := &tls.Config{
 		Certificates: []tls.Certificate{cert},
-		MinVersion:   minVersion(c.MinVersion),
+		MinVersion:   tlsMinVersion,
 		ClientCAs:    pool,
 	}
 	if c.RequireClientCert {
@@ -170,9 +164,8 @@ func ClientConfig(c Config) (*tls.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	// #nosec G402 -- see matching comment in ServerConfig.
 	cfg := &tls.Config{
-		MinVersion: minVersion(c.MinVersion),
+		MinVersion: tlsMinVersion,
 		RootCAs:    pool,
 	}
 	if c.RequireClientCert {

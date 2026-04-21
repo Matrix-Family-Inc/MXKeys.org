@@ -82,11 +82,14 @@ this release provides:
   encrypted at rest as an `MXKENC01` envelope (AES-256-GCM,
   PBKDF2-HMAC-SHA256 at 600 000 iterations) when
   `keys.encryption.passphrase_env` is set. Otherwise the key is
-  stored at 0600 as plaintext.
-- **Cluster confidentiality**: TLS with optional mutual auth
-  covers both CRDT and Raft transports. When TLS is disabled,
-  cluster traffic carries HMAC-SHA256 over canonical JSON but is
-  not encrypted.
+  stored at 0600 as plaintext. On Linux the loaded seed's pages
+  are mlock'd via `syscall.Mlock` so the key does not land in
+  swap. The mlock call is best-effort; failures surface as a
+  startup WARN and do not block startup.
+- **Cluster confidentiality**: TLS 1.3 with optional mutual auth
+  covers both CRDT and Raft transports. TLS 1.2 and earlier are
+  not accepted. When TLS is disabled, cluster traffic carries
+  HMAC-SHA256 over canonical JSON but is not encrypted.
 - **WAL integrity**: every record carries CRC32C (bit rot) and
   HMAC-SHA256 (intentional tampering). A CRC-valid but HMAC-
   invalid record surfaces as `ErrWALTampered`.

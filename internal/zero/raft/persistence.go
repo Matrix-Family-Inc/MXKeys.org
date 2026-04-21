@@ -215,13 +215,14 @@ func (n *Node) CompactLog() error {
 	// Drop the in-memory prefix covered by the snapshot. logOffset becomes
 	// lastIdx so Index/offset arithmetic stays consistent.
 	if lastIdx > n.logOffset {
-		// Bounded by len(n.log) in the subsequent clamp.
-		drop := int(lastIdx - n.logOffset) // #nosec G115
-		if drop > len(n.log) {
-			drop = len(n.log)
+		// Convert "drop the prefix up to and including lastIdx" into a
+		// slice-safe index via the centralised narrowing helper.
+		drop := len(n.log)
+		if slot, ok := offsetToSlot(lastIdx+1, n.logOffset, len(n.log)); ok {
+			drop = slot
 		}
-		// Preserve the post-snapshot tail in a fresh backing slice so the
-		// old array with compacted entries becomes eligible for GC.
+		// Preserve the post-snapshot tail in a fresh backing slice so
+		// the old array with compacted entries becomes eligible for GC.
 		rest := append([]LogEntry(nil), n.log[drop:]...)
 		n.log = rest
 	}

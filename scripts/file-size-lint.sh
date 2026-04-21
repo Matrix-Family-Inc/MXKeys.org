@@ -18,7 +18,7 @@
 set -euo pipefail
 
 WARN_AT="${FILE_SIZE_LINT_WARN:-300}"
-FAIL_AT="${FILE_SIZE_LINT_FAIL:-500}"
+FAIL_AT="${FILE_SIZE_LINT_FAIL:-400}"
 
 patterns=(
   '*.go'

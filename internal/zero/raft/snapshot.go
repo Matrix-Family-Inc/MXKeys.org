@@ -27,6 +27,11 @@ const snapshotFileName = "raft.snapshot"
 // fails fast rather than parsing garbage as state.
 var snapshotMagic = [4]byte{'M', 'X', 'K', 'S'}
 
+// maxSnapshotSize caps the size of an on-disk snapshot. At 256 MiB
+// we comfortably fit any practical notary state while keeping the
+// length field in the header bounded to uint32.
+const maxSnapshotSize = 256 << 20
+
 // SnapshotMeta describes the point in the replicated log that a snapshot
 // captures.
 type SnapshotMeta struct {
@@ -91,11 +96,12 @@ func SaveSnapshot(dir string, s Snapshot) error {
 	var hdr [20]byte
 	binary.LittleEndian.PutUint64(hdr[0:8], s.Meta.LastIncludedIndex)
 	binary.LittleEndian.PutUint64(hdr[8:16], s.Meta.LastIncludedTerm)
-	// Snapshot size is bounded by available memory at snapshot
-	// creation time; truncation to uint32 would only matter for
-	// snapshots >4 GiB, which we do not support (chunked delivery
-	// caps streaming but not creation).
-	binary.LittleEndian.PutUint32(hdr[16:20], uint32(len(s.Data))) // #nosec G115
+	dataLen, err := lenUint32("raft snapshot body", s.Data, maxSnapshotSize)
+	if err != nil {
+		closeRemove(f, tmpPath)
+		return err
+	}
+	binary.LittleEndian.PutUint32(hdr[16:20], dataLen)
 	if _, err := f.Write(hdr[:]); err != nil {
 		closeRemove(f, tmpPath)
 		return fmt.Errorf("raft snapshot: write header: %w", err)
