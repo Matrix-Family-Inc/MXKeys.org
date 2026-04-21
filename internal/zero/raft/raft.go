@@ -27,10 +27,13 @@ var (
 	ErrNoQuorum  = errors.New("no quorum")
 	ErrShutdown  = errors.New("node is shutting down")
 	ErrTimeout   = errors.New("operation timeout")
-	// ErrNoLeader is returned by Propose when the node is not the
-	// leader and no leader is currently known (e.g. mid-election).
-	// Callers should back off and retry.
+	// ErrNoLeader: Propose on a follower with no known leader
+	// (e.g. mid-election). Callers back off and retry.
 	ErrNoLeader = errors.New("no leader known")
+	// ErrSnapshotInstallerRequired: snapshot arrives (LoadFromDisk
+	// or InstallSnapshot) but no SnapshotInstaller is registered.
+	// Raft refuses rather than desync the state machine.
+	ErrSnapshotInstallerRequired = errors.New("raft: SetSnapshotInstaller is required to process a persisted or incoming snapshot")
 )
 
 // State represents the Raft node state
@@ -112,14 +115,10 @@ type Node struct {
 	snapshotIndex uint64
 	snapshotTerm  uint64
 
-	// pendingSnapshot* hold the in-flight InstallSnapshot transfer
-	// state. Exactly one is active at a time; Offset==0 or a
-	// differing (index, term) tuple resets. When stateDir != ""
-	// chunks stream to pendingSnapshotFile (stateDir/raft.snapshot
-	// .recv) keeping RAM at O(snapshotChunkSize). With stateDir==""
-	// (in-memory mode, tests) chunks buffer in pendingSnapshot. See
-	// pending_snapshot.go for the full lifecycle and
-	// cleanupStalePendingSnapshot for crash recovery.
+	// pendingSnapshot* hold the in-flight InstallSnapshot transfer.
+	// stateDir != "" streams chunks to raft.snapshot.recv for
+	// O(chunk) RAM; stateDir=="" buffers in pendingSnapshot. See
+	// pending_snapshot.go for the lifecycle.
 	pendingSnapshot         []byte
 	pendingSnapshotFile     *os.File
 	pendingSnapshotPath     string

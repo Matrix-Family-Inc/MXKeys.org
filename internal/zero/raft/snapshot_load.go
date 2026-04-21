@@ -91,6 +91,22 @@ func LoadSnapshotReader(dir string) (*os.File, SnapshotMeta, error) {
 		_ = f.Close()
 		return nil, SnapshotMeta{}, err
 	}
+	// File-level size check: the snapshot file MUST be exactly
+	// the header plus the declared data length. Trailing bytes,
+	// truncation, or any other length drift is structural
+	// corruption and rejected here before we even hash the
+	// payload. Catches a class of tampering that a CRC of the
+	// declared span alone would silently accept (garbage
+	// appended after the valid payload).
+	info, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, SnapshotMeta{}, fmt.Errorf("raft snapshot: stat: %w", err)
+	}
+	if info.Size() != int64(snapshotHeaderSize)+meta.Size {
+		_ = f.Close()
+		return nil, SnapshotMeta{}, ErrSnapshotCorrupt
+	}
 	if err := verifySnapshotPayloadCRC(f, meta.Size, expectedCRC); err != nil {
 		_ = f.Close()
 		return nil, SnapshotMeta{}, err

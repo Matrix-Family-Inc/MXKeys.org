@@ -8,6 +8,24 @@ No breaking changes to the Matrix federation API contract.
 
 ### Added
 
+- `nettls.DialContext`: ctx-aware dial helper that honours
+  caller cancellation at BOTH the TCP connect and the TLS
+  handshake stages. `net.Dialer.DialContext` replaces the
+  timeout-only flow; for TLS, `tls.Client` +
+  `HandshakeContext` adds the handshake-stage hook.
+  `DialTimeout` is now a thin wrapper (background ctx with the
+  given timeout) so legacy call sites keep compiling; every
+  call site that carries a context should invoke DialContext
+  directly. `raft.sendRPCCtx` now does so, which means a
+  caller-initiated cancel (e.g. stopCh close via ctxWithStop or
+  Cluster.Stop via proposeCtx) short-circuits the full 2-second
+  dial cap instead of waiting it out.
+- Dial-cancellation tests
+  (`internal/zero/nettls/dialctx_test.go`):
+  `TestDialContextCancelsMidDial` asserts an in-flight dial
+  returns within milliseconds when ctx fires;
+  `TestDialContextAlreadyCancelledReturnsImmediately` covers
+  the fast path.
 - `raft.LoadSnapshotReader` now performs a streaming Castagnoli
   CRC pre-verification of the full data portion before returning
   the reader to the caller
@@ -436,6 +454,29 @@ No breaking changes to the Matrix federation API contract.
   forwarding endpoint on every heartbeat and cause Propose to
   return `ErrNoLeader` even though leadership was healthy.
   Populated addresses still overwrite stale ones.
+- `raft.LoadSnapshotReader` now enforces a strict
+  file-size contract: the on-disk file MUST be exactly
+  `snapshotHeaderSize + meta.Size` bytes. Any trailing
+  garbage, mid-file truncation, or appended padding is
+  rejected as `ErrSnapshotCorrupt` before the CRC pass even
+  runs. Previously a CRC over the declared span would silently
+  accept content appended after the payload.
+  `TestLoadSnapshotReaderRejectsTrailingGarbage` pins this.
+- Snapshot installer short-read is now a hard failure instead
+  of an advisory warning. `LoadFromDisk` returns an error and
+  leaves the Node unmodified; `handleInstallSnapshot` drops
+  the spill and ACKs with `Success=false`. The SnapshotInstaller
+  contract in `internal/zero/raft/snapshot.go` is updated
+  accordingly: the installer MUST consume all `size` bytes.
+  Short-reading under nil return was previously only warned
+  about, which let a buggy installer decode a prefix of the
+  snapshot and move on undetected.
+  `TestLoadFromDiskFailsOnShortReadingInstaller` pins this.
+- `raft.sendRPCCtx` no longer lets the dial stage outlive ctx
+  cancellation. Prior implementation watched `net.Conn` only
+  after `DialTimeout` returned, so a cancel during dial waited
+  for the 2-second hard cap. Using `nettls.DialContext` turns
+  the dial into a ctx-first operation.
 - Raft startup restore (`LoadFromDisk`) no longer trusts the
   on-disk snapshot without verifying its payload CRC. The
   streaming-installer migration in the previous commit replaced

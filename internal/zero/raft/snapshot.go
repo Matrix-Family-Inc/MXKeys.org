@@ -210,10 +210,18 @@ type SnapshotProvider func() (data []byte, lastAppliedIndex uint64, err error)
 // (LoadFromDisk) and again when a leader sends InstallSnapshot for
 // the same tuple.
 //
-// Streaming contract: the reader is valid only while the installer
-// call is running. The installer MUST NOT retain r, or read from
-// r after returning. The raft layer takes ownership of the
-// underlying resource again as soon as the call returns.
+// Streaming contract:
+//
+//   - The reader is valid only while the installer call is running.
+//     The installer MUST NOT retain r or read from r after
+//     returning; the raft layer takes ownership of the underlying
+//     resource again as soon as the call returns.
+//   - The installer MUST consume all size bytes. The raft layer
+//     treats a short read (cr.count < size) as a contract
+//     violation and returns an error. This keeps the boundary
+//     between "application chose to stop early" and "application
+//     silently dropped trailing bytes" unambiguous and catches
+//     installer bugs at the transport layer.
 type SnapshotInstaller func(r io.Reader, size int64, lastIncludedIndex, lastIncludedTerm uint64) error
 
 // InstallSnapshotRequest is sent by a leader to fast-forward a follower

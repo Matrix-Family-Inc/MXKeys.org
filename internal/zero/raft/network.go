@@ -104,7 +104,11 @@ func (n *Node) sendRPCCtx(ctx context.Context, peer string, msgType MessageType,
 		return nil, err
 	}
 
-	conn, err := nettls.DialTimeout("tcp", peer, 2*time.Second, n.config.TLS)
+	// DialContext honours ctx at both the TCP-connect and TLS-
+	// handshake stages, so a caller-initiated cancel (e.g. stopCh
+	// close via ctxWithStop) short-circuits the dial itself rather
+	// than waiting out its 2-second hard cap.
+	conn, err := nettls.DialContext(ctx, "tcp", peer, 2*time.Second, n.config.TLS)
 	if err != nil {
 		return nil, err
 	}

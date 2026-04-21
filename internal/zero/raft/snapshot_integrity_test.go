@@ -151,6 +151,69 @@ func TestLoadSnapshotReaderAcceptsValidFile(t *testing.T) {
 	}
 }
 
+// TestLoadSnapshotReaderRejectsTrailingGarbage pins the strict
+// file-size contract: a well-formed header + valid-CRC payload
+// followed by ANY trailing bytes must be rejected as corruption.
+// Without the file-size guard a CRC that only covers the declared
+// data_len would silently accept appended content, which is an
+// undesirable loosening of the on-disk format.
+func TestLoadSnapshotReaderRejectsTrailingGarbage(t *testing.T) {
+	dir := t.TempDir()
+	path := seedValidSnapshot(t, dir, []byte("clean-payload"))
+
+	// Append trailing bytes after the valid snapshot.
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		t.Fatalf("open for append: %v", err)
+	}
+	if _, err := f.Write([]byte("trailing-garbage")); err != nil {
+		_ = f.Close()
+		t.Fatalf("append: %v", err)
+	}
+	_ = f.Close()
+
+	_, _, err = LoadSnapshotReader(dir)
+	if !errors.Is(err, ErrSnapshotCorrupt) {
+		t.Fatalf("expected ErrSnapshotCorrupt on trailing garbage, got %v", err)
+	}
+}
+
+// TestLoadFromDiskFailsOnShortReadingInstaller pins the strict
+// SnapshotInstaller contract: an installer that returns nil but
+// stops short of size MUST fail the startup restore path. A
+// previous build logged a Warn and continued; a later refactor
+// where the installer silently reads only a JSON prefix would
+// have left the Node's snapshotIndex advancing past state the
+// application never fully parsed.
+func TestLoadFromDiskFailsOnShortReadingInstaller(t *testing.T) {
+	dir := seedWALAndSnapshot(t, 5, 2, nil)
+
+	n := NewNode(Config{NodeID: "n", SharedSecret: startupContractSecret})
+	if err := n.SetStateDir(dir, true); err != nil {
+		t.Fatalf("SetStateDir: %v", err)
+	}
+	t.Cleanup(func() { _ = n.wal.Close() })
+
+	// Installer returns success but reads only the first byte.
+	// Deliberately breaks the drain contract.
+	n.SetSnapshotInstaller(func(r io.Reader, _ int64, _, _ uint64) error {
+		buf := make([]byte, 1)
+		_, _ = r.Read(buf)
+		return nil
+	})
+
+	err := n.LoadFromDisk()
+	if err == nil {
+		t.Fatalf("LoadFromDisk must fail when installer short-reads")
+	}
+	// Assert Node was NOT half-loaded.
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	if n.snapshotIndex != 0 {
+		t.Fatalf("snapshotIndex must stay zero after short-read rejection, got %d", n.snapshotIndex)
+	}
+}
+
 // TestCountingReaderCountsExactBytes documents the observability
 // contract used by LoadFromDisk and handleInstallSnapshot to log
 // an advisory warning when an installer stops short of size.
