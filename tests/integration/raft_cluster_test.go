@@ -350,6 +350,203 @@ func TestRaftConcurrentSubmits(t *testing.T) {
 	}
 }
 
+// TestRaftAutomaticInstallSnapshotCatchUp drives the production
+// path that was previously broken: a leader whose lagging peer has
+// nextIndex at or below the snapshot boundary must automatically
+// switch from AppendEntries to SendInstallSnapshot. Without the fix
+// sendHeartbeats would loop forever decrementing nextIndex through
+// entries that only exist on disk.
+//
+// Scenario:
+//
+//  1. 3-node cluster elects a leader.
+//  2. Every node hooks a snapshot provider/installer reflecting a
+//     tracked state blob.
+//  3. We stop one follower, submit further entries on the leader
+//     (2/3 quorum still commits), drain and compact the leader.
+//  4. The leader's snapshotIndex now sits strictly above the stopped
+//     follower's matchIndex; its nextIndex[victim] falls inside the
+//     snapshot prefix.
+//  5. We bring the victim back up with the same addr and a fresh
+//     state directory. The leader's heartbeat tick detects the
+//     catch-up condition and streams InstallSnapshot. The installer
+//     counter on the victim must increment.
+func TestRaftAutomaticInstallSnapshotCatchUp(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
+
+	nodes := newCluster(t, 3)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	payload := []byte("catchup-state-blob")
+	installed := make([]*atomic.Int32, 3)
+	for i, n := range nodes {
+		i, n := i, n
+		installed[i] = &atomic.Int32{}
+		n.raft.SetSnapshotProvider(func() ([]byte, error) {
+			return append([]byte(nil), payload...), nil
+		})
+		n.raft.SetSnapshotInstaller(func(data []byte, _, _ uint64) error {
+			installed[i].Add(1)
+			return nil
+		})
+	}
+
+	startAll(t, ctx, nodes)
+	waitUntil(t, 3*time.Second, "leader elected", func() bool {
+		return findLeader(nodes) != nil
+	})
+	leader := findLeader(nodes)
+
+	var victimIdx int
+	var victim *node
+	for i, n := range nodes {
+		if n != leader {
+			victim = n
+			victimIdx = i
+			break
+		}
+	}
+
+	// Submit a baseline so every node has a non-trivial applied log.
+	for i := 0; i < 3; i++ {
+		if err := leader.raft.Submit(ctx, json.RawMessage(fmt.Sprintf(`"pre-%d"`, i))); err != nil {
+			t.Fatalf("pre-submit: %v", err)
+		}
+	}
+	waitUntil(t, 3*time.Second, "victim caught up baseline", func() bool {
+		return victim.appliedLen() >= 3
+	})
+
+	// Stop the victim; remaining 2-of-3 quorum still commits.
+	_ = victim.raft.Stop()
+
+	for i := 0; i < 5; i++ {
+		if err := leader.raft.Submit(ctx, json.RawMessage(fmt.Sprintf(`"post-%d"`, i))); err != nil {
+			t.Fatalf("post-submit: %v", err)
+		}
+	}
+	waitUntil(t, 3*time.Second, "leader applied post-entries", func() bool {
+		return leader.raft.LastApplied() >= 8
+	})
+
+	if err := leader.raft.CompactLog(); err != nil {
+		t.Fatalf("CompactLog: %v", err)
+	}
+
+	// Rebuild the victim with a fresh state dir on the same addr so
+	// the leader's stale nextIndex[victim] > new victim's zero log.
+	freshDir := t.TempDir()
+	host, port, err := net.SplitHostPort(victim.addr)
+	if err != nil {
+		t.Fatalf("split victim addr: %v", err)
+	}
+	var portNum int
+	if _, err := fmt.Sscanf(port, "%d", &portNum); err != nil {
+		t.Fatalf("parse victim port: %v", err)
+	}
+	peers := make([]string, 0, len(nodes)-1)
+	for i, n := range nodes {
+		if i == victimIdx {
+			continue
+		}
+		peers = append(peers, n.addr)
+	}
+	reborn := raft.NewNode(raft.Config{
+		NodeID:            victim.id,
+		BindAddress:       host,
+		BindPort:          portNum,
+		Peers:             peers,
+		ElectionTimeout:   200 * time.Millisecond,
+		HeartbeatInterval: 50 * time.Millisecond,
+		CommitTimeout:     2 * time.Second,
+		SharedSecret:      clusterSecret,
+	})
+	if err := reborn.SetStateDir(freshDir, true); err != nil {
+		t.Fatalf("reborn SetStateDir: %v", err)
+	}
+	reborn.SetSnapshotProvider(func() ([]byte, error) {
+		return append([]byte(nil), payload...), nil
+	})
+	reborn.SetSnapshotInstaller(func(data []byte, _, _ uint64) error {
+		installed[victimIdx].Add(1)
+		return nil
+	})
+	if err := reborn.Start(ctx); err != nil {
+		t.Fatalf("reborn Start: %v", err)
+	}
+	t.Cleanup(func() { _ = reborn.Stop() })
+
+	// The leader's heartbeat tick (50 ms) should observe the stale
+	// nextIndex, detect nextIdx <= snapshotIndex, and drive
+	// SendInstallSnapshot automatically. We only care that the
+	// installer counter advanced on the reborn node.
+	waitUntil(t, 5*time.Second, "automatic InstallSnapshot caught up victim", func() bool {
+		return installed[victimIdx].Load() >= 1
+	})
+}
+
+// TestRaftProposeFromFollowerForwardsToLeader exercises the
+// follower-forward path. A Propose call on a node that is not the
+// leader must transparently forward to the current leader via
+// MsgForwardProposal, and the committed entry must apply on every
+// replica. Previously the only write API was Submit, which returns
+// ErrNotLeader on followers; client writes hitting a follower were
+// silently dropped at the cluster level.
+func TestRaftProposeFromFollowerForwardsToLeader(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
+	nodes := newCluster(t, 3)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	startAll(t, ctx, nodes)
+
+	waitUntil(t, 3*time.Second, "leader elected", func() bool {
+		return findLeader(nodes) != nil
+	})
+	leader := findLeader(nodes)
+
+	var follower *node
+	for _, n := range nodes {
+		if n != leader {
+			follower = n
+			break
+		}
+	}
+
+	// Wait until the follower has seen at least one AppendEntries
+	// from the leader so that its leaderAddr is populated. Without
+	// this, Propose would race the first heartbeat and return
+	// ErrNoLeader on the initial tick.
+	waitUntil(t, 2*time.Second, "follower learned leader id", func() bool {
+		return follower.raft.LeaderID() == leader.raft.LeaderID() && follower.raft.LeaderID() != ""
+	})
+
+	cmd := json.RawMessage(`{"forwarded":true}`)
+	if err := follower.raft.Propose(ctx, cmd); err != nil {
+		t.Fatalf("Propose on follower: %v", err)
+	}
+
+	waitUntil(t, 3*time.Second, "every node applied forwarded entry", func() bool {
+		for _, n := range nodes {
+			found := false
+			for _, e := range n.appliedSnapshot() {
+				if string(e.Command) == string(cmd) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		}
+		return true
+	})
+}
+
 // TestRaftInstallSnapshotStreamsLargePayload drives the end-to-end
 // chunked InstallSnapshot path with a payload that spans multiple
 // 512 KiB chunks. Requires a snapshot provider and installer hooked

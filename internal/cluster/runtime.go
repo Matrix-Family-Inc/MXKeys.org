@@ -75,6 +75,7 @@ func (c *Cluster) startRaft(ctx context.Context) error {
 		NodeID:            c.nodeID,
 		BindAddress:       c.config.BindAddress,
 		BindPort:          c.config.BindPort,
+		AdvertiseAddr:     fmt.Sprintf("%s:%d", c.advertiseAddress(), c.advertisePort()),
 		Peers:             c.config.Seeds,
 		ElectionTimeout:   300 * time.Millisecond,
 		HeartbeatInterval: 100 * time.Millisecond,

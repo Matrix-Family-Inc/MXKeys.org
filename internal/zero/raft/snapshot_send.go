@@ -60,6 +60,8 @@ func (n *Node) SendInstallSnapshot(ctx context.Context, peer string) error {
 	leaderID := n.config.NodeID
 	n.mu.RUnlock()
 
+	leaderAddr := n.advertiseAddr()
+
 	data := []byte(snap.Data)
 	total := uint64(len(data))
 
@@ -69,6 +71,7 @@ func (n *Node) SendInstallSnapshot(ctx context.Context, peer string) error {
 		req := InstallSnapshotRequest{
 			Term:              term,
 			LeaderID:          leaderID,
+			LeaderAddress:     leaderAddr,
 			LastIncludedIndex: snap.Meta.LastIncludedIndex,
 			LastIncludedTerm:  snap.Meta.LastIncludedTerm,
 			Offset:            0,
@@ -95,6 +98,7 @@ func (n *Node) SendInstallSnapshot(ctx context.Context, peer string) error {
 			req := InstallSnapshotRequest{
 				Term:              term,
 				LeaderID:          leaderID,
+				LeaderAddress:     leaderAddr,
 				LastIncludedIndex: snap.Meta.LastIncludedIndex,
 				LastIncludedTerm:  snap.Meta.LastIncludedTerm,
 				Offset:            offset,

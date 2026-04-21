@@ -64,11 +64,14 @@ func (c *Cluster) BroadcastKeyUpdate(serverName, keyID, keyData string, validUnt
 			return
 		}
 		// Strict Raft semantics: do not touch local state until the
-		// entry is committed. Submit only succeeds on the leader; on a
-		// follower it returns ErrNotLeader and we surface that via a
-		// warning. The committed entry reaches every replica through
+		// entry is committed. Propose routes through the leader: on
+		// the leader it is equivalent to Submit; on a follower it
+		// forwards the command to the current leader via
+		// MsgForwardProposal so follower-originated cache updates are
+		// actually replicated cluster-wide instead of being silently
+		// dropped. The committed entry reaches every replica through
 		// the apply callback registered in startRaft.
-		if err := c.raftNode.Submit(context.Background(), command); err != nil {
+		if err := c.raftNode.Propose(context.Background(), command); err != nil {
 			log.Warn("Failed to replicate key update via raft", "server", serverName, "key_id", keyID, "error", err)
 		}
 		return

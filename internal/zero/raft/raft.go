@@ -12,6 +12,7 @@ package raft
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -24,6 +25,10 @@ var (
 	ErrNoQuorum  = errors.New("no quorum")
 	ErrShutdown  = errors.New("node is shutting down")
 	ErrTimeout   = errors.New("operation timeout")
+	// ErrNoLeader is returned by Propose when the node is not the
+	// leader and no leader is currently known (e.g. mid-election).
+	// Callers should back off and retry.
+	ErrNoLeader = errors.New("no leader known")
 )
 
 // State represents the Raft node state
@@ -65,6 +70,14 @@ type Config struct {
 	HeartbeatInterval time.Duration
 	CommitTimeout     time.Duration
 	SharedSecret      string
+
+	// AdvertiseAddr is the dialable "host:port" other Raft nodes
+	// should use to reach this node. It is embedded by the leader in
+	// every AppendEntries / InstallSnapshot RPC so followers learn a
+	// concrete forwarding endpoint (see Propose). Empty means "use
+	// BindAddress:BindPort"; that fallback only works when BindAddress
+	// is a real interface address, not a wildcard.
+	AdvertiseAddr string
 
 	// TLS configures transport-level encryption and mutual
 	// authentication for Raft peer traffic. When TLS.Enabled is false
@@ -114,6 +127,7 @@ type Node struct {
 
 	// Volatile state
 	leaderId    string
+	leaderAddr  string
 	lastContact time.Time
 
 	// Channels
@@ -150,6 +164,10 @@ const (
 	MsgAppendEntries  MessageType = "append_entries"
 	MsgAppendRes      MessageType = "append_entries_response"
 )
+
+// MsgForwardProposal, ForwardProposalRequest and ForwardProposalResponse
+// are declared in propose.go alongside the Propose/handleForwardProposal
+// implementation.
 
 // RequestVoteRequest is sent by candidates to gather votes
 type RequestVoteRequest struct {
@@ -188,14 +206,20 @@ type PreVoteResponse struct {
 	VoteGranted bool   `json:"vote_granted"`
 }
 
-// AppendEntriesRequest is sent by leaders to replicate log entries
+// AppendEntriesRequest is sent by leaders to replicate log entries.
+//
+// LeaderAddress is the leader's dialable "host:port" and is used by
+// followers to forward client proposals (see Propose). Empty when
+// the leader was built without an AdvertiseAddr; in that case
+// followers cannot forward and Propose returns ErrNoLeader.
 type AppendEntriesRequest struct {
-	Term         uint64     `json:"term"`
-	LeaderId     string     `json:"leader_id"`
-	PrevLogIndex uint64     `json:"prev_log_index"`
-	PrevLogTerm  uint64     `json:"prev_log_term"`
-	Entries      []LogEntry `json:"entries"`
-	LeaderCommit uint64     `json:"leader_commit"`
+	Term          uint64     `json:"term"`
+	LeaderId      string     `json:"leader_id"`
+	LeaderAddress string     `json:"leader_address,omitempty"`
+	PrevLogIndex  uint64     `json:"prev_log_index"`
+	PrevLogTerm   uint64     `json:"prev_log_term"`
+	Entries       []LogEntry `json:"entries"`
+	LeaderCommit  uint64     `json:"leader_commit"`
 }
 
 // AppendEntriesResponse is the response to append entries
@@ -211,6 +235,20 @@ type RPCMessage struct {
 	Timestamp time.Time       `json:"timestamp"`
 	Payload   json.RawMessage `json:"payload"`
 	Signature string          `json:"signature,omitempty"`
+}
+
+// advertiseAddr returns the dialable "host:port" peers should use to
+// reach this node. Falls back to the bind address when AdvertiseAddr
+// is unset. Returns "" only when neither is usable, in which case
+// leader-forward cannot work for this node.
+func (n *Node) advertiseAddr() string {
+	if s := n.config.AdvertiseAddr; s != "" {
+		return s
+	}
+	if n.config.BindAddress != "" && n.config.BindPort > 0 {
+		return fmt.Sprintf("%s:%d", n.config.BindAddress, n.config.BindPort)
+	}
+	return ""
 }
 
 // NewNode creates a new Raft node

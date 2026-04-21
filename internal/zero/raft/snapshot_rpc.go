@@ -63,6 +63,7 @@ func (n *Node) handleInstallSnapshot(msg *RPCMessage) *RPCMessage {
 	}
 	n.state = Follower
 	n.leaderId = req.LeaderID
+	n.leaderAddr = req.LeaderAddress
 	n.lastContact = time.Now()
 
 	// Reset buffer on Offset==0 OR when the leader has moved to a
