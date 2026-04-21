@@ -107,6 +107,7 @@ func (c *Cluster) installKeySnapshot(data []byte, lastIncludedIndex, lastInclude
 			c.state.raftLastApplied = lastIncludedIndex
 		}
 		c.state.mu.Unlock()
+		c.installedSnapshotIndex.Store(lastIncludedIndex)
 		log.Info("Cluster key snapshot installed (empty)",
 			"last_included_index", lastIncludedIndex,
 			"last_included_term", lastIncludedTerm,
@@ -138,6 +139,7 @@ func (c *Cluster) installKeySnapshot(data []byte, lastIncludedIndex, lastInclude
 		c.state.raftLastApplied = lastIncludedIndex
 	}
 	c.state.mu.Unlock()
+	c.installedSnapshotIndex.Store(lastIncludedIndex)
 
 	log.Info("Cluster key snapshot installed",
 		"last_included_index", lastIncludedIndex,
@@ -145,6 +147,18 @@ func (c *Cluster) installKeySnapshot(data []byte, lastIncludedIndex, lastInclude
 		"servers", len(rebuilt),
 	)
 	return nil
+}
+
+// InstalledSnapshotIndex returns the highest LastIncludedIndex that
+// has been applied via installKeySnapshot on this instance. Zero
+// means the cluster has not been bootstrapped from a snapshot (e.g.
+// a fresh node without a prior state directory, or a replica that
+// only ever replayed the WAL). Startup diagnostics, operator
+// tooling, and tests use this to prove the restore path actually
+// went through the snapshot installer instead of falling back to a
+// pure WAL replay.
+func (c *Cluster) InstalledSnapshotIndex() uint64 {
+	return c.installedSnapshotIndex.Load()
 }
 
 // raftCompactionLoop periodically evaluates the Raft in-memory log

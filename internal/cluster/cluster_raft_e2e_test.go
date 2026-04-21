@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"mxkeys/internal/zero/raft"
 )
 
 const e2eRaftSharedSecret = "e2e-raft-shared-secret-32-bytes-padding!"
@@ -92,12 +94,17 @@ func waitUntilE2E(t *testing.T, timeout time.Duration, desc string, fn func() bo
 //     gives SaveSnapshot a (payload, raftLastApplied) pair
 //     captured under a single c.state.mu lock; the saved file's
 //     LastIncludedIndex is trustworthy.
-//  4. One node is stopped and rebuilt from the same state dir.
-//     LoadFromDisk replays the snapshot via installKeySnapshot,
-//     which restores the LWW cache and advances raftLastApplied to
-//     match the snapshot metadata.
+//  4. The SAME node that compacted (the leader, whose state
+//     directory is the only one that now holds a snapshot file) is
+//     stopped and rebuilt from its own state dir. We assert a
+//     snapshot file exists on that dir before the restart, and
+//     that InstalledSnapshotIndex on the reborn node is non-zero
+//     after Start, which together prove LoadFromDisk →
+//     installKeySnapshot was the actual restore path (not a WAL
+//     replay fallback).
 //  5. GetCachedKey on the restarted node returns the entry that
-//     was originally written through the follower.
+//     was originally written through the follower, and
+//     raftLastApplied is at least as high as before the restart.
 //
 // A passing run proves every seam between notary-hook writes and
 // post-restart durability holds end to end.
@@ -204,25 +211,60 @@ func TestRaftClusterEndToEndWriteCompactRestart(t *testing.T) {
 		t.Fatalf("CompactLog on leader: %v", err)
 	}
 
-	// Stop n1 (arbitrary choice); we will rebuild it from the
-	// same state dir.
-	restartIdx := 0
+	// The node we restart MUST be the one that just compacted: its
+	// state directory is the only one that now holds a snapshot
+	// file. Restarting an arbitrary peer could silently test the
+	// WAL-replay path instead of the LoadFromDisk →
+	// installKeySnapshot path we intend to cover. Resolve the index
+	// by matching leader's addr inside addrs.
+	restartIdx := -1
+	for i, a := range addrs {
+		if a == leader.config.BindAddress+":"+fmt.Sprintf("%d", leader.config.BindPort) ||
+			a == fmt.Sprintf("%s:%d", leader.config.BindAddress, leader.config.BindPort) {
+			restartIdx = i
+			break
+		}
+	}
+	if restartIdx < 0 {
+		t.Fatalf("could not match leader addr %s:%d against configured addrs %v",
+			leader.config.BindAddress, leader.config.BindPort, addrs)
+	}
 	restartDir := dirs[restartIdx]
 	restartAddr := addrs[restartIdx]
+
+	// Before restart the snapshot file MUST exist on the leader's
+	// disk. This is the primary evidence that CompactLog actually
+	// persisted. If this fails, the restart half of the test would
+	// be meaningless.
+	if _, err := raft.LoadSnapshot(restartDir); err != nil {
+		t.Fatalf("expected snapshot on compacted leader's state dir %s, got: %v", restartDir, err)
+	}
+
 	_ = nodes[restartIdx].Stop()
 	nodes[restartIdx] = nil // so cleanup skips it
 
-	// Rebuild n1 pointing at the same state directory.
-	reborn := e2eBuildNode(t, "n1", restartAddr, restartDir, peersFor(restartIdx))
+	// Rebuild the leader's node pointing at the same state dir.
+	reborn := e2eBuildNode(t, fmt.Sprintf("n%d", restartIdx+1), restartAddr, restartDir, peersFor(restartIdx))
 	if err := reborn.Start(ctx); err != nil {
 		t.Fatalf("reborn Start: %v", err)
 	}
 	defer func() { _ = reborn.Stop() }()
 
-	// The restart path: LoadFromDisk → installKeySnapshot restores
-	// keys AND bumps raftLastApplied to the snapshot's
-	// LastIncludedIndex. GetCachedKey must see the entry that was
-	// written through the follower before the restart.
+	// Strict proof that the restore path went through
+	// installKeySnapshot: that installer is the only code path that
+	// bumps installedSnapshotIndex. A non-zero value here rules out
+	// the WAL-only replay fallback, which would leave the counter
+	// at zero.
+	waitUntilE2E(t, 5*time.Second, "reborn node invoked installKeySnapshot", func() bool {
+		return reborn.InstalledSnapshotIndex() > 0
+	})
+	if got := reborn.InstalledSnapshotIndex(); got < appliedBeforeCompact {
+		t.Fatalf("InstalledSnapshotIndex = %d, must be >= pre-compact raftLastApplied %d", got, appliedBeforeCompact)
+	}
+
+	// The restore must populate the LWW cache with the entry that
+	// was originally written through the follower before the
+	// restart.
 	waitUntilE2E(t, 5*time.Second, "reborn node restored key from snapshot", func() bool {
 		return reborn.GetCachedKey("matrix.example", "ed25519:auto") != nil
 	})

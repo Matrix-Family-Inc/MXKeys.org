@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"mxkeys/internal/zero/log"
@@ -100,6 +101,15 @@ type Cluster struct {
 	nodesTotal    *metrics.Gauge
 	syncTotal     *metrics.Counter
 	messagesTotal *metrics.Counter
+
+	// installedSnapshotIndex records the highest LastIncludedIndex
+	// that installKeySnapshot has processed on this instance. It is
+	// an observability hook: it lets startup diagnostics and tests
+	// prove that a restart actually went through the snapshot-
+	// install path instead of reconstructing state from a WAL
+	// replay, without any mutable test-only injection on the
+	// SnapshotInstaller callback. Zero until the first install.
+	installedSnapshotIndex atomic.Uint64
 }
 
 // CRDTState holds the shared key cache plus the raft bookkeeping

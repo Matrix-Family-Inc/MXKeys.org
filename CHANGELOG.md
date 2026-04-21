@@ -8,6 +8,32 @@ No breaking changes to the Matrix federation API contract.
 
 ### Added
 
+- `raft.Node.sendRPCCtx`
+  (`internal/zero/raft/network.go`): a context-aware variant of
+  `sendRPC` that closes the underlying TCP connection when the
+  caller's context fires so an outstanding write/read wakes up
+  immediately with `ctx.Err()`. `sendRPC` is now a thin wrapper
+  around `sendRPCCtx(context.Background(), ...)` for call paths
+  (election, replication) that do not yet carry a context; every
+  new call site with a real context (Propose-forward) uses
+  `sendRPCCtx` directly.
+- `cluster.Cluster.InstalledSnapshotIndex()` returns the highest
+  `LastIncludedIndex` the snapshot installer has processed on
+  this instance. Observability hook used by startup diagnostics,
+  operator tooling, and the raft end-to-end test to prove the
+  restore path went through the snapshot installer rather than a
+  WAL-only replay fallback. Zero until the first install.
+- `cluster.Cluster.installedSnapshotIndex` (unexported
+  `atomic.Uint64` backing the accessor above).
+- Unit tests:
+  - `TestProposeRespectsCancelledContextImmediately`,
+    `TestProposeReturnsErrNoLeaderWhenAddrMissing`
+    (`internal/zero/raft/propose_test.go`) lock in the terminal
+    context contract of Propose.
+  - `TestHandleAppendEntriesDoesNotClobberLeaderAddrWithEmpty`,
+    `TestHandleAppendEntriesAcceptsUpdatedLeaderAddr`,
+    `TestHandleInstallSnapshotDoesNotClobberLeaderAddrWithEmpty`
+    pin the leaderAddr preservation rule across both RPCs.
 - Atomic snapshot capture contract for Raft state machines. The
   `raft.SnapshotProvider` signature now returns
   `(data []byte, lastAppliedIndex uint64, err error)`. The
@@ -297,6 +323,30 @@ No breaking changes to the Matrix federation API contract.
   `CommitTimeout`. They now run under contexts that cancel on
   stopCh close, so `Cluster.Stop()` / `Node.Stop()` evict
   in-flight proposals and snapshot streams immediately.
+- `raft.Node.Propose` now terminally respects its caller context.
+  Previously the follower path ignored `ctx` once it decided to
+  forward: the context was not checked up front and not threaded
+  into the underlying `sendRPC`, so a cancel during the
+  forwarded round trip still waited for `net.Conn`'s default
+  deadline. Propose now returns `ctx.Err()` early on a cancelled
+  context and uses `sendRPCCtx` for the forward RPC itself.
+- `handleAppendEntries` and `handleInstallSnapshot` no longer
+  overwrite a known `leaderAddr` with an empty value. A mixed-
+  version or misconfigured leader that ships RPCs without
+  `LeaderAddress` would previously strip the follower's
+  forwarding endpoint on every heartbeat and cause Propose to
+  return `ErrNoLeader` even though leadership was healthy.
+  Populated addresses still overwrite stale ones.
+- `internal/cluster/cluster_raft_e2e_test.go`:
+  `TestRaftClusterEndToEndWriteCompactRestart` now restarts the
+  node that actually compacted (the leader at the time of
+  `CompactLog`), asserts the snapshot file exists on that node's
+  state directory before the restart, and asserts the reborn
+  node's `InstalledSnapshotIndex() > 0` to prove the restore went
+  through `installKeySnapshot` rather than a silent WAL-replay
+  fallback. Previously `restartIdx` was hard-coded to zero, which
+  silently exercised the wrong path whenever elections landed
+  outside `nodes[0]`.
 - Raft `BroadcastKeyUpdate` in cluster mode now transparently
   forwards follower-originated writes to the leader. Before this
   fix a fetch served by a follower was pinned to that node's

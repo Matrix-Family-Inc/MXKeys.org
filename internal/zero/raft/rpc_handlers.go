@@ -148,7 +148,15 @@ func (n *Node) handleAppendEntries(msg *RPCMessage) *RPCMessage {
 
 	n.state = Follower
 	n.leaderId = req.LeaderId
-	n.leaderAddr = req.LeaderAddress
+	// Never overwrite a known leaderAddr with an empty one. A mixed-
+	// version leader (or any peer that shipped before AdvertiseAddr
+	// plumbing) does not populate LeaderAddress; accepting an empty
+	// overwrite would strip the follower's forwarding endpoint and
+	// leave Propose returning ErrNoLeader even though leadership is
+	// healthy. Populated addresses always win over stale ones.
+	if req.LeaderAddress != "" {
+		n.leaderAddr = req.LeaderAddress
+	}
 	n.lastContact = time.Now()
 
 	// Check log consistency. prevLog may sit anywhere:
