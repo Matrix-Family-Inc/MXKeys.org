@@ -85,6 +85,12 @@ func (f *Fetcher) fetchDirect(ctx context.Context, serverName string) (*ServerKe
 		return nil, NewSignatureError(serverName, err)
 	}
 
+	// Preserve the exact origin-delivered bytes. This is what later
+	// lets notary_query attach a perspective signature without
+	// reshaping origin fields and keeps origin self-signature
+	// verification valid end-to-end.
+	keysResp.Raw = append([]byte(nil), body...)
+
 	log.Info("Successfully fetched server keys",
 		"server", serverName,
 		"keys_count", len(keysResp.VerifyKeys),

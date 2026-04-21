@@ -81,6 +81,10 @@ func (n *Notary) validateReplicatedServerResponse(serverName string, rawResponse
 	if err := n.fetcher.verifySelfSignature(&response, []byte(rawResponse)); err != nil {
 		return nil, fmt.Errorf("replicated response failed verification: %w", err)
 	}
+	// Preserve the replicated raw bytes so a peer that receives the
+	// payload over cluster replication can still serve notary
+	// replies that keep origin self-signatures verifiable.
+	response.Raw = []byte(rawResponse)
 	return &response, nil
 }
 

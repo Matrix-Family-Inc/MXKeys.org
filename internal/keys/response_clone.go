@@ -39,5 +39,9 @@ func cloneServerKeysResponse(src *ServerKeysResponse) *ServerKeysResponse {
 		}
 	}
 
+	if len(src.Raw) > 0 {
+		dst.Raw = append([]byte(nil), src.Raw...)
+	}
+
 	return dst
 }

@@ -8,6 +8,44 @@ No breaking changes to the Matrix federation API contract.
 
 ### Added
 
+- Raw-preserving notary reply pipeline
+  (`internal/keys/notary_raw_response.go`). `AttachNotarySignature`
+  parses origin-delivered `/_matrix/key/v2/server` bytes,
+  canonicalises them, and attaches this notary's perspective
+  signature under `signatures[<notary>][<key_id>]` without
+  reshaping any other origin field. Every field delivered by
+  origin (including presence/absence of `old_verify_keys` and any
+  future Matrix schema extension) is preserved byte-for-byte so
+  origin signatures over `canonical(payload - signatures)` remain
+  verifiable end-to-end against the notary reply.
+- `ServerKeysResponse.Raw` (`internal/keys/types.go`) with a
+  custom `MarshalJSON` that emits `Raw` verbatim when populated.
+  Callers on the raw path round-trip origin bytes through the
+  wire response without falling back to struct-based marshalling.
+- `internal/keys/fetcher_direct.go` captures body bytes into
+  `Raw` after self-signature verification; those bytes flow
+  untouched through cache, DB, cluster replication, and the
+  notary reply pipeline.
+- `internal/keys/notary_fetch_store.go` and
+  `internal/keys/storage_server_response.go`: the fetch/persist
+  and raw-aware storage surfaces are split out of
+  `notary_query.go` and `storage.go` respectively so every file
+  stays under the per-file line budget.
+- Schema migration
+  `internal/storage/migrations/sql/0003_raw_server_response.sql`:
+  adds `server_key_responses.raw_response BYTEA`. Idempotent;
+  legacy rows with NULL transparently fall back to the
+  struct-based path until the next successful fetch refills the
+  column.
+- Unit tests
+  (`internal/keys/notary_raw_response_test.go`):
+  `TestAttachNotarySignaturePreservesOriginWhenOldKeysOmitted`,
+  `TestAttachNotarySignaturePreservesOriginWhenOldKeysEmpty`,
+  `TestAttachNotarySignaturePreservesOriginWhenOldKeysPopulated`,
+  `TestAttachNotarySignatureAddsVerifiableNotarySig`,
+  `TestAttachNotarySignatureRejectsEmptyAndBadInputs`. Pin the
+  origin-signature survival invariant, the notary-signature
+  validity, and bad-input rejection.
 - `nettls.DialContext`: ctx-aware dial helper that honours
   caller cancellation at BOTH the TCP connect and the TLS
   handshake stages. `net.Dialer.DialContext` replaces the
@@ -378,6 +416,23 @@ No breaking changes to the Matrix federation API contract.
 
 ### Fixed
 
+- Notary replies no longer strip origin-signed fields tagged
+  `omitempty` on the Go struct (notably empty
+  `old_verify_keys: {}`) during the cache/DB round-trip. Before
+  this fix a `/_matrix/key/v2/query` reply served through this
+  notary canonicalised to a different byte sequence than what
+  origin signed, and Synapse's `PerspectivesKeyFetcher` rejected
+  the origin self-signature as `SignatureVerifyException:
+  Signature was forged or corrupt`, silently falling back to a
+  direct federation fetch. The raw-preserving pipeline
+  (`AttachNotarySignature`, `ServerKeysResponse.Raw`, migration
+  0003) keeps origin payload byte-exact through every stage, so
+  origin signatures computed over `canonical(payload -
+  signatures)` verify end-to-end against the notary reply.
+  Verified on a three-node smoke cluster against live Synapse A
+  and B: zero `SignatureVerifyException`, Synapse
+  `server_signature_keys.from_server` points at the cluster
+  notary rather than the origin.
 - `cmd/mxkeys/main.go` was present on disk but not tracked in
   git. Clones could not build without it. Now tracked.
 - staticcheck findings: SA9004 in `middleware.go`, SA1012 in a

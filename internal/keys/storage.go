@@ -13,7 +13,6 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -143,49 +142,6 @@ func (s *Storage) StoreKey(serverName, keyID string, publicKey []byte, validUnti
 			valid_until = $4,
 			fetched_at = NOW()
 	`, serverName, keyID, publicKey, validUntil)
-}
-
-// StoreServerResponse stores full server key response
-func (s *Storage) StoreServerResponse(serverName string, response *ServerKeysResponse, validUntil time.Time) error {
-	responseJSON, err := json.Marshal(response)
-	if err != nil {
-		return err
-	}
-
-	return s.execWrite(`
-		INSERT INTO server_key_responses (server_name, response, valid_until, fetched_at)
-		VALUES ($1, $2, $3, NOW())
-		ON CONFLICT (server_name) DO UPDATE SET
-			response = $2,
-			valid_until = $3,
-			fetched_at = NOW()
-	`, serverName, responseJSON, validUntil)
-}
-
-// GetServerResponse retrieves cached server key response
-func (s *Storage) GetServerResponse(serverName string) (*ServerKeysResponse, error) {
-	var responseJSON []byte
-	var validUntil time.Time
-
-	err := s.db.QueryRow(`
-		SELECT response, valid_until
-		FROM server_key_responses
-		WHERE server_name = $1 AND valid_until > NOW()
-	`, serverName).Scan(&responseJSON, &validUntil)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	var response ServerKeysResponse
-	if err := json.Unmarshal(responseJSON, &response); err != nil {
-		return nil, err
-	}
-
-	return &response, nil
 }
 
 // GetKey retrieves a server key
