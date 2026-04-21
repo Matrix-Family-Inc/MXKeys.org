@@ -70,15 +70,12 @@ func (n *Node) SetSnapshotInstaller(fn SnapshotInstaller) {
 // LoadFromDisk restores node state from the persisted snapshot + WAL.
 // Safe to call before Start; a no-op when SetStateDir was not called.
 //
-// Recovery semantics:
-//
-//  1. If a snapshot exists, install it (via snapshotInstaller if set) and
-//     set snapshotIndex/snapshotTerm/commitIndex/lastApplied.
-//  2. Replay the WAL: every record whose Index > snapshotIndex is appended
-//     to n.log. Corrupt tails truncate the replay (ErrWALCorrupt).
-//  3. currentTerm is advanced to max(term in replayed entries,
-//     snapshotTerm) so a future election sees a term at least as high as
-//     anything already durable.
+// Recovery:
+//  1. If a snapshot exists, install it (via snapshotInstaller if set)
+//     and set snapshotIndex/snapshotTerm/commitIndex/lastApplied.
+//  2. Replay WAL records with Index > snapshotIndex. Corrupt tails
+//     truncate the replay (ErrWALCorrupt).
+//  3. currentTerm advances to max(replayed-term, snapshotTerm).
 func (n *Node) LoadFromDisk() error {
 	if n.stateDir == "" {
 		return nil
@@ -98,9 +95,18 @@ func (n *Node) LoadFromDisk() error {
 		return fmt.Errorf("raft: load snapshot: %w", err)
 	default:
 		if n.snapshotInstaller != nil {
-			if ierr := n.snapshotInstaller(f, meta.Size, meta.LastIncludedIndex, meta.LastIncludedTerm); ierr != nil {
+			// CRC already verified by LoadSnapshotReader; the
+			// counter is for advisory short-read warnings only.
+			cr := &countingReader{r: f}
+			if ierr := n.snapshotInstaller(cr, meta.Size, meta.LastIncludedIndex, meta.LastIncludedTerm); ierr != nil {
 				_ = f.Close()
 				return fmt.Errorf("raft: install snapshot: %w", ierr)
+			}
+			if cr.count < meta.Size {
+				log.Warn("Raft startup installer did not drain full snapshot",
+					"read", cr.count,
+					"expected", meta.Size,
+				)
 			}
 		}
 		_ = f.Close()

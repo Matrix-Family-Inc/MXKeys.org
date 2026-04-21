@@ -193,17 +193,19 @@ func (n *Node) handleInstallSnapshot(msg *RPCMessage) *RPCMessage {
 	}
 	n.mu.Unlock()
 
-	// Build the reader the installer will consume. For the
-	// disk-backed path the file is already seeked past the header.
-	var reader io.Reader
+	// Build the installer reader. CRC integrity is already
+	// established by finalizePendingSnapshot; the counting wrap
+	// exists only to emit an advisory short-read warning below.
+	var baseReader io.Reader
 	if f != nil {
-		reader = f
+		baseReader = f
 	} else {
-		reader = bytes.NewReader(memData)
+		baseReader = bytes.NewReader(memData)
 	}
+	cr := &countingReader{r: baseReader}
 
 	if installer != nil {
-		if err := installer(reader, size, req.LastIncludedIndex, req.LastIncludedTerm); err != nil {
+		if err := installer(cr, size, req.LastIncludedIndex, req.LastIncludedTerm); err != nil {
 			log.Warn("Raft snapshot installer rejected payload",
 				"last_index", req.LastIncludedIndex,
 				"last_term", req.LastIncludedTerm,
@@ -221,12 +223,22 @@ func (n *Node) handleInstallSnapshot(msg *RPCMessage) *RPCMessage {
 		}
 	}
 
-	// Installer accepted the payload. For the disk-backed path the
-	// spill file IS the snapshot in its final byte layout; just
-	// close the handle and atomically rename it into place. That
-	// single rename replaces the previous SaveSnapshot pass, so the
-	// peak memory of this whole critical section is O(chunk) + the
-	// installer's own decoding.
+	// Installer accepted the payload. Emit an advisory warning if
+	// it stopped reading short of size so broken installers are
+	// visible to operators; integrity itself is unaffected because
+	// the bytes on disk are still the CRC-verified payload.
+	if cr.count < size {
+		log.Warn("Raft install handler: installer did not drain full snapshot",
+			"read", cr.count,
+			"expected", size,
+		)
+	}
+
+	// For the disk-backed path the spill file IS the snapshot in
+	// its final byte layout; just close the handle and atomically
+	// rename it into place. That single rename replaces the
+	// previous SaveSnapshot pass, so the peak memory of this whole
+	// critical section is O(chunk) + the installer's own decoding.
 	if f != nil {
 		_ = f.Close()
 		if err := finalizeAndRenamePendingSnapshot(stateDir, path); err != nil {
