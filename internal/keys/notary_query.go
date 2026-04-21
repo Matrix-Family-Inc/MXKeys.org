@@ -11,8 +11,6 @@ package keys
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -60,6 +58,31 @@ func (n *Notary) QueryKeys(ctx context.Context, request *KeyQueryRequest) *KeyQu
 			log.Error("Failed to add notary signature", "server", serverName, "error", err)
 			response.Failures[serverName] = matrixFailure("M_UNKNOWN", "Internal signing error")
 			continue
+		}
+
+		// When origin raw bytes are available, rebuild the delivered
+		// canonical JSON with this notary's signature attached
+		// without re-marshalling origin fields. This preserves
+		// origin-signed fields (including `old_verify_keys: {}` or
+		// any future schema extension) byte-for-byte so every
+		// downstream client can verify origin self-signature.
+		// Non-raw paths (legacy cache, fallback notary fetch) keep
+		// the struct-based delivery intact.
+		if len(keysForResponse.Raw) > 0 {
+			finalRaw, rawErr := AttachNotarySignature(
+				keysForResponse.Raw,
+				n.serverName,
+				n.serverKeyID,
+				n.serverKeyPair,
+			)
+			if rawErr != nil {
+				log.Warn("Raw notary attach failed; falling back to struct-based delivery",
+					"server", serverName,
+					"error", rawErr,
+				)
+			} else {
+				keysForResponse.Raw = finalRaw
+			}
 		}
 
 		if violation := n.checkResponsePolicy(serverName, keysForResponse); violation != nil {
@@ -236,46 +259,3 @@ func (n *Notary) GetServerKeys(ctx context.Context, serverName string) (*ServerK
 	return result.(*ServerKeysResponse), nil
 }
 
-// fetchAndStore fetches keys from remote and stores them.
-func (n *Notary) fetchAndStore(ctx context.Context, serverName string) (*ServerKeysResponse, error) {
-	return n.fetchAndStoreWithSource(ctx, serverName, FetchSourceDirect)
-}
-
-// fetchAndStoreWithSource fetches keys with source tracking for metrics.
-func (n *Notary) fetchAndStoreWithSource(ctx context.Context, serverName, source string) (*ServerKeysResponse, error) {
-	start := time.Now()
-	keys, err := n.fetcher.FetchServerKeys(ctx, serverName)
-	duration := time.Since(start).Seconds()
-	if err != nil {
-		recordFetchFailure(source, duration)
-		return nil, err
-	}
-	recordFetchSuccess(source, duration)
-
-	validUntil := time.UnixMilli(keys.ValidUntilTS)
-	if err := n.storage.StoreServerResponse(serverName, keys, validUntil); err != nil {
-		log.Warn("Failed to store server response in database", "error", err)
-	}
-
-	for keyID, verifyKey := range keys.VerifyKeys {
-		pubKeyBytes, err := base64.RawStdEncoding.DecodeString(verifyKey.Key)
-		if err != nil {
-			continue
-		}
-		if err := n.storage.StoreKey(serverName, keyID, pubKeyBytes, validUntil); err != nil {
-			log.Warn("Failed to store key", "error", err)
-		}
-	}
-
-	n.storeInMemoryCache(serverName, keys)
-
-	if broadcastHook := n.getKeyBroadcastHook(); broadcastHook != nil {
-		if responseJSON, err := json.Marshal(keys); err == nil {
-			broadcastHook(serverName, ClusterReplicatedResponseKeyID, string(responseJSON), keys.ValidUntilTS)
-		} else {
-			log.Warn("Failed to marshal key response for cluster broadcast", "server", serverName, "error", err)
-		}
-	}
-
-	return keys, nil
-}
