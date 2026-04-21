@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -112,14 +113,22 @@ type Node struct {
 	snapshotIndex uint64
 	snapshotTerm  uint64
 
-	// pendingSnapshot buffers InstallSnapshot chunks from the current
-	// leader while they arrive. Reset whenever a chunk arrives with
-	// Offset==0 (new transfer starts) or a different
-	// (LastIncludedIndex, LastIncludedTerm) tuple (leader moved on).
+	// pendingSnapshot* hold the state of an in-flight InstallSnapshot
+	// transfer. Exactly one is active at a time; Offset==0 or a
+	// differing (LastIncludedIndex, LastIncludedTerm) tuple resets.
+	//
+	// Memory: when stateDir != "" every chunk is streamed to
+	// pendingSnapshotFile (stateDir/raft.snapshot.recv) so follower
+	// RAM stays O(snapshotChunkSize) regardless of total size. With
+	// stateDir == "" (in-memory mode, tests) chunks land in
+	// pendingSnapshot []byte. LoadFromDisk removes a stale recv file
+	// so a crash mid-transfer cannot leak bytes into the next one.
 	pendingSnapshot         []byte
+	pendingSnapshotFile     *os.File
+	pendingSnapshotPath     string
 	pendingSnapshotIndex    uint64
 	pendingSnapshotTerm     uint64
-	pendingSnapshotExpected uint64 // next expected Offset
+	pendingSnapshotExpected uint64 // next expected Offset = bytes accumulated so far
 
 	// Leader state
 	nextIndex  map[string]uint64
