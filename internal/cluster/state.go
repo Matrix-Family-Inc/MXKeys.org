@@ -10,7 +10,6 @@
 package cluster
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -67,11 +66,20 @@ func (c *Cluster) BroadcastKeyUpdate(serverName, keyID, keyData string, validUnt
 		// entry is committed. Propose routes through the leader: on
 		// the leader it is equivalent to Submit; on a follower it
 		// forwards the command to the current leader via
-		// MsgForwardProposal so follower-originated cache updates are
-		// actually replicated cluster-wide instead of being silently
-		// dropped. The committed entry reaches every replica through
-		// the apply callback registered in startRaft.
-		if err := c.raftNode.Propose(context.Background(), command); err != nil {
+		// MsgForwardProposal so follower-originated cache updates
+		// are actually replicated cluster-wide instead of being
+		// silently dropped. The committed entry reaches every
+		// replica through the apply callback registered in
+		// startRaft.
+		//
+		// The context is bounded by proposeTimeout and also
+		// cancelled when the cluster is stopping, so a shutdown
+		// evicts a blocked proposal immediately instead of forcing
+		// callers on the notary hot path to wait out the full
+		// raft CommitTimeout.
+		ctx, cancel := c.proposeCtx(proposeTimeout)
+		defer cancel()
+		if err := c.raftNode.Propose(ctx, command); err != nil {
 			log.Warn("Failed to replicate key update via raft", "server", serverName, "key_id", keyID, "error", err)
 		}
 		return
@@ -172,24 +180,43 @@ func (c *Cluster) Stats() map[string]interface{} {
 	}
 }
 
+// storeEntry writes an entry into the LWW cache with its own lock
+// acquisition. CRDT-mode entry point; callers that already hold
+// c.state.mu must use storeEntryLocked instead.
 func (c *Cluster) storeEntry(entry *KeyEntry, notify bool) {
 	c.state.mu.Lock()
-	if _, ok := c.state.keys[entry.ServerName]; !ok {
-		c.state.keys[entry.ServerName] = make(map[string]*KeyEntry)
-	}
-
-	existing := c.state.keys[entry.ServerName][entry.KeyID]
-	if existing == nil || entry.Timestamp.After(existing.Timestamp) {
-		c.state.keys[entry.ServerName][entry.KeyID] = entry
-	}
+	changed := c.applyEntryLocked(entry)
 	c.state.mu.Unlock()
 
-	if notify && c.onKeyReceived != nil && (existing == nil || entry.Timestamp.After(existing.Timestamp)) {
-		data, err := json.Marshal(entry)
-		if err == nil {
+	if notify && changed && c.onKeyReceived != nil {
+		if data, err := json.Marshal(entry); err == nil {
 			c.onKeyReceived(entry.ServerName, data)
 		}
 	}
+}
+
+// storeEntryLocked writes an entry into the LWW cache. Caller MUST
+// hold c.state.mu for writing. Returns whether the write was
+// accepted by the LWW comparator. The notify callback is NOT
+// invoked from here because callers may hold c.state.mu beyond this
+// call; they are responsible for notifying after releasing the lock.
+func (c *Cluster) storeEntryLocked(entry *KeyEntry) bool {
+	return c.applyEntryLocked(entry)
+}
+
+// applyEntryLocked is the shared LWW merge body. Caller MUST hold
+// c.state.mu for writing. Returns true iff the new entry replaced
+// the existing one (strictly newer Timestamp) or inserted fresh.
+func (c *Cluster) applyEntryLocked(entry *KeyEntry) bool {
+	if _, ok := c.state.keys[entry.ServerName]; !ok {
+		c.state.keys[entry.ServerName] = make(map[string]*KeyEntry)
+	}
+	existing := c.state.keys[entry.ServerName][entry.KeyID]
+	if existing != nil && !entry.Timestamp.After(existing.Timestamp) {
+		return false
+	}
+	c.state.keys[entry.ServerName][entry.KeyID] = entry
+	return true
 }
 
 func (c *Cluster) raftNodes() []*Node {

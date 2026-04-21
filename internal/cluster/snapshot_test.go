@@ -31,16 +31,24 @@ func TestSnapshotKeyStateRoundTrip(t *testing.T) {
 		{ServerName: "matrix.org", KeyID: "ed25519:other", KeyData: "bbb", ValidUntilTS: 43, Timestamp: ts.Add(time.Second), NodeID: "src", Hash: "h2"},
 		{ServerName: "example.org", KeyID: "ed25519:auto", KeyData: "ccc", ValidUntilTS: 44, Timestamp: ts.Add(2 * time.Second), NodeID: "src", Hash: "h3"},
 	}
+	// Seed entries AND bump the apply counter so the provider
+	// returns the index the payload actually reflects.
+	src.state.mu.Lock()
 	for _, e := range entries {
-		src.storeEntry(e, false)
+		src.storeEntryLocked(e)
 	}
+	src.state.raftLastApplied = 42
+	src.state.mu.Unlock()
 
-	data, err := src.snapshotKeyState()
+	data, idx, err := src.snapshotKeyState()
 	if err != nil {
 		t.Fatalf("snapshotKeyState: %v", err)
 	}
 	if len(data) == 0 {
 		t.Fatalf("snapshot payload must be non-empty")
+	}
+	if idx != 42 {
+		t.Fatalf("snapshotKeyState index = %d, want 42", idx)
 	}
 
 	dst, err := NewCluster(ClusterConfig{Enabled: true, NodeID: "dst"})
@@ -130,9 +138,18 @@ func TestSnapshotKeyStateDeterministic(t *testing.T) {
 		return c
 	}
 
-	a, _ := build().snapshotKeyState()
-	b, _ := build().snapshotKeyState()
-	if string(a) != string(b) {
-		t.Fatalf("snapshotKeyState must be deterministic:\n a=%s\n b=%s", a, b)
+	aBytes, aIdx, err := build().snapshotKeyState()
+	if err != nil {
+		t.Fatalf("snapshotKeyState a: %v", err)
+	}
+	bBytes, bIdx, err := build().snapshotKeyState()
+	if err != nil {
+		t.Fatalf("snapshotKeyState b: %v", err)
+	}
+	if string(aBytes) != string(bBytes) {
+		t.Fatalf("snapshotKeyState payload must be deterministic:\n a=%s\n b=%s", aBytes, bBytes)
+	}
+	if aIdx != bIdx {
+		t.Fatalf("snapshotKeyState index must be deterministic: a=%d b=%d", aIdx, bIdx)
 	}
 }

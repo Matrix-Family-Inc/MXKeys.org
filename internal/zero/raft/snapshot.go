@@ -202,9 +202,19 @@ func closeRemove(f *os.File, path string) {
 // --- State-machine snapshot callbacks -----------------------------------
 
 // SnapshotProvider produces the state-machine bytes to persist in a new
-// snapshot. It is invoked by the Raft node when it decides to compact the
-// log; the caller is the application layer (e.g. CRDT state holder).
-type SnapshotProvider func() ([]byte, error)
+// snapshot along with the highest Raft log index those bytes reflect.
+//
+// Atomicity contract: the application MUST capture data and
+// lastAppliedIndex under the same lock that serialises writes
+// performed from onApply. Any other strategy makes the pair
+// inconsistent (the payload would reflect indices past
+// lastAppliedIndex) and breaks the snapshot-audit invariant that
+// two replicas which applied the same prefix produce byte-identical
+// snapshot files at the same LastIncludedIndex.
+//
+// The raft layer does not hold a lock during the provider call; the
+// provider is fully responsible for its own consistency.
+type SnapshotProvider func() (data []byte, lastAppliedIndex uint64, err error)
 
 // SnapshotInstaller installs state-machine bytes received via
 // InstallSnapshot RPC or loaded from disk during startup. Must be idempotent

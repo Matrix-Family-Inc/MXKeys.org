@@ -385,8 +385,18 @@ func TestRaftAutomaticInstallSnapshotCatchUp(t *testing.T) {
 	for i, n := range nodes {
 		i, n := i, n
 		installed[i] = &atomic.Int32{}
-		n.raft.SetSnapshotProvider(func() ([]byte, error) {
-			return append([]byte(nil), payload...), nil
+		// Provider atomically reads (payload, idx) under the harness's
+		// own apply mutex: idx is the index of the latest entry that
+		// the apply callback captured into n.applied, which exactly
+		// matches the moment the static payload reflects.
+		n.raft.SetSnapshotProvider(func() ([]byte, uint64, error) {
+			n.appliedMu.Lock()
+			var idx uint64
+			if len(n.applied) > 0 {
+				idx = n.applied[len(n.applied)-1].Index
+			}
+			n.appliedMu.Unlock()
+			return append([]byte(nil), payload...), idx, nil
 		})
 		n.raft.SetSnapshotInstaller(func(data []byte, _, _ uint64) error {
 			installed[i].Add(1)
@@ -467,8 +477,11 @@ func TestRaftAutomaticInstallSnapshotCatchUp(t *testing.T) {
 	if err := reborn.SetStateDir(freshDir, true); err != nil {
 		t.Fatalf("reborn SetStateDir: %v", err)
 	}
-	reborn.SetSnapshotProvider(func() ([]byte, error) {
-		return append([]byte(nil), payload...), nil
+	// Reborn node has no apply history yet; its provider returns 0
+	// as the applied index. It will never call CompactLog in this
+	// test before observing applies, so the value is academic.
+	reborn.SetSnapshotProvider(func() ([]byte, uint64, error) {
+		return append([]byte(nil), payload...), 0, nil
 	})
 	reborn.SetSnapshotInstaller(func(data []byte, _, _ uint64) error {
 		installed[victimIdx].Add(1)
@@ -568,8 +581,14 @@ func TestRaftInstallSnapshotStreamsLargePayload(t *testing.T) {
 	var installed atomic.Int32
 	for _, n := range nodes {
 		n := n
-		n.raft.SetSnapshotProvider(func() ([]byte, error) {
-			return append([]byte(nil), payload...), nil
+		n.raft.SetSnapshotProvider(func() ([]byte, uint64, error) {
+			n.appliedMu.Lock()
+			var idx uint64
+			if len(n.applied) > 0 {
+				idx = n.applied[len(n.applied)-1].Index
+			}
+			n.appliedMu.Unlock()
+			return append([]byte(nil), payload...), idx, nil
 		})
 		n.raft.SetSnapshotInstaller(func(data []byte, idx, term uint64) error {
 			if len(data) != len(payload) {

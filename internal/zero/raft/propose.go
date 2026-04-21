@@ -122,7 +122,11 @@ func (n *Node) handleForwardProposal(msg *RPCMessage) *RPCMessage {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	// ctxWithStop tears the pending Submit down the moment
+	// Node.Stop() is invoked on the leader, instead of letting the
+	// forwarded proposal burn through the full CommitTimeout on
+	// shutdown.
+	ctx, cancel := n.ctxWithStop(context.Background(), timeout)
 	defer cancel()
 
 	if err := n.Submit(ctx, req.Command); err != nil {

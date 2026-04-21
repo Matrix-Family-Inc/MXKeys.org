@@ -102,12 +102,33 @@ type Cluster struct {
 	messagesTotal *metrics.Counter
 }
 
-// CRDTState holds the CRDT-based shared state
+// CRDTState holds the shared key cache plus the raft bookkeeping
+// that must stay consistent with it.
+//
+// Lock discipline:
+//
+//   - mu serialises both fields. Every field here MUST be read or
+//     written while holding mu (at least RLock for reads, Lock for
+//     writes). No field escapes via pointer outside critical
+//     sections.
+//   - raftLastApplied tracks the highest raft log index whose
+//     onApply callback has committed its mutations to keys. Pairing
+//     it with keys under the same mu is what gives the snapshot
+//     provider atomic (payload, index) captures; without that
+//     pairing a snapshot's LastIncludedIndex could lag the payload
+//     by an arbitrary number of applied entries.
+//   - raftLastApplied is only used by the raft consensus mode. In
+//     CRDT mode it stays at zero.
 type CRDTState struct {
 	mu sync.RWMutex
 
 	// LWW key cache state: map[serverName]map[keyID]KeyEntry.
 	keys map[string]map[string]*KeyEntry
+
+	// raftLastApplied is the highest Raft log index whose apply
+	// callback has written its KeyEntry into keys. Updated from
+	// startRaft's onApply under mu together with the keys mutation.
+	raftLastApplied uint64
 }
 
 // KeyEntry represents a cached key in CRDT state

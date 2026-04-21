@@ -120,15 +120,18 @@ func (n *Node) needsSnapshotCatchUp(peer string) bool {
 }
 
 // driveInstallSnapshot runs SendInstallSnapshot against a lagging
-// peer with a timeout derived from CommitTimeout. A failure is logged
-// at debug level and leaves nextIndex/matchIndex untouched so the
-// next heartbeat tick retries from offset 0.
+// peer with a timeout derived from CommitTimeout. The context is
+// derived via ctxWithStop so Node.Stop() cancels an in-flight
+// snapshot stream immediately instead of letting it consume the
+// full CommitTimeout on shutdown. A failure is logged at debug
+// level and leaves nextIndex/matchIndex untouched so the next
+// heartbeat tick retries from offset 0.
 func (n *Node) driveInstallSnapshot(peer string) {
 	timeout := n.config.CommitTimeout
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := n.ctxWithStop(context.Background(), timeout)
 	defer cancel()
 	if err := n.SendInstallSnapshot(ctx, peer); err != nil {
 		log.Debug("Raft InstallSnapshot catch-up failed",
