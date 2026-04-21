@@ -19,41 +19,28 @@ import (
 	"mxkeys/internal/zero/log"
 )
 
-// handleInstallSnapshot processes an InstallSnapshot RPC. Follower-side only.
+// handleInstallSnapshot processes an InstallSnapshot RPC. Follower-side.
 //
-// Semantics:
+// Flow: term check; tuple reset on Offset==0 or tuple mismatch;
+// append chunk to spill file (disk) or in-memory buffer; on
+// Done=true finalise header, run streaming installer over data
+// portion, atomic-rename spill into raft.snapshot, advance
+// snapshotIndex / commitIndex / lastApplied.
 //
-//  1. Reject when the leader's term is stale.
-//  2. Refresh currentTerm and fall back to follower on higher leader term.
-//  3. Accumulate req.Data into the active transfer (chunking). A chunk
-//     with req.Offset == 0 resets the buffer so a retry or a new leader
-//     snapshots cleanly. A chunk whose (LastIncludedIndex, Term) tuple
-//     differs from the current buffered transfer also resets.
-//  4. When req.Done == true the accumulated payload is installed:
-//     finalise the spill file's header, invoke the streaming
-//     SnapshotInstaller with a reader over the data portion, rename
-//     the spill into raft.snapshot, truncate local log entries whose
-//     Index <= LastIncludedIndex, advance commitIndex / lastApplied.
+// Memory: stateDir != "" streams to raft.snapshot.recv so peak
+// RAM is O(snapshotChunkSize) both on accumulation and install.
 //
-// Memory bound: when stateDir != "" the in-flight payload is
-// streamed to stateDir/raft.snapshot.recv so both chunk accumulation
-// AND installer consumption are O(snapshotChunkSize) peak memory,
-// regardless of total snapshot size. The installer reads from the
-// spill file directly; no intermediate full-size []byte ever lives
-// on the Go heap.
-//
-// Concurrency: n.snapMu is held for the entire handler so no other
-// handleInstallSnapshot invocation or CompactLog can mutate the
-// shared spill state, raft.snapshot on disk, or the in-memory
-// snapshotIndex/snapshotTerm bookkeeping while we are in flight.
+// Concurrency: n.snapMu is held for the whole handler, so no
+// parallel handleInstallSnapshot or CompactLog can mutate the
+// spill, raft.snapshot, or snapshotIndex/term while we run.
 //
 // Success flag contract:
-//   - Success=true only when the chunk was accepted (non-Done) or
-//     fully installed and persisted (Done).
-//   - Success=false on stale term, offset gap, overflow, installer
-//     error, finalise error, or rename error. The leader MUST treat
-//     Success=false as a rejection and NOT advance
-//     nextIndex/matchIndex; it should retry from offset 0.
+//   - Success=true: non-Done chunk accepted, or Done chunk fully
+//     installed and renamed into place.
+//   - Success=false: stale term, missing installer, offset gap,
+//     overflow, installer error, finalise error, rename error.
+//     The leader MUST NOT advance nextIndex/matchIndex on
+//     Success=false; it retries from offset 0.
 func (n *Node) handleInstallSnapshot(msg *RPCMessage) *RPCMessage {
 	var req InstallSnapshotRequest
 	if err := json.Unmarshal(msg.Payload, &req); err != nil {
@@ -80,26 +67,33 @@ func (n *Node) handleInstallSnapshot(msg *RPCMessage) *RPCMessage {
 		n.mu.Unlock()
 		return n.wrapResponse(MsgInstallSnapshotRes, response)
 	}
+
+	// Reject outright without an installer: advancing
+	// snapshotIndex without applying the payload would desync the
+	// state machine. Operator must register SnapshotInstaller.
+	if n.snapshotInstaller == nil {
+		n.mu.Unlock()
+		log.Warn("Raft InstallSnapshot rejected: no SnapshotInstaller registered",
+			"last_index", req.LastIncludedIndex, "last_term", req.LastIncludedTerm)
+		return n.wrapResponse(MsgInstallSnapshotRes, response)
+	}
 	if req.Term > n.currentTerm {
 		n.currentTerm = req.Term
 		n.votedFor = ""
 	}
 	n.state = Follower
 	n.leaderId = req.LeaderID
-	// Never overwrite a known leaderAddr with an empty one. See the
-	// matching comment in handleAppendEntries for the rationale.
+	// Never overwrite a known leaderAddr with an empty one; see
+	// handleAppendEntries for the rationale.
 	if req.LeaderAddress != "" {
 		n.leaderAddr = req.LeaderAddress
 	}
 	n.lastContact = time.Now()
 
-	// Monotonicity: never roll snapshotIndex backwards. An
-	// InstallSnapshot whose LastIncludedIndex is at or below the
-	// index already on disk is either a duplicate retry (idempotent
-	// no-op) or a straggler from a stale leader (must not overwrite
-	// newer state). Acknowledge with Success=true so the leader
-	// considers the peer caught up without running the installer or
-	// touching the spill file.
+	// Monotonicity: never roll snapshotIndex backwards. A
+	// duplicate retry or straggler from a stale leader is ACKed
+	// idempotently with Success=true without running the installer
+	// or touching the spill file.
 	if req.LastIncludedIndex <= n.snapshotIndex && n.snapshotIndex > 0 {
 		response.Term = n.currentTerm
 		response.Success = true
@@ -223,15 +217,20 @@ func (n *Node) handleInstallSnapshot(msg *RPCMessage) *RPCMessage {
 		}
 	}
 
-	// Installer accepted the payload. Emit an advisory warning if
-	// it stopped reading short of size so broken installers are
-	// visible to operators; integrity itself is unaffected because
-	// the bytes on disk are still the CRC-verified payload.
-	if cr.count < size {
+	// Short read violates the SnapshotInstaller contract. Reject
+	// with Success=false and drop the spill; the idempotent
+	// installer will converge (or surface its bug) on retry.
+	if cr.count != size {
 		log.Warn("Raft install handler: installer did not drain full snapshot",
-			"read", cr.count,
-			"expected", size,
-		)
+			"read", cr.count, "expected", size)
+		if f != nil {
+			_ = f.Close()
+			_ = os.Remove(path)
+		}
+		n.mu.Lock()
+		response.Term = n.currentTerm
+		n.mu.Unlock()
+		return n.wrapResponse(MsgInstallSnapshotRes, response)
 	}
 
 	// For the disk-backed path the spill file IS the snapshot in

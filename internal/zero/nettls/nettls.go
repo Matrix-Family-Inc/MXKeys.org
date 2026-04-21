@@ -29,6 +29,7 @@
 package nettls
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -200,9 +201,34 @@ func Listen(network, address string, c Config) (net.Listener, error) {
 
 // DialTimeout returns a net.Conn optionally wrapped in TLS. The
 // serverName default is the host portion of address.
+//
+// Equivalent to DialContext with a background context and the
+// given timeout. Kept for legacy call sites that have no
+// context; every path that does carry a context should call
+// DialContext directly so cancellation actually interrupts the
+// connect + TLS handshake stages.
 func DialTimeout(network, address string, timeout time.Duration, c Config) (net.Conn, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return DialContext(ctx, network, address, timeout, c)
+}
+
+// DialContext dials network:address, optionally wraps the
+// connection in TLS, and honours ctx cancellation at BOTH the
+// TCP-connect stage and the TLS-handshake stage. timeout is the
+// hard per-attempt cap applied via net.Dialer.Timeout on top of
+// ctx; pass zero to rely on ctx alone.
+//
+// Cancellation contract: if ctx fires before net.Dial returns,
+// the dial is aborted immediately (net.Dialer.DialContext). If
+// ctx fires after TCP is up but before the TLS handshake
+// finishes, HandshakeContext tears the connection down and
+// returns ctx.Err(). Every internal goroutine exits before
+// DialContext returns; no watcher is leaked.
+func DialContext(ctx context.Context, network, address string, timeout time.Duration, c Config) (net.Conn, error) {
+	dialer := &net.Dialer{Timeout: timeout}
 	if !c.Enabled {
-		return net.DialTimeout(network, address, timeout)
+		return dialer.DialContext(ctx, network, address)
 	}
 	ccfg, err := ClientConfig(c)
 	if err != nil {
@@ -215,6 +241,14 @@ func DialTimeout(network, address string, timeout time.Duration, c Config) (net.
 			ccfg.ServerName = host
 		}
 	}
-	dialer := &net.Dialer{Timeout: timeout}
-	return tls.DialWithDialer(dialer, network, address, ccfg)
+	raw, err := dialer.DialContext(ctx, network, address)
+	if err != nil {
+		return nil, err
+	}
+	tlsConn := tls.Client(raw, ccfg)
+	if err := tlsConn.HandshakeContext(ctx); err != nil {
+		_ = tlsConn.Close()
+		return nil, err
+	}
+	return tlsConn, nil
 }
