@@ -8,6 +8,32 @@ No breaking changes to the Matrix federation API contract.
 
 ### Added
 
+- Cluster Raft state-machine snapshotting
+  (`internal/cluster/snapshot.go`). `snapshotKeyState` and
+  `installKeySnapshot` are registered via
+  `node.SetSnapshotProvider` / `node.SetSnapshotInstaller` before
+  `node.Start()` so `LoadFromDisk` can restore the LWW key cache
+  from a persisted snapshot and so `CompactLog` has a provider to
+  call. Wire format is versioned (`keySnapshotVersion`);
+  unknown versions are refused via `ErrUnsupportedSnapshotVersion`.
+  Serialization is deterministic (JSON with sorted keys) so
+  replicas at the same commit index produce byte-identical
+  snapshots.
+- Raft background log compaction loop (`raftCompactionLoop` in
+  `internal/cluster/snapshot.go`). Ticks every
+  `compactionCheckInterval` (30 s) and triggers `CompactLog` when
+  the in-memory log exceeds `compactionLogThreshold` (1024
+  entries). Bounds recovery time to snapshot size plus the most
+  recent window.
+- `InstallSnapshotResponse.Success` and
+  `InstallSnapshotResponse.BytesStored`
+  (`internal/zero/raft/snapshot.go`). The follower sets
+  `Success=true` only when a non-Done chunk was buffered cleanly
+  or a Done chunk was installed and persisted; it sets
+  `Success=false` on stale term, offset gap, installer error, or
+  snapshot save error. `ErrSnapshotRejected` (new public error in
+  `internal/zero/raft/snapshot_send.go`) surfaces a follower
+  rejection to the replication loop.
 - Schema migrations runner (`internal/storage/migrations`) with
   embedded versioned SQL, per-migration transactions, and a
   `schema_migrations` bookkeeping table. Startup applies pending
@@ -116,6 +142,31 @@ No breaking changes to the Matrix federation API contract.
   bumped to `MXKS_WAL_v3` to carry the HMAC tag.
 - `InstallSnapshotRequest.Data` type changed to `[]byte`
   (binary-safe via base64 over JSON).
+- `cluster.raft_state_dir` is now mandatory when
+  `cluster.consensus_mode=raft`. `config.Validate()` rejects the
+  empty value (`TestValidateRaftRequiresStateDir`); the runtime
+  no longer degrades silently to in-memory Raft. Matches the
+  durability promise stated in `docs/architecture.md` and
+  ADR-0001.
+- `internal/cluster/state.go` `BroadcastKeyUpdate` no longer
+  writes the entry into the local LWW cache before `Submit` in
+  `raft` mode. Only the apply callback (after commit) populates
+  `c.state.keys`, so a non-leader call or a `Submit` failure can
+  no longer leave unreplicated state visible via
+  `GetCachedKey`. CRDT-mode behaviour is unchanged.
+- `SendInstallSnapshot`
+  (`internal/zero/raft/snapshot_send.go`, split out of
+  `snapshot_rpc.go`) now advances `nextIndex` / `matchIndex` for
+  a peer only when the follower ACKed the Done chunk with
+  `Success=true`. Transport errors, decode errors, and
+  `Success=false` ACKs leave peer bookkeeping untouched and
+  return `ErrSnapshotRejected` so the next replication pass
+  restarts from offset 0. Earlier behaviour advanced the indices
+  unconditionally after the last chunk.
+- `handleInstallSnapshot` no longer swallows `SaveSnapshot`
+  errors; a failed persist rejects the install with
+  `Success=false` so the leader retries rather than treating a
+  best-effort install as a successful snapshot install.
 - File-size policy: target 250 - 300 lines, hard ceiling 500
   lines. See ADR-0010. Earlier production files already split
   below 300 stay as they are.
@@ -146,6 +197,17 @@ No breaking changes to the Matrix federation API contract.
   group-commit batcher can amortise fsync across concurrent
   submissions. Index assignment stays serialised through the
   lock; persist failure truncates the in-memory tail.
+- Raft cluster runtime now wires snapshot provider / installer
+  before `node.Start()`. Before this fix the callbacks lived in
+  `internal/zero/raft` but no production path invoked them;
+  `LoadFromDisk` and `handleInstallSnapshot` advanced
+  `snapshotIndex` / `commitIndex` / `lastApplied` and truncated
+  the log without restoring the application-level key state.
+- Raft `InstallSnapshot` protocol no longer has silent
+  follower-failure semantics. See the new `Success` field under
+  **Changed**; the combined effect closes the path where a
+  follower installer error or save error left the leader
+  convinced the peer had caught up.
 - Transparency log default table is created by the migrations
   runner (`sql/0002_transparency_log.sql`). The lazy-DDL path
   remains for operators using a custom `transparency.table_name`

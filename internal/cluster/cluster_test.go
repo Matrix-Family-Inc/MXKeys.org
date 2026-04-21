@@ -319,6 +319,27 @@ func TestBroadcastKeyUpdateDisabledIsNoop(t *testing.T) {
 	}
 }
 
+// TestBroadcastKeyUpdateRaftModeDoesNotBypassConsensus documents the
+// strict-Raft contract: in raft mode BroadcastKeyUpdate must not write
+// into the local LWW cache before Submit succeeds. Only the apply
+// callback (triggered after a committed entry) is allowed to populate
+// c.state.keys. Without a running raft node we cannot observe a
+// committed apply, so the cache must stay empty.
+func TestBroadcastKeyUpdateRaftModeDoesNotBypassConsensus(t *testing.T) {
+	c, err := NewCluster(ClusterConfig{
+		Enabled:       true,
+		NodeID:        "local",
+		ConsensusMode: "raft",
+	})
+	if err != nil {
+		t.Fatalf("NewCluster() error = %v", err)
+	}
+	c.BroadcastKeyUpdate("srv", "key", "payload", 1234)
+	if got := c.GetCachedKey("srv", "key"); got != nil {
+		t.Fatalf("raft mode must not populate local cache before consensus; got %+v", got)
+	}
+}
+
 func TestClusterLifecycleAndSeedJoin(t *testing.T) {
 	seedPort := freePort(t)
 	joinerPort := freePort(t)
