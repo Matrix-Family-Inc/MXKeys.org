@@ -8,6 +8,29 @@ No breaking changes to the Matrix federation API contract.
 
 ### Added
 
+- Automatic InstallSnapshot catch-up in production (see Fixed).
+  `sendAppendEntries` now detects peers whose `nextIndex` sits at or
+  below the leader's snapshot boundary and switches to
+  `SendInstallSnapshot` in place of `AppendEntries`. Eliminates the
+  deadlock where a lagging follower would loop forever decrementing
+  through entries that only exist in the leader's on-disk snapshot.
+- Follower-forward writes via `raft.Node.Propose`
+  (`internal/zero/raft/propose.go`) and the new
+  `MsgForwardProposal` RPC. A follower that receives a write forwards
+  it to the current leader over a SharedSecret-signed RPC; the
+  leader submits locally and responds with the Submit outcome.
+  `cluster.BroadcastKeyUpdate` now routes every raft-mode write
+  through `Propose`, so follower-originated cache updates are
+  actually replicated cluster-wide instead of being silently
+  dropped as `ErrNotLeader`.
+- `raft.Config.AdvertiseAddr` and `AppendEntriesRequest.LeaderAddress`
+  / `InstallSnapshotRequest.LeaderAddress`. The leader embeds its
+  dialable "host:port" in every AE and InstallSnapshot RPC so
+  followers learn a concrete forwarding endpoint used by Propose.
+  The cluster runtime passes `advertiseAddress:advertisePort` into
+  the raft config automatically.
+- `raft.ErrNoLeader`: returned by Propose when the caller is not the
+  leader and no leader is currently known (e.g. mid-election).
 - Cluster Raft state-machine snapshotting
   (`internal/cluster/snapshot.go`). `snapshotKeyState` and
   `installKeySnapshot` are registered via
@@ -208,6 +231,28 @@ No breaking changes to the Matrix federation API contract.
   **Changed**; the combined effect closes the path where a
   follower installer error or save error left the leader
   convinced the peer had caught up.
+- Raft production replication now drives `InstallSnapshot`
+  automatically after compaction. `sendAppendEntries` previously
+  only shipped `AppendEntries`, so a peer whose `nextIndex` sat at
+  or below the leader's snapshot boundary would reject every AE
+  (`termAt` cannot resolve an index inside the compacted prefix),
+  the leader would decrement `nextIndex` on every response, and the
+  peer would never catch up. `SendInstallSnapshot` now lives on the
+  heartbeat path via `needsSnapshotCatchUp` and
+  `driveInstallSnapshot`, bounded by `CommitTimeout`.
+- Raft `becomeLeader` initialises per-peer `nextIndex` via
+  `logLen()+1` (absolute index) instead of `len(n.log)+1`. After
+  compaction `logOffset > 0` and the in-memory slice length no
+  longer reflects the tail position, so the previous formula placed
+  `nextIndex` below the real tail and forced the new leader into
+  the same stuck-on-compacted-prefix loop described above.
+- Raft `BroadcastKeyUpdate` in cluster mode now transparently
+  forwards follower-originated writes to the leader. Before this
+  fix a fetch served by a follower was pinned to that node's
+  local notary storage but never reached the replicated cluster
+  cache, because `Submit` on a non-leader returns `ErrNotLeader`
+  with no fallback. See the `Propose` / `MsgForwardProposal`
+  entry under **Added**.
 - Transparency log default table is created by the migrations
   runner (`sql/0002_transparency_log.sql`). The lazy-DDL path
   remains for operators using a custom `transparency.table_name`

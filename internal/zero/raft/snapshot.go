@@ -227,6 +227,7 @@ type SnapshotInstaller func(data []byte, lastIncludedIndex, lastIncludedTerm uin
 type InstallSnapshotRequest struct {
 	Term              uint64 `json:"term"`
 	LeaderID          string `json:"leader_id"`
+	LeaderAddress     string `json:"leader_address,omitempty"`
 	LastIncludedIndex uint64 `json:"last_included_index"`
 	LastIncludedTerm  uint64 `json:"last_included_term"`
 	Offset            uint64 `json:"offset"`

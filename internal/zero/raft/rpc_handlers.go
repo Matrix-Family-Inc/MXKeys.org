@@ -25,6 +25,8 @@ func (n *Node) handleRPC(msg *RPCMessage) *RPCMessage {
 		return n.handleAppendEntries(msg)
 	case MsgInstallSnapshot:
 		return n.handleInstallSnapshot(msg)
+	case MsgForwardProposal:
+		return n.handleForwardProposal(msg)
 	default:
 		return nil
 	}
@@ -146,6 +148,7 @@ func (n *Node) handleAppendEntries(msg *RPCMessage) *RPCMessage {
 
 	n.state = Follower
 	n.leaderId = req.LeaderId
+	n.leaderAddr = req.LeaderAddress
 	n.lastContact = time.Now()
 
 	// Check log consistency. prevLog may sit anywhere:

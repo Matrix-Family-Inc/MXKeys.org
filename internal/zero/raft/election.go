@@ -188,13 +188,21 @@ func (n *Node) startElection() {
 }
 
 // becomeLeader transitions to leader state.
+//
+// Initializes per-peer nextIndex to the ABSOLUTE next log slot
+// (logLen()+1). Using len(n.log)+1 is wrong after compaction: the
+// in-memory slice only holds entries above logOffset, so the bare
+// length would place nextIndex well below the real tail and the
+// leader would immediately start decrementing through entries that
+// only exist inside the on-disk snapshot, deadlocking replication
+// until InstallSnapshot eventually runs.
 func (n *Node) becomeLeader() {
 	n.state = Leader
 	n.leaderId = n.config.NodeID
 
-	// Initialize leader state.
+	nextAbs := n.logLen() + 1
 	for _, peer := range n.config.Peers {
-		n.nextIndex[peer] = uint64(len(n.log)) + 1
+		n.nextIndex[peer] = nextAbs
 		n.matchIndex[peer] = 0
 	}
 

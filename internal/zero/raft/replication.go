@@ -13,6 +13,8 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+
+	"mxkeys/internal/zero/log"
 )
 
 type appendEntriesSnapshot struct {
@@ -25,8 +27,28 @@ type appendEntriesSnapshot struct {
 }
 
 // sendAppendEntries sends append entries to a peer.
+//
+// Catch-up contract for lagging peers:
+//
+//   - When the peer's nextIndex is at or below the leader's snapshot
+//     boundary (logOffset/snapshotIndex), the entries the peer needs
+//     are no longer in the leader's in-memory log; they live only in
+//     the on-disk snapshot. Sending AppendEntries in that state would
+//     carry a PrevLogTerm the leader cannot compute (termAt rejects
+//     indices under the snapshot prefix), the follower would answer
+//     Success=false, and the leader would decrement nextIndex forever
+//     without ever sending the data. We detect that state here and
+//     drive SendInstallSnapshot instead; on success the leader's own
+//     nextIndex/matchIndex bookkeeping is advanced atomically inside
+//     SendInstallSnapshot, so the next AE tick ships log tail from
+//     the snapshot boundary forward.
 func (n *Node) sendAppendEntries(peer string) {
 	defer n.wg.Done()
+
+	if n.needsSnapshotCatchUp(peer) {
+		n.driveInstallSnapshot(peer)
+		return
+	}
 
 	snapshot, ok := n.appendEntriesSnapshot(peer)
 	if !ok {
@@ -34,12 +56,13 @@ func (n *Node) sendAppendEntries(peer string) {
 	}
 
 	req := AppendEntriesRequest{
-		Term:         snapshot.term,
-		LeaderId:     n.config.NodeID,
-		PrevLogIndex: snapshot.prevLogIndex,
-		PrevLogTerm:  snapshot.prevLogTerm,
-		Entries:      snapshot.entries,
-		LeaderCommit: snapshot.leaderCommit,
+		Term:          snapshot.term,
+		LeaderId:      n.config.NodeID,
+		LeaderAddress: n.advertiseAddr(),
+		PrevLogIndex:  snapshot.prevLogIndex,
+		PrevLogTerm:   snapshot.prevLogTerm,
+		Entries:       snapshot.entries,
+		LeaderCommit:  snapshot.leaderCommit,
 	}
 
 	resp, err := n.sendRPC(peer, MsgAppendEntries, req)
@@ -73,6 +96,45 @@ func (n *Node) sendAppendEntries(peer string) {
 		if n.nextIndex[peer] > 1 {
 			n.nextIndex[peer]--
 		}
+	}
+}
+
+// needsSnapshotCatchUp reports whether the peer has fallen past the
+// leader's snapshot boundary. True iff the leader holds a non-empty
+// snapshot and the peer's nextIndex points at or below that boundary,
+// meaning the required prefix of history only exists on disk.
+func (n *Node) needsSnapshotCatchUp(peer string) bool {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	if n.state != Leader {
+		return false
+	}
+	if n.snapshotIndex == 0 {
+		return false
+	}
+	nextIdx, ok := n.nextIndex[peer]
+	if !ok {
+		return false
+	}
+	return nextIdx <= n.snapshotIndex
+}
+
+// driveInstallSnapshot runs SendInstallSnapshot against a lagging
+// peer with a timeout derived from CommitTimeout. A failure is logged
+// at debug level and leaves nextIndex/matchIndex untouched so the
+// next heartbeat tick retries from offset 0.
+func (n *Node) driveInstallSnapshot(peer string) {
+	timeout := n.config.CommitTimeout
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := n.SendInstallSnapshot(ctx, peer); err != nil {
+		log.Debug("Raft InstallSnapshot catch-up failed",
+			"peer", peer,
+			"error", err,
+		)
 	}
 }
 
