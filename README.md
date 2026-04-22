@@ -14,23 +14,42 @@ deployment is a single Go binary plus PostgreSQL; optional modules
 (transparency log, analytics, trust policy, clustering, server-info
 enrichment) are off by default and opt in via config.
 
-## What It Does (core)
+## Design principles
 
-- Resolves Matrix homeservers via `.well-known`, SRV, explicit ports, and IP literals.
-- Verifies Ed25519 self-signatures and server identity before accepting key material.
-- Adds a perspective signature to verified responses.
-- Stores validated responses in PostgreSQL and in-process cache.
-- Exposes health/liveness/readiness probes and Prometheus metrics.
+- Minimal default surface: key notary plus health/live/ready probes.
+- Opt-in modules: transparency, analytics, trust policy, clustering, enrichment.
+- Deterministic validation: canonical JSON, explicit SSRF and timeout policy.
+- Operator-owned data: PostgreSQL and a local signing key, no external calls without config.
 
-Optional modules (opt-in, off by default): transparency log, analytics,
-trust policy, clustering (CRDT or Raft), server-info enrichment. See
+## How it works
+
+1. Resolve the target homeserver via `.well-known`, SRV, explicit `host:port`, or IP literal.
+2. Fetch `/_matrix/key/v2/server`, enforce canonical JSON, and verify each Ed25519 self-signature.
+3. Apply trust policy (if enabled) and caching/freshness rules.
+4. Add the notary's perspective signature and persist the verified response in PostgreSQL and the in-process cache.
+
+See `docs/federation-behavior.md` for the normative contract, including
+SSRF handling, timeouts, and error mapping. Optional modules
+(transparency log, analytics, trust policy, clustering with CRDT or
+Raft, server-info enrichment) are opt-in; see
 [Core vs optional modules](#core-vs-optional-modules) for the full table.
 
-## Why It Exists
+## Why a dedicated notary
 
-- Federation trust is hard to audit when key changes happen silently.
-- Upstream failures and inconsistent keys need explicit handling, not blind trust.
-- Operators need a small, inspectable service rather than a large dependency stack.
+Homeservers fetch keys as part of federation, which is correct by spec
+but couples trust decisions to the homeserver's codebase and operational
+surface. A dedicated notary:
+
+- Isolates key verification from message and state handling.
+- Lets multiple homeservers share a single audit and observability point.
+- Makes trust policy (allow and deny lists, signature requirements, TLS rules) explicit and configurable independently of any homeserver.
+
+## Use cases
+
+- Perspective notary for Synapse, Dendrite, Conduit, or MXCore via `trusted_key_servers`.
+- Internal notary for a restricted federation, with allow-list and mTLS on upstream fetches.
+- Standalone audit trail for server-key history through the transparency log and Merkle proofs.
+- Observability point for federation key behavior via Prometheus metrics and structured logs.
 
 ## Quick Start
 
@@ -64,6 +83,12 @@ trusted_servers:
 
 `server.name` must be configured explicitly to the public hostname of your deployment. `database.url` has no built-in default and must be configured explicitly. To gate the admin-only operational routes with a bearer token, set `security.admin_access_token`. For cluster mode, set `cluster.shared_secret` and, when binding to a wildcard address, `cluster.advertise_address`.
 If `security.trust_forwarded_headers` is enabled, configure the full trusted proxy chain in `security.trusted_proxies` and ensure those proxies overwrite forwarded headers instead of passing client-supplied values through unchanged.
+
+A live instance is available for a quick sanity check against a running notary:
+
+```bash
+curl https://mxkeys.org/_matrix/key/v2/server
+```
 
 ## Public API
 
