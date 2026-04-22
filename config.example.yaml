@@ -139,3 +139,24 @@ cluster:
     require_client_cert: true
     min_version: "1.3"     # only "1.3" is accepted; the field stays for forward compatibility
     server_name: ""        # optional SNI pin
+
+# Optional GET /_mxkeys/server-info enrichment endpoint. When
+# enabled the notary serves DNS + federation reachability +
+# optional WHOIS metadata for any Matrix server_name the visitor
+# queries. Disabled by default so the base binary runs without
+# outbound TCP 43 (WHOIS).
+server_info:
+  enabled: false
+  # How long a successful enrichment is cached before re-fetch.
+  # Must be >= 1m when set explicitly; zero selects the default
+  # (6h).
+  cache_ttl: "6h"
+  # Per-request overall budget. DNS / reachability / WHOIS run
+  # in parallel under this cap and the handler returns whatever
+  # succeeded. Must be >= 1s when set explicitly; zero selects
+  # the default (5s).
+  request_timeout: "5s"
+  # WHOIS is opt-in because it requires outbound TCP 43 and
+  # depends on per-TLD rate limits that the operator is
+  # responsible for respecting.
+  whois_enabled: false

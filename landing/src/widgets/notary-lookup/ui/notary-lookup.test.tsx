@@ -38,8 +38,12 @@ describe('NotaryLookupSection', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: /check notary keys/i }));
 
+    // The widget renders the queried hostname in two places: the
+    // server_name headline of each returned key card, and the
+    // "Result for <host>" footer. getAllBy* tolerates both; the
+    // assertion is satisfied as long as at least one match exists.
     await waitFor(() => {
-      expect(screen.getByText(/matrix\.example\.org/)).toBeInTheDocument();
+      expect(screen.getAllByText(/matrix\.example\.org/).length).toBeGreaterThan(0);
     });
     expect(screen.getByText(/ed25519:auto/i)).toBeInTheDocument();
   });

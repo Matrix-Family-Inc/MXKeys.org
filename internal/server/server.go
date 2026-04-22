@@ -88,6 +88,7 @@ type Server struct {
 	analytics             *keys.Analytics
 	trustPolicy           *keys.TrustPolicy
 	cluster               *cluster.Cluster
+	serverInfo            *ServerInfoService
 	enterpriseAccessToken string
 
 	// shuttingDown is set atomically at the start of graceful shutdown
@@ -280,6 +281,17 @@ func New(cfg *config.Config) (*Server, error) {
 				log.Warn("Failed to apply replicated server response", "server", serverName, "error", err)
 			}
 		})
+	}
+
+	if cfg.ServerInfo.Enabled {
+		cache, err := NewServerInfoCache(db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialise server-info cache: %w", err)
+		}
+		s.serverInfo = NewServerInfoService(cfg.ServerInfo, cache)
+		log.Info("Server-info enrichment enabled",
+			"whois", cfg.ServerInfo.WhoisEnabled,
+		)
 	}
 
 	s.setupRoutes()

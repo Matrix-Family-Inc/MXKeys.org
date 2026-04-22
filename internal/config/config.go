@@ -29,6 +29,7 @@ type Config struct {
 	TrustPolicy    TrustPolicyConfig
 	Transparency   TransparencyConfig
 	Cluster        ClusterConfig
+	ServerInfo     ServerInfoConfig
 }
 
 // ServerConfig server settings
@@ -183,6 +184,37 @@ type ClusterTLSConfig struct {
 	ServerName        string // optional SNI/CN pin for dials
 }
 
+// ServerInfoConfig controls the optional /_mxkeys/server-info
+// enrichment endpoint: DNS + federation reachability + WHOIS
+// lookups produced in parallel for a requested Matrix
+// server_name. Disabled by default so operators without outbound
+// WHOIS access run the same binary without additional setup.
+type ServerInfoConfig struct {
+	// Enabled turns on the GET /_mxkeys/server-info route. When
+	// false, the route is not registered and the handler is never
+	// reachable.
+	Enabled bool
+
+	// CacheTTL is how long a successful lookup is kept in the
+	// server_info_cache table before the handler re-fetches. Zero
+	// selects the built-in default (6h) so operators are not forced
+	// to pick a number.
+	CacheTTL time.Duration
+
+	// RequestTimeout is the overall budget for a single handler
+	// call. Sub-tasks (DNS, reachability probe, WHOIS) run in
+	// parallel with their own shorter timeouts and the handler
+	// returns whatever succeeded within this budget. Zero selects
+	// the built-in default (5s).
+	RequestTimeout time.Duration
+
+	// WhoisEnabled allows the handler to open outbound TCP 43
+	// connections to the canonical WHOIS network. Operators whose
+	// egress firewall blocks TCP 43 should leave this false; the
+	// rest of the enrichment (DNS, reachability) still runs.
+	WhoisEnabled bool
+}
+
 // Load assembles a Config from optional YAML + environment overrides.
 //
 // Resolution order:
@@ -294,4 +326,10 @@ func setDefaults(c *Config) {
 	c.Cluster.SharedSecret = ""
 	c.Cluster.RaftStateDir = "/var/lib/mxkeys/raft"
 	c.Cluster.RaftSyncOnAppend = true
+
+	// Server-info enrichment (disabled by default).
+	c.ServerInfo.Enabled = false
+	c.ServerInfo.CacheTTL = 6 * time.Hour
+	c.ServerInfo.RequestTimeout = 5 * time.Second
+	c.ServerInfo.WhoisEnabled = false
 }

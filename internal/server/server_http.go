@@ -35,6 +35,11 @@ func (s *Server) setupRoutes() {
 	// POST /_matrix/key/v2/query - notary query (stricter rate limit)
 	s.mux.HandleFunc("POST /_matrix/key/v2/query", s.withQueryRateLimit(s.handleKeyQuery))
 
+	// GET /_mxkeys/server-info - optional enrichment endpoint.
+	// Shares the query-rate-limit bucket so an anonymous client
+	// cannot weaponise it as an amplified scanner.
+	s.mux.HandleFunc("GET /_mxkeys/server-info", s.withQueryRateLimit(s.handleServerInfo))
+
 	// Version endpoint
 	s.mux.HandleFunc("GET /_matrix/federation/v1/version", s.handleVersion)
 

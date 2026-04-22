@@ -6,6 +6,7 @@ dist/
 Thumbs.db
 
 # Go build artifacts
+/bin
 /mxkeys
 /mxkeys-verify
 /release/

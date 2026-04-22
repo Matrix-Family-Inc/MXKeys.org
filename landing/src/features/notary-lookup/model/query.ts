@@ -9,7 +9,7 @@
 
 import { useMutation } from '@tanstack/react-query';
 
-import { env } from '@/shared/config/env';
+import { apiBaseURL } from '@/shared/config/env';
 import { verifyServer, type QueryResponse } from '../api/verify';
 
 /**
@@ -21,7 +21,7 @@ export function useVerifyServer() {
   return useMutation<QueryResponse, Error, { serverName: string }>({
     mutationFn: ({ serverName }) =>
       verifyServer({
-        baseURL: env.VITE_SITE_URL,
+        baseURL: apiBaseURL(),
         serverName,
       }),
   });

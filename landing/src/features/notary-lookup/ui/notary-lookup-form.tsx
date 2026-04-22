@@ -3,69 +3,66 @@
  * Company: Matrix Family Inc. (https://matrix.family)
  * Maintainer: Brabus
  * Contact: dev@matrix.family
- * Date: Mon Apr 20 2026 UTC
- * Status: Created
+ * Date: Wed Apr 22 2026 UTC
+ * Status: Updated
  */
 
 import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { TextField } from '@/shared/ui/text-field';
-import { notaryLookupSchema, type NotaryLookupInput } from '../model/schema';
+import {
+  notaryLookupSchema,
+  NOTARY_LOOKUP_ERROR_I18N,
+  type NotaryLookupInput,
+} from '../model/schema';
 
 export interface NotaryLookupFormProps {
-  /**
-   * onSubmit is invoked only after Zod validation has succeeded. The
-   * caller is responsible for the network round trip (and, at the
-   * moment, for rendering the result elsewhere on the page).
-   */
   onSubmit: (input: NotaryLookupInput) => void | Promise<void>;
-  /**
-   * busy lets the parent disable the submit button while a request is
-   * in flight; the form itself does not track async state to keep
-   * this feature framework-agnostic.
-   */
   busy?: boolean;
 }
 
 /**
- * Accessible, validated single-field form used as the reference
- * integration of React Hook Form + Zod in this codebase. Future
- * forms in the landing page follow the same pattern:
- *
- *   1. Declare the shape in `model/schema.ts` with zod.
- *   2. Wire `useForm({ resolver: zodResolver(schema) })` here.
- *   3. Register inputs via `register('field')` and surface errors via
- *      the TextField shared primitive.
- *
- * No global form state; no useEffect. Errors come from zod.
+ * Single-field form used as the reference integration of React
+ * Hook Form + Zod + i18next in this codebase. Validation runs
+ * on submit only so the input never turns red while the visitor
+ * is still typing.
  */
 export function NotaryLookupForm({ onSubmit, busy = false }: NotaryLookupFormProps) {
+  const { t } = useTranslation();
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<NotaryLookupInput>({
     resolver: zodResolver(notaryLookupSchema),
-    mode: 'onBlur',
+    mode: 'onSubmit',
+    reValidateMode: 'onSubmit',
   });
+
+  const rawError = errors.server_name?.message;
+  const errorText = rawError
+    ? t(NOTARY_LOOKUP_ERROR_I18N[rawError] ?? 'lookup.validation.badShape')
+    : undefined;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3" noValidate>
       <TextField
-        label="Matrix server"
-        placeholder="matrix.example.org"
+        label={t('lookup.field')}
+        placeholder={t('lookup.placeholder')}
         autoComplete="off"
         spellCheck={false}
+        description={t('lookup.hint')}
         {...register('server_name')}
-        error={errors.server_name?.message}
+        error={errorText}
       />
       <button
         type="submit"
         disabled={busy || isSubmitting}
-        className="inline-flex w-fit items-center justify-center rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+        className="btn btn-primary w-fit"
       >
-        {busy || isSubmitting ? 'Checking...' : 'Check notary keys'}
+        {busy || isSubmitting ? t('lookup.submitting') : t('lookup.submit')}
       </button>
     </form>
   );

@@ -170,6 +170,33 @@ func (c *Config) Validate() error {
 		return err
 	}
 
+	if err := validateServerInfo(c.ServerInfo); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateServerInfo checks the optional /_mxkeys/server-info
+// enrichment settings. Disabled ServerInfo is always valid; when
+// Enabled=true the numeric knobs must be positive or zero
+// (zero -> built-in default).
+func validateServerInfo(s ServerInfoConfig) error {
+	if !s.Enabled {
+		return nil
+	}
+	if s.CacheTTL < 0 {
+		return fmt.Errorf("server_info.cache_ttl must be >= 0 (got %s)", s.CacheTTL)
+	}
+	if s.CacheTTL > 0 && s.CacheTTL < time.Minute {
+		return fmt.Errorf("server_info.cache_ttl must be >= 1m when set explicitly (got %s)", s.CacheTTL)
+	}
+	if s.RequestTimeout < 0 {
+		return fmt.Errorf("server_info.request_timeout must be >= 0 (got %s)", s.RequestTimeout)
+	}
+	if s.RequestTimeout > 0 && s.RequestTimeout < time.Second {
+		return fmt.Errorf("server_info.request_timeout must be >= 1s when set explicitly (got %s)", s.RequestTimeout)
+	}
 	return nil
 }
 
