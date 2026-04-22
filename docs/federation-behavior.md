@@ -2,8 +2,8 @@ Project: MXKeys
 Company: Matrix Family Inc. (https://matrix.family)
 Maintainer: Brabus
 Contact: dev@matrix.family
-Date: Mon Mar 16 2026 UTC
-Status: Created
+Date: Wed Apr 22 2026 UTC
+Status: Updated
 
 # Federation Behavior Specification
 
@@ -12,7 +12,11 @@ Status: Created
 This document specifies deterministic federation-key behavior for MXKeys.
 It defines request/response semantics, validation rules, resolution order, and failure behavior.
 
-This specification covers the stable public contract only. Protected operational routes are intentionally out of scope except where noted.
+The **compatibility-stable** surface is the Matrix Key Server API and related
+`/_matrix/federation/v1/version` behavior. Other HTTP routes listed below are
+normative for operators and integrators (health, verification aids, optional
+enrichment); protected operational routes are documented here even though they
+are not part of the core federation contract.
 
 ## Supported Endpoints
 
@@ -23,17 +27,50 @@ This specification covers the stable public contract only. Protected operational
 - `POST /_matrix/key/v2/query`
 - `GET /_matrix/federation/v1/version`
 
-### Operational endpoints
+### Public verification and notary key discovery
+
+Registered for every deployment. These routes do **not** use the enterprise-access
+middleware:
+
+- `GET /_mxkeys/transparency/signed-head` — signed Merkle tree head JSON for
+  external verification. Returns `404` with Matrix error JSON when the
+  transparency log is not available at runtime.
+- `GET /_mxkeys/notary/key` — notary public key metadata JSON for STH
+  verification helpers.
+
+### Operational probes
+
+Always reachable without an access token:
 
 - `GET /_mxkeys/health`
 - `GET /_mxkeys/live`
 - `GET /_mxkeys/ready`
+
+### Operational detail (conditionally gated)
+
 - `GET /_mxkeys/status`
 - `GET /_mxkeys/metrics`
 
+When `security.enterprise_access_token` is **non-empty**, these endpoints
+require the same credential as protected operational routes: `Authorization:
+Bearer <token>` or `X-MXKeys-Enterprise-Token: <token>`. Missing or invalid
+credential yields `401` (`M_UNAUTHORIZED`). When the token is **empty** in
+configuration, `status` and `metrics` are served **without** that check.
+
+### Optional server-info enrichment
+
+- `GET /_mxkeys/server-info?name=<host>` — optional operator-facing enrichment
+  (DNS, federation reachability, optional WHOIS). Shares the rate-limit bucket
+  with `POST /_matrix/key/v2/query`. Returns `503` when `server_info.enabled`
+  is false. Response shape and sub-sections are defined in `ARCHITECTURE.md`.
+
 ### Protected operational routes (non-core contract)
 
-These routes are available only when `security.enterprise_access_token` is configured and the corresponding runtime surface is registered:
+These routes are **registered only when** `security.enterprise_access_token` is
+configured. If the token is unset, they are absent from the mux (requests
+receive `404`). If the token is set, missing or invalid bearer/header yields
+`401` (`M_UNAUTHORIZED`). Individual routes may additionally require a feature
+(transparency log, cluster, trust policy) to be enabled at runtime.
 
 - `GET /_mxkeys/transparency/log`
 - `GET /_mxkeys/transparency/verify`
@@ -43,10 +80,14 @@ These routes are available only when `security.enterprise_access_token` is confi
 - `GET /_mxkeys/analytics/servers`
 - `GET /_mxkeys/analytics/anomalies`
 - `GET /_mxkeys/analytics/rotators`
+- `GET /_mxkeys/circuits`
 - `GET /_mxkeys/cluster/status`
 - `GET /_mxkeys/cluster/nodes`
 - `GET /_mxkeys/policy/status`
 - `GET /_mxkeys/policy/check`
+
+Note: `GET /_mxkeys/transparency/signed-head` is **not** in this list; it stays
+public as defined above.
 
 ## Endpoint Status and Error Codes
 
@@ -56,13 +97,18 @@ These routes are available only when `security.enterprise_access_token` is confi
 | `GET /_matrix/key/v2/server/{keyID}` | `200` | `400` (`M_INVALID_PARAM`) for invalid `keyID`, `404` (`M_NOT_FOUND`) for unknown key |
 | `POST /_matrix/key/v2/query` | `200` | `400` (`M_BAD_JSON`, `M_INVALID_PARAM`), `413` (`M_TOO_LARGE`), `429` (`M_LIMIT_EXCEEDED`) |
 | `GET /_matrix/federation/v1/version` | `200` | internal failures may produce `5xx` |
+| `GET /_mxkeys/transparency/signed-head` | `200` | `404` (`M_NOT_FOUND`) when no signed head is available |
+| `GET /_mxkeys/notary/key` | `200` | internal failures may produce `5xx` |
 | `GET /_mxkeys/health` | `200` | internal failures may produce `5xx` |
 | `GET /_mxkeys/live` | `200` | internal failures may produce `5xx` |
 | `GET /_mxkeys/ready` | `200` | `503` when DB or signing-key readiness checks fail |
-| `GET /_mxkeys/status` | `200` | internal failures may produce `5xx` |
-| `GET /_mxkeys/metrics` | `200` | internal failures may produce `5xx` |
+| `GET /_mxkeys/status` | `200` | `401` when enterprise token is configured but missing/invalid; internal failures may produce `5xx` |
+| `GET /_mxkeys/metrics` | `200` | same `401` rule as `status` |
+| `GET /_mxkeys/server-info` | `200` | `503` when enrichment disabled; `400` for bad/missing `name`; `429` under query rate limit |
 
-Protected operational routes return `401` (`M_UNAUTHORIZED`) when the enterprise access token is missing or invalid, and `404` when a route is not registered for the current feature set.
+Protected operational routes return `401` (`M_UNAUTHORIZED`) when the enterprise
+access token is missing or invalid, and `404` when the route is not registered
+(token not configured, or required feature disabled).
 
 ## Deterministic Request Handling
 
@@ -137,15 +183,21 @@ Common matrix-compatible codes:
 - `M_INVALID_PARAM` for invalid parameter semantics,
 - `M_NOT_FOUND` for missing key ID on own-key endpoint,
 - `M_TOO_LARGE` for oversized request body,
-- `M_LIMIT_EXCEEDED` for rate-limited requests.
+- `M_LIMIT_EXCEEDED` for rate-limited requests,
+- `M_UNAUTHORIZED` for missing or invalid enterprise/operational access token.
 
 ## Operational Endpoint Semantics
 
 - `/_mxkeys/health`: process health check.
 - `/_mxkeys/live`: liveness (process alive).
 - `/_mxkeys/ready`: readiness (DB + signing-key readiness).
-- `/_mxkeys/status`: detailed runtime status (cache/db/uptime fields).
-- `/_mxkeys/metrics`: Prometheus exposition format.
+- `/_mxkeys/status`: detailed runtime status (cache/db/uptime fields); optional
+  bearer token when `security.enterprise_access_token` is set.
+- `/_mxkeys/metrics`: Prometheus exposition format; same optional gate as
+  `status`.
+- `/_mxkeys/transparency/signed-head`: public signed-tree head for verifiers.
+- `/_mxkeys/notary/key`: public notary key metadata for verifiers.
+- `/_mxkeys/server-info`: optional enrichment JSON; see `ARCHITECTURE.md`.
 
 ## Performance and Abuse Controls
 

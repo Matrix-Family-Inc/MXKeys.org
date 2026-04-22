@@ -4,10 +4,50 @@ All notable changes to MXKeys are documented in this file.
 
 ## [Unreleased]
 
-No breaking changes to the Matrix federation API contract.
+No entries.
+
+## [1.0.0] - 2026-04-22
+
+First stable release. Matrix federation API contract frozen. Raft
+consensus, transparency log, cluster TLS, and notary reply pipeline
+are all covered by unit, integration, race, and end-to-end smoke
+tests against a live 3-node cluster federating between two Synapse
+homeservers.
 
 ### Added
 
+- Optional `GET /_mxkeys/server-info?name=<host>` enrichment
+  endpoint. Returns the Matrix discovery state (well-known
+  delegation, SRV records, resolved host + port, A/AAAA
+  addresses), a federation-port TLS reachability probe (RTT
+  and negotiated version), and a sanitised WHOIS subset
+  (registrar, dates, nameservers) when `whois_enabled` is on.
+  Every sub-section is independently optional; the handler
+  always returns 200 with whatever succeeded within the
+  configured request budget and lists per-stage timeouts /
+  errors under `errors`. Disabled by default; turn on via
+  `server_info.enabled: true`. Shares the
+  `/_matrix/key/v2/query` rate-limit bucket so the notary
+  cannot be weaponised as a reconnaissance proxy. Backing table
+  `server_info_cache` provisioned via migration
+  `0004_server_info_cache.sql` with a configurable TTL (default
+  6h). Code lives in `internal/server/serverinfo_*.go`.
+- Landing widget panel "About <server>" that renders the
+  enrichment response under the notary lookup result. Every
+  row is data-gated, so the panel collapses to nothing when
+  the notary has `server_info.enabled: false`. Shipped in
+  `landing/src/features/server-info/` with a typed Zod schema,
+  a TanStack useMutation hook, and an MSW mock for local
+  development.
+- Top-level `ARCHITECTURE.md` promoted from `docs/architecture.md`.
+  Matrix Family projects keep the architecture document at the
+  repository root for discoverability from the GitHub overview.
+  The document gains a new **Notary Reply Integrity** section
+  covering the raw-preserving pipeline (`ServerKeysResponse.Raw`,
+  `AttachNotarySignature`, migration `0003_raw_server_response`)
+  and the end-to-end origin-signature survival invariant.
+  `docs/README.md`, `README.md`, `internal/config/validate.go`
+  comments, and this changelog updated accordingly.
 - Raw-preserving notary reply pipeline
   (`internal/keys/notary_raw_response.go`). `AttachNotarySignature`
   parses origin-delivered `/_matrix/key/v2/server` bytes,
@@ -316,7 +356,7 @@ No breaking changes to the Matrix federation API contract.
   ed25519 length. Cluster-transport HMAC payload uses canonical
   JSON.
 - File-size lint (`scripts/file-size-lint.sh`): warn at 300 lines,
-  fail at 500. New `file-size` CI job. See ADR-0010.
+  fail at 400. New `file-size` CI job. See ADR-0010.
 - Fuzz targets: `FuzzJSON`, `FuzzMarshalRoundTrip`
   (`internal/zero/canonical`), `FuzzValidateServerName`,
   `FuzzValidateKeyID`, `FuzzDecodeStrictJSON`
@@ -384,7 +424,7 @@ No breaking changes to the Matrix federation API contract.
   `cluster.consensus_mode=raft`. `config.Validate()` rejects the
   empty value (`TestValidateRaftRequiresStateDir`); the runtime
   no longer degrades silently to in-memory Raft. Matches the
-  durability promise stated in `docs/architecture.md` and
+  durability promise stated in `ARCHITECTURE.md` and
   ADR-0001.
 - `internal/cluster/state.go` `BroadcastKeyUpdate` no longer
   writes the entry into the local LWW cache before `Submit` in
@@ -405,7 +445,7 @@ No breaking changes to the Matrix federation API contract.
   errors; a failed persist rejects the install with
   `Success=false` so the leader retries rather than treating a
   best-effort install as a successful snapshot install.
-- File-size policy: target 250 - 300 lines, hard ceiling 500
+- File-size policy: target 250 - 300 lines, hard ceiling 400
   lines. See ADR-0010. Earlier production files already split
   below 300 stay as they are.
 - Coverage gate floors (see `scripts/coverage-gate.sh`): total
