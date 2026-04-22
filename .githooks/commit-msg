@@ -1,0 +1,51 @@
+#!/bin/sh
+# MXKeys commit-msg hook.
+#
+# Repository commit-message policy: reject auto-generated attribution
+# trailers and bot signatures. Commits land from human authors only.
+# Matches only canonical trailer form anchored at line start, so the
+# same words are fine as ordinary text elsewhere in the message body.
+#
+# Install (per clone): git config core.hooksPath .githooks
+
+set -eu
+
+msg_file="${1:-}"
+if [ -z "$msg_file" ] || [ ! -f "$msg_file" ]; then
+    exit 0
+fi
+
+git_dir=$(git rev-parse --git-dir 2>/dev/null || echo "")
+if [ -n "$git_dir" ] && [ -f "$git_dir/MERGE_MSG" ] && [ "$msg_file" = "$git_dir/MERGE_MSG" ]; then
+    exit 0
+fi
+
+msg=$(cat "$msg_file")
+
+fail() {
+    echo "commit-msg: $1" >&2
+    echo "repository policy: no auto-generated attribution trailers." >&2
+    exit 1
+}
+
+if printf '%s\n' "$msg" | grep -iqE '^[[:space:]]*made-with:'; then
+    fail "auto-generated 'Made-with:' trailer not allowed"
+fi
+
+if printf '%s\n' "$msg" | grep -iqE '^[[:space:]]*(generated-by|authored-by):'; then
+    fail "auto-generated attribution trailer not allowed"
+fi
+
+if printf '%s\n' "$msg" | grep -iqE '^[[:space:]]*co-authored-by:.*(\[bot\]|-bot@)'; then
+    fail "bot co-author not allowed"
+fi
+
+if printf '%s\n' "$msg" | grep -iqE '^[[:space:]]*signed-off-by:.*(\[bot\]|-bot@)'; then
+    fail "bot sign-off not allowed"
+fi
+
+if printf '%s\n' "$msg" | grep -qE '^[[:space:]]*🤖'; then
+    fail "robot marker not allowed"
+fi
+
+exit 0
