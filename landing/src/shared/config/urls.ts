@@ -41,7 +41,7 @@ export const MATRIX_CONTACTS = {
 } as const;
 
 export const EXTERNAL = {
-  github: 'https://github.com/matrixfamily/MXKeys.org',
+  github: 'https://github.com/Matrix-Family-Inc/MXKeys.org',
 } as const;
 
 /**
