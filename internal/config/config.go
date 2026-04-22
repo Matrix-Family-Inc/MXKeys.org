@@ -110,7 +110,7 @@ type SecurityConfig struct {
 	RequireRequestID      bool
 	TrustForwardedHeaders bool
 	TrustedProxies        []string
-	EnterpriseAccessToken string
+	AdminAccessToken      string
 	TrustedNotaries       []TrustedNotary
 }
 
@@ -297,7 +297,7 @@ func setDefaults(c *Config) {
 	c.Security.RequireRequestID = false
 	c.Security.TrustForwardedHeaders = false
 	c.Security.TrustedProxies = nil
-	c.Security.EnterpriseAccessToken = ""
+	c.Security.AdminAccessToken = ""
 
 	// Trust policies (disabled by default)
 	c.TrustPolicy.Enabled = false

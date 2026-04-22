@@ -153,7 +153,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'מצב שירות מפורט: זמן פעילות, מדדי מטמון, סטטיסטיקות מסד נתונים ומצב תכונות ארגוניות אופציונלי.',
+      description: 'מצב שירות מפורט: זמן פעילות, מדדי מטמון, סטטיסטיקות מסד נתונים ומצב של תת-מערכות אופציונליות.',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -161,8 +161,8 @@ export default {
     },
     errorsTitle: 'מודל שגיאות',
     errorsDescription: 'אימות בקשות ובקרות שימוש לרעה משתמשים בקודי שגיאה תואמי Matrix: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE ו-M_LIMIT_EXCEEDED.',
-    protectedTitle: 'נתיבים תפעוליים מוגנים',
-    protectedDescription: 'נתיבי שקיפות, אנליטיקה, אשכול ומדיניות דורשים טוקן גישה ארגוני ומתועדים בנפרד מ-API הפדרציה הציבורי היציב.',
+    protectedTitle: 'נתיבים תפעוליים לאדמין בלבד',
+    protectedDescription: 'נתיבי שקיפות, אנליטיקה, אשכול ומדיניות הם משטחי ops/debug לאדמין בלבד. הם מוגנים על ידי טוקן bearer (security.admin_access_token) ונמצאים מחוץ ל-API הפדרציה הציבורי היציב.',
   },
 
   integration: {

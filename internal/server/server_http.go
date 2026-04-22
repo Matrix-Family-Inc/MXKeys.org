@@ -49,8 +49,10 @@ func (s *Server) setupRoutes() {
 	// Public key discovery (required for external STH verification)
 	s.mux.HandleFunc("GET /_mxkeys/notary/key", s.handleNotaryPublicKey)
 
-	// Protected operational API endpoints
-	s.registerEnterpriseRoutes()
+	// Admin-only operational API endpoints (transparency inspection,
+	// analytics, cluster/policy status). Registered only when
+	// security.admin_access_token is configured.
+	s.registerAdminRoutes()
 }
 
 // withQueryRateLimit wraps a handler with query-specific rate limiting
@@ -69,12 +71,14 @@ func (s *Server) withQueryRateLimit(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// withOperationalAccess protects operational endpoints with enterprise token when configured
+// withOperationalAccess protects operational endpoints with the admin
+// token when one is configured. When the token is empty the endpoint
+// is served without the check.
 func (s *Server) withOperationalAccess(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if s.enterpriseAccessToken != "" {
-			token := enterpriseTokenFromRequest(r)
-			if !secureTokenCompare(token, s.enterpriseAccessToken) {
+		if s.adminAccessToken != "" {
+			token := adminTokenFromRequest(r)
+			if !secureTokenCompare(token, s.adminAccessToken) {
 				w.Header().Set("Content-Type", "application/json")
 				writeMatrixError(w, http.StatusUnauthorized, "M_UNAUTHORIZED", "Operational access token required")
 				return
@@ -84,12 +88,14 @@ func (s *Server) withOperationalAccess(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// withOperationalAccessHandler protects http.Handler with enterprise token when configured
+// withOperationalAccessHandler is the http.Handler variant of
+// withOperationalAccess, used for handlers supplied by third-party
+// packages (for example the Prometheus metrics handler).
 func (s *Server) withOperationalAccessHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.enterpriseAccessToken != "" {
-			token := enterpriseTokenFromRequest(r)
-			if !secureTokenCompare(token, s.enterpriseAccessToken) {
+		if s.adminAccessToken != "" {
+			token := adminTokenFromRequest(r)
+			if !secureTokenCompare(token, s.adminAccessToken) {
 				w.Header().Set("Content-Type", "application/json")
 				writeMatrixError(w, http.StatusUnauthorized, "M_UNAUTHORIZED", "Operational access token required")
 				return

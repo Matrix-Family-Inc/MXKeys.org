@@ -41,7 +41,7 @@ func validConfig() *Config {
 			MaxSignaturesPerKey:   10,
 			TrustForwardedHeaders: false,
 			TrustedProxies:        []string{"127.0.0.1/32"},
-			EnterpriseAccessToken: "enterprise-token",
+			AdminAccessToken:      "admin-token",
 		},
 		Transparency: TransparencyConfig{
 			Enabled:       false,

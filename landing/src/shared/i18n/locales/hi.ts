@@ -153,7 +153,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'विस्तृत सर्विस स्टेटस: अपटाइम, कैश मेट्रिक्स, डेटाबेस स्टैट्स, और वैकल्पिक एंटरप्राइज़ फ़ीचर स्टेटस।',
+      description: 'विस्तृत सर्विस स्टेटस: अपटाइम, कैश मेट्रिक्स, डेटाबेस स्टैट्स, और वैकल्पिक सब-सिस्टम की स्थिति।',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -161,8 +161,8 @@ export default {
     },
     errorsTitle: 'त्रुटि मॉडल',
     errorsDescription: 'अनुरोध मान्यकरण और दुरुपयोग नियंत्रण Matrix-संगत त्रुटि कोड का उपयोग करते हैं: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE, और M_LIMIT_EXCEEDED।',
-    protectedTitle: 'संरक्षित ऑपरेशनल रूट्स',
-    protectedDescription: 'पारदर्शिता, एनालिटिक्स, क्लस्टर, और पॉलिसी रूट्स के लिए एंटरप्राइज़ एक्सेस टोकन आवश्यक है और इन्हें स्थिर सार्वजनिक फ़ेडरेशन API से अलग दस्तावेज़ित किया गया है।',
+    protectedTitle: 'केवल एडमिन ऑपरेशनल रूट्स',
+    protectedDescription: 'पारदर्शिता, एनालिटिक्स, क्लस्टर, और पॉलिसी रूट्स केवल एडमिन के ops/debug सरफेस हैं। इन्हें bearer टोकन (security.admin_access_token) द्वारा संरक्षित किया गया है और ये स्थिर सार्वजनिक फ़ेडरेशन API के बाहर स्थित हैं।',
   },
 
   integration: {

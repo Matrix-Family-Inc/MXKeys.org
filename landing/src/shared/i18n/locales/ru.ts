@@ -161,8 +161,8 @@ export default {
     },
     errorsTitle: 'Модель ошибок',
     errorsDescription: 'Валидация запросов и abuse controls используют Matrix-compatible коды ошибок: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE и M_LIMIT_EXCEEDED.',
-    protectedTitle: 'Защищённые operational routes',
-    protectedDescription: 'Маршруты transparency, analytics, cluster и policy требуют enterprise access token и документируются отдельно от стабильного public federation API.',
+    protectedTitle: 'Admin-only operational routes',
+    protectedDescription: 'Маршруты transparency, analytics, cluster и policy — admin-only ops/debug-поверхность. Закрываются bearer-токеном (security.admin_access_token) и лежат вне стабильного public federation API.',
   },
 
   integration: {

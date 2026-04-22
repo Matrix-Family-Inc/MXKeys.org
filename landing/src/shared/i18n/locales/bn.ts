@@ -153,7 +153,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'বিস্তারিত সার্ভিস স্ট্যাটাস: আপটাইম, ক্যাশ মেট্রিক্স, ডেটাবেস স্ট্যাটস, এবং ঐচ্ছিক এন্টারপ্রাইজ ফিচার স্ট্যাটাস।',
+      description: 'বিস্তারিত সার্ভিস স্ট্যাটাস: আপটাইম, ক্যাশ মেট্রিক্স, ডেটাবেস স্ট্যাটস, এবং ঐচ্ছিক সাবসিস্টেমের অবস্থা।',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -161,8 +161,8 @@ export default {
     },
     errorsTitle: 'ত্রুটি মডেল',
     errorsDescription: 'অনুরোধ বৈধতা এবং অপব্যবহার নিয়ন্ত্রণ Matrix-সামঞ্জস্যপূর্ণ ত্রুটি কোড ব্যবহার করে: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE, এবং M_LIMIT_EXCEEDED।',
-    protectedTitle: 'সুরক্ষিত অপারেশনাল রুট',
-    protectedDescription: 'স্বচ্ছতা, বিশ্লেষণ, ক্লাস্টার, এবং নীতি রুটগুলির জন্য এন্টারপ্রাইজ অ্যাক্সেস টোকেন প্রয়োজন এবং স্থিতিশীল পাবলিক ফেডারেশন API থেকে আলাদাভাবে নথিভুক্ত।',
+    protectedTitle: 'শুধুমাত্র অ্যাডমিন অপারেশনাল রুট',
+    protectedDescription: 'স্বচ্ছতা, বিশ্লেষণ, ক্লাস্টার, এবং নীতি রুটগুলি শুধুমাত্র অ্যাডমিনের জন্য ops/debug সারফেস। এগুলি bearer টোকেন (security.admin_access_token) দ্বারা সুরক্ষিত এবং স্থিতিশীল পাবলিক ফেডারেশন API-এর বাইরে অবস্থিত।',
   },
 
   integration: {

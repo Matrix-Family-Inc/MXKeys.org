@@ -3,7 +3,7 @@
  * Company: Matrix Family Inc. (https://matrix.family)
  * Maintainer: Brabus
  * Contact: dev@matrix.family
- * Date: Fri 03 Apr 2026 UTC
+ * Date: Wed Apr 22 2026 UTC
  * Status: Created
  */
 
@@ -11,14 +11,20 @@ package server
 
 import "net/http"
 
-// registerEnterpriseRoutes registers protected operational routes.
-func (s *Server) registerEnterpriseRoutes() {
-	if s.enterpriseAccessToken == "" {
+// registerAdminRoutes wires admin-only operational routes. These
+// routes are registered only when security.admin_access_token is
+// configured; otherwise they are absent from the mux entirely.
+// They cover ops/debug surfaces (transparency inspection,
+// analytics, circuit-breaker state, cluster status, trust policy)
+// that an operator runs locally and does not want to expose
+// anonymously. They are not a product tier.
+func (s *Server) registerAdminRoutes() {
+	if s.adminAccessToken == "" {
 		return
 	}
 
 	register := func(pattern string, handler http.HandlerFunc) {
-		s.mux.HandleFunc(pattern, s.withEnterpriseAccess(handler))
+		s.mux.HandleFunc(pattern, s.withAdminAccess(handler))
 	}
 
 	if s.transparency != nil {

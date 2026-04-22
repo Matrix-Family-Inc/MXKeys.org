@@ -153,7 +153,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'Stato dettagliato del servizio: uptime, metriche cache, statistiche del database e stato opzionale delle funzionalità enterprise.',
+      description: 'Stato dettagliato del servizio: uptime, metriche cache, statistiche del database e stato dei sottosistemi opzionali.',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -161,8 +161,8 @@ export default {
     },
     errorsTitle: 'Modello di errore',
     errorsDescription: 'La validazione delle richieste e i controlli anti-abuso utilizzano codici di errore compatibili con Matrix: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE e M_LIMIT_EXCEEDED.',
-    protectedTitle: 'Route operative protette',
-    protectedDescription: 'Le route di trasparenza, analisi, cluster e politiche richiedono un token di accesso enterprise e sono documentate separatamente dall\'API di federazione pubblica stabile.',
+    protectedTitle: 'Route operative admin-only',
+    protectedDescription: 'Le route di trasparenza, analisi, cluster e politiche sono superfici ops/debug admin-only. Sono protette da un token bearer (security.admin_access_token) e si trovano al di fuori dell\'API di federazione pubblica stabile.',
   },
 
   integration: {

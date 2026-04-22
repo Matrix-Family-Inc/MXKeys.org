@@ -134,8 +134,8 @@ func applyEnvOverrides(c *Config) error {
 	if v := os.Getenv("MXKEYS_SECURITY_TRUSTED_PROXIES"); v != "" {
 		c.Security.TrustedProxies = splitCSV(v)
 	}
-	if v := os.Getenv("MXKEYS_SECURITY_ENTERPRISE_ACCESS_TOKEN"); v != "" {
-		c.Security.EnterpriseAccessToken = v
+	if v := os.Getenv("MXKEYS_SECURITY_ADMIN_ACCESS_TOKEN"); v != "" {
+		c.Security.AdminAccessToken = v
 	}
 
 	if err := envBool("MXKEYS_TRUST_POLICY_ENABLED", &c.TrustPolicy.Enabled); err != nil {

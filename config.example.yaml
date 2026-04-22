@@ -61,13 +61,19 @@ security:
   require_request_id: false
   trust_forwarded_headers: false # enable only behind proxies that overwrite X-Forwarded-For / X-Real-IP
   trusted_proxies: []
-  enterprise_access_token: ""
+  # admin_access_token gates the admin-only operational endpoints
+  # (/_mxkeys/transparency/*, /_mxkeys/analytics/*, /_mxkeys/cluster/*,
+  # /_mxkeys/policy/*, /_mxkeys/circuits) plus the optional gate on
+  # /_mxkeys/status and /_mxkeys/metrics. Leave empty to keep those
+  # routes unregistered. This is a plain shared secret; it is not a
+  # product tier.
+  admin_access_token: ""
   # trusted_proxies:
   #   Configure every trusted hop so MXKeys can derive the rightmost untrusted client IP.
   #   Upstream proxies must scrub/append forwarded headers instead of passing client-supplied chains through unchanged.
   #   - 127.0.0.1/32
   #   - 10.0.0.0/8
-  # enterprise_access_token: "replace-with-long-random-token"
+  # admin_access_token: "replace-with-long-random-token"
 
 # Optional: Pin trusted notary keys for fallback servers.
 # Leave the list empty until you have real pinned keys. Validation

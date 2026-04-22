@@ -142,7 +142,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'Statut détaillé du service : temps de fonctionnement, métriques de cache, statistiques de base de données et statut optionnel des fonctionnalités entreprise.',
+      description: 'Statut détaillé du service : temps de fonctionnement, métriques de cache, statistiques de base de données et statut des sous-systèmes optionnels.',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -150,8 +150,8 @@ export default {
     },
     errorsTitle: 'Modèle d\'erreur',
     errorsDescription: 'La validation des requêtes et les contrôles anti-abus utilisent des codes d\'erreur compatibles Matrix : M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE et M_LIMIT_EXCEEDED.',
-    protectedTitle: 'Routes opérationnelles protégées',
-    protectedDescription: 'Les routes de transparence, d\'analyse, de cluster et de politique nécessitent un jeton d\'accès entreprise et sont documentées séparément de l\'API de fédération publique stable.',
+    protectedTitle: 'Routes opérationnelles admin-only',
+    protectedDescription: 'Les routes de transparence, d\'analyse, de cluster et de politique sont des surfaces ops/debug réservées à l\'administrateur. Elles sont protégées par un jeton bearer (security.admin_access_token) et se trouvent en dehors de l\'API de fédération publique stable.',
   },
   integration: {
     title: 'Intégration',

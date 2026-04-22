@@ -153,7 +153,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'Szczegółowy status usługi: czas działania, metryki bufora, statystyki bazy danych i opcjonalny status funkcji enterprise.',
+      description: 'Szczegółowy status usługi: czas działania, metryki bufora, statystyki bazy danych i status opcjonalnych podsystemów.',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -161,8 +161,8 @@ export default {
     },
     errorsTitle: 'Model błędów',
     errorsDescription: 'Walidacja żądań i kontrole nadużyć używają kodów błędów kompatybilnych z Matrix: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE i M_LIMIT_EXCEEDED.',
-    protectedTitle: 'Chronione trasy operacyjne',
-    protectedDescription: 'Trasy przejrzystości, analityki, klastrów i polityk wymagają tokenu dostępu enterprise i są dokumentowane oddzielnie od stabilnego publicznego API federacji.',
+    protectedTitle: 'Trasy operacyjne admin-only',
+    protectedDescription: 'Trasy przejrzystości, analityki, klastrów i polityk to powierzchnie ops/debug dostępne tylko dla administratora. Są chronione tokenem bearer (security.admin_access_token) i znajdują się poza stabilnym publicznym API federacji.',
   },
 
   integration: {

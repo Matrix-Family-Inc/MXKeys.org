@@ -30,7 +30,7 @@ For deployment and operations, see `docs/deployment.md`.
 - `database.url` must be set explicitly.
 - `cluster.shared_secret` is required when cluster mode is enabled (>=32 chars, placeholder values rejected at startup).
 - `cluster.raft_state_dir` is required when `cluster.consensus_mode=raft`.
-- `security.enterprise_access_token` is required only when protected operational routes are intended to be exposed.
+- `security.admin_access_token` is required only when the admin-only operational routes are intended to be exposed.
 
 ## Build Commands
 

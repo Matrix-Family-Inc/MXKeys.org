@@ -153,7 +153,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'تفصیلی سروس سٹیٹس: اپ ٹائم، کیش میٹرکس، ڈیٹابیس اسٹیٹس، اور اختیاری انٹرپرائز فیچر سٹیٹس۔',
+      description: 'تفصیلی سروس سٹیٹس: اپ ٹائم، کیش میٹرکس، ڈیٹابیس اسٹیٹس، اور اختیاری ذیلی نظاموں کی حالت۔',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -161,8 +161,8 @@ export default {
     },
     errorsTitle: 'ایرر ماڈل',
     errorsDescription: 'درخواست کی توثیق اور غلط استعمال کے کنٹرولز Matrix-compatible ایرر کوڈز استعمال کرتے ہیں: M_BAD_JSON، M_INVALID_PARAM، M_NOT_FOUND، M_TOO_LARGE، اور M_LIMIT_EXCEEDED۔',
-    protectedTitle: 'محفوظ آپریشنل روٹس',
-    protectedDescription: 'شفافیت، تجزیات، کلسٹر، اور پالیسی روٹس کے لیے انٹرپرائز ایکسیس ٹوکن درکار ہے اور انہیں مستحکم پبلک فیڈریشن API سے الگ دستاویزی شکل دی گئی ہے۔',
+    protectedTitle: 'صرف ایڈمن کے آپریشنل روٹس',
+    protectedDescription: 'شفافیت، تجزیات، کلسٹر، اور پالیسی روٹس صرف ایڈمن کے ops/debug سطحی سرفیس ہیں۔ انہیں bearer ٹوکن (security.admin_access_token) کے ذریعے محفوظ کیا گیا ہے اور یہ مستحکم پبلک فیڈریشن API سے باہر ہیں۔',
   },
 
   integration: {

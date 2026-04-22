@@ -142,7 +142,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: '상세 서비스 상태: 가동 시간, 캐시 메트릭, 데이터베이스 통계 및 선택적 엔터프라이즈 기능 상태.',
+      description: '상세 서비스 상태: 가동 시간, 캐시 메트릭, 데이터베이스 통계 및 선택적 하위 시스템 상태.',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -150,8 +150,8 @@ export default {
     },
     errorsTitle: '오류 모델',
     errorsDescription: '요청 검증 및 악용 제어는 Matrix 호환 오류 코드를 사용합니다: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE, M_LIMIT_EXCEEDED.',
-    protectedTitle: '보호된 운영 라우트',
-    protectedDescription: '투명성, 분석, 클러스터 및 정책 라우트에는 엔터프라이즈 액세스 토큰이 필요하며, 안정적인 공개 페더레이션 API와 별도로 문서화되어 있습니다.',
+    protectedTitle: '관리자 전용 운영 라우트',
+    protectedDescription: '투명성, 분석, 클러스터 및 정책 라우트는 관리자 전용 ops/debug 서피스입니다. bearer 토큰 (security.admin_access_token)으로 보호되며, 안정적인 공개 페더레이션 API 외부에 위치합니다.',
   },
   integration: {
     title: '통합',

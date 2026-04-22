@@ -48,7 +48,7 @@ security:
   max_signatures_per_key: 6
   require_request_id: true
   trust_forwarded_headers: true
-  enterprise_access_token: enterprise-token
+  admin_access_token: admin-token
   trusted_proxies:
     - 127.0.0.1/32
 
@@ -120,8 +120,8 @@ trusted_notaries:
 	if !cfg.Security.TrustForwardedHeaders || len(cfg.Security.TrustedProxies) != 1 || cfg.Security.TrustedProxies[0] != "127.0.0.1/32" {
 		t.Fatalf("security trusted proxy settings not loaded")
 	}
-	if cfg.Security.EnterpriseAccessToken != "enterprise-token" {
-		t.Fatalf("security.enterprise_access_token not loaded")
+	if cfg.Security.AdminAccessToken != "admin-token" {
+		t.Fatalf("security.admin_access_token not loaded")
 	}
 	if !cfg.TrustPolicy.Enabled || cfg.TrustPolicy.RequireNotarySignatures != 1 {
 		t.Fatalf("trust_policy values not loaded")

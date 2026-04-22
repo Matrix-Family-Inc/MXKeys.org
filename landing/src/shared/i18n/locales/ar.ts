@@ -153,7 +153,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'حالة الخدمة التفصيلية: وقت التشغيل، مقاييس التخزين المؤقت، إحصائيات قاعدة البيانات، وحالة ميزات المؤسسة الاختيارية.',
+      description: 'حالة الخدمة التفصيلية: وقت التشغيل، مقاييس التخزين المؤقت، إحصائيات قاعدة البيانات، وحالة الأنظمة الفرعية الاختيارية.',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -161,8 +161,8 @@ export default {
     },
     errorsTitle: 'نموذج الأخطاء',
     errorsDescription: 'يستخدم التحقق من الطلبات وضوابط إساءة الاستخدام رموز أخطاء متوافقة مع Matrix: M_BAD_JSON، M_INVALID_PARAM، M_NOT_FOUND، M_TOO_LARGE، وM_LIMIT_EXCEEDED.',
-    protectedTitle: 'المسارات التشغيلية المحمية',
-    protectedDescription: 'تتطلب مسارات الشفافية والتحليلات والمجموعات والسياسات رمز وصول مؤسسي وهي موثقة بشكل منفصل عن واجهة الاتحاد العامة المستقرة.',
+    protectedTitle: 'المسارات التشغيلية للمشرف فقط',
+    protectedDescription: 'مسارات الشفافية والتحليلات والمجموعات والسياسات هي أسطح ops/debug للمشرف فقط. محمية برمز bearer (security.admin_access_token) وتقع خارج واجهة الاتحاد العامة المستقرة.',
   },
 
   integration: {

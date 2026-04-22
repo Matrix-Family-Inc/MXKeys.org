@@ -153,7 +153,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'Trạng thái dịch vụ chi tiết: thời gian hoạt động, chỉ số bộ đệm, thống kê cơ sở dữ liệu và trạng thái tính năng doanh nghiệp tùy chọn.',
+      description: 'Trạng thái dịch vụ chi tiết: thời gian hoạt động, chỉ số bộ đệm, thống kê cơ sở dữ liệu và trạng thái của các hệ thống con tùy chọn.',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -161,8 +161,8 @@ export default {
     },
     errorsTitle: 'Mô hình lỗi',
     errorsDescription: 'Xác thực yêu cầu và kiểm soát lạm dụng sử dụng mã lỗi tương thích Matrix: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE và M_LIMIT_EXCEEDED.',
-    protectedTitle: 'Tuyến vận hành được bảo vệ',
-    protectedDescription: 'Các tuyến minh bạch, phân tích, cụm và chính sách yêu cầu mã thông báo truy cập doanh nghiệp và được ghi tài liệu riêng biệt với API liên bang công khai ổn định.',
+    protectedTitle: 'Tuyến vận hành chỉ dành cho admin',
+    protectedDescription: 'Các tuyến minh bạch, phân tích, cụm và chính sách là bề mặt ops/debug chỉ dành cho admin. Chúng được bảo vệ bằng mã thông báo bearer (security.admin_access_token) và nằm ngoài API liên bang công khai ổn định.',
   },
 
   integration: {

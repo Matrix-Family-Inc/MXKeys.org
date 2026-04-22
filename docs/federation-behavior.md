@@ -29,8 +29,8 @@ are not part of the core federation contract.
 
 ### Public verification and notary key discovery
 
-Registered for every deployment. These routes do **not** use the enterprise-access
-middleware:
+Registered for every deployment. These routes are public and do **not**
+go through the admin-access gate:
 
 - `GET /_mxkeys/transparency/signed-head` — signed Merkle tree head JSON for
   external verification. Returns `404` with Matrix error JSON when the
@@ -51,11 +51,12 @@ Always reachable without an access token:
 - `GET /_mxkeys/status`
 - `GET /_mxkeys/metrics`
 
-When `security.enterprise_access_token` is **non-empty**, these endpoints
-require the same credential as protected operational routes: `Authorization:
-Bearer <token>` or `X-MXKeys-Enterprise-Token: <token>`. Missing or invalid
-credential yields `401` (`M_UNAUTHORIZED`). When the token is **empty** in
-configuration, `status` and `metrics` are served **without** that check.
+When `security.admin_access_token` is **non-empty**, these endpoints
+require the same credential as the admin-only operational routes:
+`Authorization: Bearer <token>` or `X-MXKeys-Admin-Token: <token>`.
+Missing or invalid credential yields `401` (`M_UNAUTHORIZED`). When the
+token is **empty** in configuration, `status` and `metrics` are served
+**without** that check.
 
 ### Optional server-info enrichment
 
@@ -64,13 +65,15 @@ configuration, `status` and `metrics` are served **without** that check.
   with `POST /_matrix/key/v2/query`. Returns `503` when `server_info.enabled`
   is false. Response shape and sub-sections are defined in `ARCHITECTURE.md`.
 
-### Protected operational routes (non-core contract)
+### Admin-only operational routes (non-core contract)
 
-These routes are **registered only when** `security.enterprise_access_token` is
-configured. If the token is unset, they are absent from the mux (requests
-receive `404`). If the token is set, missing or invalid bearer/header yields
-`401` (`M_UNAUTHORIZED`). Individual routes may additionally require a feature
-(transparency log, cluster, trust policy) to be enabled at runtime.
+These routes are **registered only when** `security.admin_access_token`
+is configured. If the token is unset, they are absent from the mux
+(requests receive `404`). If the token is set, missing or invalid
+bearer/header yields `401` (`M_UNAUTHORIZED`). Individual routes may
+additionally require the underlying subsystem (transparency log,
+cluster, trust policy) to be enabled at runtime. These routes are local
+ops/debug surfaces, not a product tier.
 
 - `GET /_mxkeys/transparency/log`
 - `GET /_mxkeys/transparency/verify`
@@ -102,13 +105,13 @@ public as defined above.
 | `GET /_mxkeys/health` | `200` | internal failures may produce `5xx` |
 | `GET /_mxkeys/live` | `200` | internal failures may produce `5xx` |
 | `GET /_mxkeys/ready` | `200` | `503` when DB or signing-key readiness checks fail |
-| `GET /_mxkeys/status` | `200` | `401` when enterprise token is configured but missing/invalid; internal failures may produce `5xx` |
+| `GET /_mxkeys/status` | `200` | `401` when admin token is configured but missing/invalid; internal failures may produce `5xx` |
 | `GET /_mxkeys/metrics` | `200` | same `401` rule as `status` |
 | `GET /_mxkeys/server-info` | `200` | `503` when enrichment disabled; `400` for bad/missing `name`; `429` under query rate limit |
 
-Protected operational routes return `401` (`M_UNAUTHORIZED`) when the enterprise
-access token is missing or invalid, and `404` when the route is not registered
-(token not configured, or required feature disabled).
+Admin-only operational routes return `401` (`M_UNAUTHORIZED`) when the
+admin access token is missing or invalid, and `404` when the route is
+not registered (token not configured, or required subsystem disabled).
 
 ## Deterministic Request Handling
 
@@ -184,7 +187,7 @@ Common matrix-compatible codes:
 - `M_NOT_FOUND` for missing key ID on own-key endpoint,
 - `M_TOO_LARGE` for oversized request body,
 - `M_LIMIT_EXCEEDED` for rate-limited requests,
-- `M_UNAUTHORIZED` for missing or invalid enterprise/operational access token.
+- `M_UNAUTHORIZED` for missing or invalid admin/operational access token.
 
 ## Operational Endpoint Semantics
 
@@ -192,7 +195,7 @@ Common matrix-compatible codes:
 - `/_mxkeys/live`: liveness (process alive).
 - `/_mxkeys/ready`: readiness (DB + signing-key readiness).
 - `/_mxkeys/status`: detailed runtime status (cache/db/uptime fields); optional
-  bearer token when `security.enterprise_access_token` is set.
+  bearer token when `security.admin_access_token` is set.
 - `/_mxkeys/metrics`: Prometheus exposition format; same optional gate as
   `status`.
 - `/_mxkeys/transparency/signed-head`: public signed-tree head for verifiers.

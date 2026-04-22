@@ -142,7 +142,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: '詳細なサービスステータス：稼働時間、キャッシュメトリクス、データベース統計、およびオプションのエンタープライズ機能ステータス。',
+      description: '詳細なサービスステータス：稼働時間、キャッシュメトリクス、データベース統計、およびオプションのサブシステムのステータス。',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -150,8 +150,8 @@ export default {
     },
     errorsTitle: 'エラーモデル',
     errorsDescription: 'リクエスト検証と不正利用制御は Matrix 互換のエラーコードを使用します：M_BAD_JSON、M_INVALID_PARAM、M_NOT_FOUND、M_TOO_LARGE、M_LIMIT_EXCEEDED。',
-    protectedTitle: '保護された運用ルート',
-    protectedDescription: '透明性、分析、クラスター、ポリシーのルートにはエンタープライズアクセストークンが必要で、安定した公開フェデレーション API とは別に文書化されています。',
+    protectedTitle: '管理者専用の運用ルート',
+    protectedDescription: '透明性、分析、クラスター、ポリシーのルートは管理者専用の ops/debug サーフェスです。bearer トークン (security.admin_access_token) で保護されており、安定した公開フェデレーション API の外側に位置します。',
   },
   integration: {
     title: 'インテグレーション',

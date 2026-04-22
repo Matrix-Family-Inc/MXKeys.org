@@ -142,7 +142,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: '详细服务状态：运行时间、缓存指标、数据库统计和可选的企业功能状态。',
+      description: '详细服务状态：运行时间、缓存指标、数据库统计和可选子系统的状态。',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -150,8 +150,8 @@ export default {
     },
     errorsTitle: '错误模型',
     errorsDescription: '请求验证和滥用控制使用 Matrix 兼容的错误代码：M_BAD_JSON、M_INVALID_PARAM、M_NOT_FOUND、M_TOO_LARGE 和 M_LIMIT_EXCEEDED。',
-    protectedTitle: '受保护的运维路由',
-    protectedDescription: '透明、分析、集群和策略路由需要企业访问令牌，与稳定的公共联邦 API 分开记录。',
+    protectedTitle: '仅管理员的运维路由',
+    protectedDescription: '透明、分析、集群和策略路由是仅管理员的 ops/debug 接口，由 bearer 令牌 (security.admin_access_token) 保护，位于稳定的公共联邦 API 之外。',
   },
   integration: {
     title: '集成',

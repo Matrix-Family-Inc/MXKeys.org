@@ -13,27 +13,38 @@ Accepted
 
 ## Context
 
-MXKeys supports distributed notary operation where nodes share key-related state.
-The cluster layer must support both low-complexity cache propagation and stronger replicated coordination for deployments that explicitly need it.
+MXKeys is a single-binary key-notary. Clustering is optional and off
+by default (`cluster.enabled: false`). When operators do enable it,
+the cluster layer needs to support both low-complexity cache
+propagation and stronger replicated coordination for deployments that
+explicitly need it.
 
 ## Decision
 
-Use CRDT synchronization as the default cluster mode, with optional Raft mode for deployments that require stronger consistency semantics.
+When clustering is enabled, use CRDT synchronization as the default
+mode, with Raft as an alternative for deployments that need stronger
+consistency semantics.
 
-- default mode: `crdt`
-- optional mode: `raft`
-- cluster mode is opt-in via `cluster.enabled`
+- default mode (when cluster is enabled): `crdt`
+- alternative mode: `raft`
+- cluster itself is opt-in via `cluster.enabled`
 
 ## Consequences
 
-- CRDT default lowers operational complexity for most deployments.
-- Eventual consistency is sufficient for non-transactional cache propagation.
-- Optional Raft provides stronger consistency when explicitly required.
+- CRDT default lowers operational complexity for the (minority of)
+  deployments that enable clustering at all.
+- Eventual consistency is sufficient for non-transactional cache
+  propagation.
+- Raft provides stronger consistency when explicitly required.
 - CRDT mode may expose temporary divergence between nodes.
 - Raft mode increases operational and network coordination complexity.
-- cluster transport requires explicit configuration, authentication, and monitoring.
+- Cluster transport requires explicit configuration, authentication,
+  and monitoring.
 
-## Service Level Agreement by Mode
+## Mode Comparison
+
+The table below compares the two modes on the axes operators usually
+care about. It is a decision aid, not a service-level agreement.
 
 | Property | CRDT (default) | Raft |
 |----------|---------------|------|
@@ -44,7 +55,6 @@ Use CRDT synchronization as the default cluster mode, with optional Raft mode fo
 | Data on restart | Lost (requires re-sync from peers) | Preserved (WAL replay + snapshot install) |
 | Log compaction | N/A | Snapshot via `Node.CompactLog`, truncates WAL prefix |
 | Catch-up for lagging peers | Full re-sync via CRDT merge | `InstallSnapshot` RPC + AppendEntries |
-| Production ready | Yes | Yes |
 | Authentication | HMAC-SHA256 over canonical JSON | HMAC-SHA256 over canonical JSON |
 | Transport encryption | None (plaintext TCP) | None (plaintext TCP) |
 

@@ -125,8 +125,8 @@ func applySecurityMap(config *Config, m map[string]interface{}) {
 	if v := zeroconfig.GetStringSlice(m, "security.trusted_proxies"); len(v) > 0 {
 		config.Security.TrustedProxies = v
 	}
-	if v := zeroconfig.GetString(m, "security.enterprise_access_token"); v != "" {
-		config.Security.EnterpriseAccessToken = v
+	if v := zeroconfig.GetString(m, "security.admin_access_token"); v != "" {
+		config.Security.AdminAccessToken = v
 	}
 }
 

@@ -153,7 +153,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'Gedetailleerde servicestatus: uptime, cachemetrics, databasestatistieken en optionele enterprise-functiestatus.',
+      description: 'Gedetailleerde servicestatus: uptime, cachemetrics, databasestatistieken en status van optionele subsystemen.',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -161,8 +161,8 @@ export default {
     },
     errorsTitle: 'Foutmodel',
     errorsDescription: 'Verzoekvalidatie en misbruikcontroles gebruiken Matrix-compatibele foutcodes: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE en M_LIMIT_EXCEEDED.',
-    protectedTitle: 'Beschermde operationele routes',
-    protectedDescription: 'Transparantie-, analyse-, cluster- en beleidsroutes vereisen een enterprise-toegangstoken en worden apart gedocumenteerd van de stabiele openbare federatie-API.',
+    protectedTitle: 'Admin-only operationele routes',
+    protectedDescription: 'Transparantie-, analyse-, cluster- en beleidsroutes zijn admin-only ops/debug-oppervlakken. Ze worden beschermd door een bearer-token (security.admin_access_token) en staan buiten de stabiele openbare federatie-API.',
   },
 
   integration: {

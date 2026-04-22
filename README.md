@@ -8,15 +8,23 @@
 
 **Matrix Federation Key Notary**
 
-MXKeys verifies remote Matrix server keys, adds a perspective signature, caches verified responses in PostgreSQL and memory, and exposes a compact operational surface for monitoring and protected admin-style workflows.
+MXKeys verifies remote Matrix server keys, adds a perspective signature,
+and caches verified responses in PostgreSQL and memory. The default
+deployment is a single Go binary plus PostgreSQL; optional modules
+(transparency log, analytics, trust policy, clustering, server-info
+enrichment) are off by default and opt in via config.
 
-## What It Does
+## What It Does (core)
 
 - Resolves Matrix homeservers via `.well-known`, SRV, explicit ports, and IP literals.
 - Verifies Ed25519 self-signatures and server identity before accepting key material.
 - Adds a perspective signature to verified responses.
 - Stores validated responses in PostgreSQL and in-process cache.
-- Supports transparency logging, analytics, and authenticated cluster operation.
+- Exposes health/liveness/readiness probes and Prometheus metrics.
+
+Optional modules (opt-in, off by default): transparency log, analytics,
+trust policy, clustering (CRDT or Raft), server-info enrichment. See
+[Core vs optional modules](#core-vs-optional-modules) for the full table.
 
 ## Why It Exists
 
@@ -54,7 +62,7 @@ trusted_servers:
     - matrix.org
 ```
 
-`server.name` must be configured explicitly to the public hostname of your deployment. `database.url` has no built-in default and must be configured explicitly. For protected operational routes, set `security.enterprise_access_token`. For cluster mode, set `cluster.shared_secret` and, when binding to a wildcard address, `cluster.advertise_address`.
+`server.name` must be configured explicitly to the public hostname of your deployment. `database.url` has no built-in default and must be configured explicitly. To gate the admin-only operational routes with a bearer token, set `security.admin_access_token`. For cluster mode, set `cluster.shared_secret` and, when binding to a wildcard address, `cluster.advertise_address`.
 If `security.trust_forwarded_headers` is enabled, configure the full trusted proxy chain in `security.trusted_proxies` and ensure those proxies overwrite forwarded headers instead of passing client-supplied values through unchanged.
 
 ## Public API
@@ -80,9 +88,34 @@ curl -X POST https://notary.example.org/_matrix/key/v2/query \
   -d '{"server_keys":{"matrix.org":{}}}'
 ```
 
-Protected operational routes for transparency, analytics, cluster, and policy exist separately and require an enterprise access token. The normative API contract lives in `docs/federation-behavior.md`.
+Admin-only operational routes for transparency inspection, analytics,
+cluster status, and trust-policy checks sit behind a bearer token
+(`security.admin_access_token`) and are not part of the stable
+federation contract. They are local ops/debug surfaces, not a product
+tier. The normative API contract lives in `docs/federation-behavior.md`.
 
 The strongest compatibility promise applies to the Matrix key-notary endpoints. Operational probes are documented and supported, but they do not carry the same strict compatibility scope as the core federation API.
+
+## Core vs optional modules
+
+The default deployment ships only the Matrix key-notary endpoints, the
+health/live/ready probes, and the gated `/_mxkeys/status` +
+`/_mxkeys/metrics` pair. Everything else is opt-in.
+
+| Module | Config flag | Default | Purpose |
+|---|---|---|---|
+| Key notary (Matrix v2) | always on | on | `/_matrix/key/v2/*`, `/_matrix/federation/v1/version` |
+| Health/live/ready probes | always on | on | Kubernetes / orchestration probes |
+| Status + metrics | `security.admin_access_token` (optional gate) | served, token-gated if set | `/_mxkeys/status`, `/_mxkeys/metrics` |
+| Admin routes (transparency inspection, analytics, circuits, cluster/policy status) | `security.admin_access_token` | unset — routes not registered | Local ops/debug surface |
+| Trust policy | `trust_policy.enabled` | `false` | Allow/deny list, TLS/notary-signature requirements |
+| Transparency log | `transparency.enabled` | `false` | Append-only log with Merkle proofs |
+| Cluster (CRDT or Raft) | `cluster.enabled` | `false` | Multi-node replication |
+| Server-info enrichment | `server_info.enabled` | `false` | DNS/reachability/WHOIS lookup endpoint |
+| At-rest key encryption | `keys.encryption.passphrase_env` | unset — plaintext 0600 | AES-256-GCM envelope for the signing key |
+
+If none of the optional modules are enabled, the runtime surface is the
+core federation API plus three probes; nothing else is reachable.
 
 ## Integration
 

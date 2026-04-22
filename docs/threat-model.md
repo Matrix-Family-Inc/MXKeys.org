@@ -44,7 +44,10 @@ It covers key fetch/verify/sign/query behavior, cache/storage paths, and operati
 
 ## Threats and Controls
 
-| Threat | Attack Pattern | Current Controls | Detection | Residual Risk |
+The "Remaining exposure" column is an engineering estimate of the risk
+that stays after the listed controls; it is not a compliance rating.
+
+| Threat | Attack Pattern | Current Controls | Detection | Remaining exposure |
 |---|---|---|---|---|
 | Malicious homeserver | Publishes invalid or misleading key response | Canonical JSON checks (continuously fuzz-tested), signature verification, server name validation, key/signature length validation | Request rejection metrics, fetch failure metrics, logs | Medium (depends on upstream correctness and operator policy) |
 | Key substitution | MITM/upstream substitution of `server_keys` | Required signature validation, optional pinned notary verification, trust policy checks | Query failures with reason codes, policy violation counters | Medium (reduced with strict trust policy) |
@@ -54,7 +57,7 @@ It covers key fetch/verify/sign/query behavior, cache/storage paths, and operati
 | DoS vectors | Oversized body, high-rate requests, upstream fanout abuse, unique-IP floods | Body size limits, per-IP rate limiting with O(1) LRU eviction, max servers per query, concurrency limits, singleflight dedup | Rate-limit and rejection metrics, latency/error alerts | Medium (availability still bounded by host/network capacity) |
 | Notary compromise | Theft/misuse of MXKeys signing key or host access | Key-provider abstraction (file 0600/0700, env, KMS stub), backup/rotation runbook, isolated storage path | Operational logs, `docs/runbook/key-rotation.md` | High (requires incident response and trust reset) |
 | Cluster MAC forgery or replay | Attacker with network access crafts or replays cluster messages | HMAC-SHA256 over canonical JSON (no structural-ambiguity collisions), 5-minute skew window, signature-replay cache, minimum-length shared-secret guard, placeholder-secret guard | Cluster message rejection counters | Medium (mitigated further by network-layer overlay) |
-| Cluster restart with stale state | Raft cluster loses committed entries on restart | Write-ahead log with CRC32C per record (Castagnoli, fuzz-tested), group-commit + bounded queue backpressure, atomic snapshot persistence, InstallSnapshot RPC for lagging followers | WAL replay logs, snapshot-age metrics | Low (covered by ADR-0001 production SLA) |
+| Cluster restart with stale state | Raft cluster loses committed entries on restart | Write-ahead log with CRC32C per record (Castagnoli, fuzz-tested), group-commit + bounded queue backpressure, atomic snapshot persistence, InstallSnapshot RPC for lagging followers | WAL replay logs, snapshot-age metrics | Low (see ADR-0001) |
 | Schema drift across versions | `CREATE IF NOT EXISTS` loses track of evolving schema | Versioned migrations runner with per-migration transaction + `schema_migrations` bookkeeping | Startup log entries per applied migration | Low |
 | WAL on-disk tampering | Attacker with filesystem access modifies `raft.wal` | CRC32C detects random/single-bit corruption and short tails; format magic `MXKS_WAL_v2` detects cross-version attempts | ErrWALCorrupt on replay, per-file attestation recommended | Medium; CRC is not a MAC. Targeted-tampering resistance requires a signed-envelope layer (follow-up) |
 

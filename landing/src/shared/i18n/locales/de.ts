@@ -142,7 +142,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'Detaillierter Servicestatus: Betriebszeit, Cache-Metriken, Datenbankstatistiken und optionaler Enterprise-Funktionsstatus.',
+      description: 'Detaillierter Servicestatus: Betriebszeit, Cache-Metriken, Datenbankstatistiken und Status der optionalen Subsysteme.',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -150,8 +150,8 @@ export default {
     },
     errorsTitle: 'Fehlermodell',
     errorsDescription: 'Anfragenvalidierung und Missbrauchskontrollen verwenden Matrix-kompatible Fehlercodes: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE und M_LIMIT_EXCEEDED.',
-    protectedTitle: 'Geschützte operative Routen',
-    protectedDescription: 'Transparenz-, Analyse-, Cluster- und Richtlinienrouten erfordern ein Enterprise-Zugriffstoken und sind separat von der stabilen öffentlichen Föderations-API dokumentiert.',
+    protectedTitle: 'Admin-only Operations-Routen',
+    protectedDescription: 'Transparenz-, Analyse-, Cluster- und Richtlinienrouten sind admin-only Ops/Debug-Oberflächen. Sie werden durch ein Bearer-Token (security.admin_access_token) abgesichert und liegen außerhalb der stabilen öffentlichen Föderations-API.',
   },
   integration: {
     title: 'Integration',

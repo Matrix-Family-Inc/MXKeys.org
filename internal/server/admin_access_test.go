@@ -3,7 +3,7 @@
  * Company: Matrix Family Inc. (https://matrix.family)
  * Maintainer: Brabus
  * Contact: dev@matrix.family
- * Date: Wed Apr 08 2026 UTC
+ * Date: Wed Apr 22 2026 UTC
  * Status: Created
  */
 
@@ -18,34 +18,34 @@ import (
 	"mxkeys/internal/keys"
 )
 
-func newEnterpriseRouteTestServer(token string) *Server {
+func newAdminRouteTestServer(token string) *Server {
 	s := &Server{
 		config: &config.Config{
 			Security: config.SecurityConfig{},
 		},
-		mux:                   http.NewServeMux(),
-		rateLimiter:           NewRateLimiter(DefaultRateLimitConfig()),
-		analytics:             keys.NewAnalytics(nil, keys.AnalyticsConfig{Enabled: true}),
-		enterpriseAccessToken: token,
+		mux:              http.NewServeMux(),
+		rateLimiter:      NewRateLimiter(DefaultRateLimitConfig()),
+		analytics:        keys.NewAnalytics(nil, keys.AnalyticsConfig{Enabled: true}),
+		adminAccessToken: token,
 	}
 	s.setupRoutes()
 	return s
 }
 
-func TestEnterpriseRoutesNotRegisteredWithoutToken(t *testing.T) {
-	s := newEnterpriseRouteTestServer("")
+func TestAdminRoutesNotRegisteredWithoutToken(t *testing.T) {
+	s := newAdminRouteTestServer("")
 	req := httptest.NewRequest(http.MethodGet, "/_mxkeys/analytics/summary", nil)
 	rr := httptest.NewRecorder()
 
 	s.mux.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404 when enterprise token is absent", rr.Code)
+		t.Fatalf("status = %d, want 404 when admin token is absent", rr.Code)
 	}
 }
 
-func TestEnterpriseRoutesRequireToken(t *testing.T) {
-	s := newEnterpriseRouteTestServer("secret-token")
+func TestAdminRoutesRequireToken(t *testing.T) {
+	s := newAdminRouteTestServer("secret-token")
 	req := httptest.NewRequest(http.MethodGet, "/_mxkeys/analytics/summary", nil)
 	rr := httptest.NewRecorder()
 
@@ -56,8 +56,8 @@ func TestEnterpriseRoutesRequireToken(t *testing.T) {
 	}
 }
 
-func TestEnterpriseRoutesAcceptBearerToken(t *testing.T) {
-	s := newEnterpriseRouteTestServer("secret-token")
+func TestAdminRoutesAcceptBearerToken(t *testing.T) {
+	s := newAdminRouteTestServer("secret-token")
 	req := httptest.NewRequest(http.MethodGet, "/_mxkeys/analytics/summary", nil)
 	req.Header.Set("Authorization", "Bearer secret-token")
 	rr := httptest.NewRecorder()
@@ -69,8 +69,8 @@ func TestEnterpriseRoutesAcceptBearerToken(t *testing.T) {
 	}
 }
 
-func TestEnterpriseRoutesAcceptCaseInsensitiveBearerToken(t *testing.T) {
-	s := newEnterpriseRouteTestServer("secret-token")
+func TestAdminRoutesAcceptCaseInsensitiveBearerToken(t *testing.T) {
+	s := newAdminRouteTestServer("secret-token")
 	req := httptest.NewRequest(http.MethodGet, "/_mxkeys/analytics/summary", nil)
 	req.Header.Set("Authorization", "bearer    secret-token")
 	rr := httptest.NewRecorder()
@@ -83,7 +83,7 @@ func TestEnterpriseRoutesAcceptCaseInsensitiveBearerToken(t *testing.T) {
 }
 
 func TestOperationalAccessMiddlewareRequiresToken(t *testing.T) {
-	s := newEnterpriseRouteTestServer("secret-token")
+	s := newAdminRouteTestServer("secret-token")
 	handler := s.withOperationalAccess(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -98,7 +98,7 @@ func TestOperationalAccessMiddlewareRequiresToken(t *testing.T) {
 }
 
 func TestOperationalAccessMiddlewareAcceptsBearerToken(t *testing.T) {
-	s := newEnterpriseRouteTestServer("secret-token")
+	s := newAdminRouteTestServer("secret-token")
 	handler := s.withOperationalAccess(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -114,13 +114,13 @@ func TestOperationalAccessMiddlewareAcceptsBearerToken(t *testing.T) {
 }
 
 func TestOperationalAccessHandlerProtectsMetricsStyleHandlers(t *testing.T) {
-	s := newEnterpriseRouteTestServer("secret-token")
+	s := newAdminRouteTestServer("secret-token")
 	handler := s.withOperationalAccessHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/_mxkeys/metrics", nil)
-	req.Header.Set("X-MXKeys-Enterprise-Token", "secret-token")
+	req.Header.Set("X-MXKeys-Admin-Token", "secret-token")
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 

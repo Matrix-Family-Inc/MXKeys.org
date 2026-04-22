@@ -44,14 +44,16 @@ Stable public routes:
 - `GET /_mxkeys/status`
 - `GET /_mxkeys/metrics`
 
-Protected operational routes:
+Admin-only operational routes:
 
 - `/_mxkeys/transparency/*`
 - `/_mxkeys/analytics/*`
 - `/_mxkeys/cluster/*`
 - `/_mxkeys/policy/*`
 
-These routes are registered only when their feature is available and the enterprise access token is configured.
+These routes are registered only when the underlying subsystem is
+enabled and `security.admin_access_token` is configured. They are local
+ops/debug surfaces gated by a bearer token, not a product tier.
 
 ## Core Components
 
@@ -215,7 +217,7 @@ See ADR-0001.
 - Upstream key material is verified cryptographically before first local acceptance.
 - Request decoding enforces size and JSON depth limits.
 - SSRF checks reject resolved private IPs when enabled.
-- Enterprise operational routes require token-based access.
+- Admin-only operational routes require bearer-token access via `security.admin_access_token`.
 - `cluster.shared_secret` rejects known example placeholders and enforces minimum length 32.
 - Canonical JSON parser is continuously fuzzed (`FuzzJSON`, `FuzzMarshalRoundTrip`) against round-trip and idempotence invariants.
 

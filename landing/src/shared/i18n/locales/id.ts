@@ -153,7 +153,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'Status layanan terperinci: uptime, metrik cache, statistik database, dan status fitur enterprise opsional.',
+      description: 'Status layanan terperinci: uptime, metrik cache, statistik database, dan status subsistem opsional.',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -161,8 +161,8 @@ export default {
     },
     errorsTitle: 'Model error',
     errorsDescription: 'Validasi permintaan dan kontrol penyalahgunaan menggunakan kode error kompatibel Matrix: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE, dan M_LIMIT_EXCEEDED.',
-    protectedTitle: 'Rute operasional terlindungi',
-    protectedDescription: 'Rute transparansi, analitik, klaster, dan kebijakan memerlukan token akses enterprise dan didokumentasikan secara terpisah dari API federasi publik yang stabil.',
+    protectedTitle: 'Rute operasional admin-only',
+    protectedDescription: 'Rute transparansi, analitik, klaster, dan kebijakan adalah permukaan ops/debug admin-only. Dilindungi oleh token bearer (security.admin_access_token) dan berada di luar API federasi publik yang stabil.',
   },
 
   integration: {

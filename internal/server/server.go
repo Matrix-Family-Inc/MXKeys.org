@@ -78,18 +78,18 @@ func buildKeyProvider(cfg *config.Config) (keyprovider.Provider, error) {
 
 // Server is the HTTP server
 type Server struct {
-	config                *config.Config
-	notary                *keys.Notary
-	mux                   *http.ServeMux
-	db                    *sql.DB
-	rateLimiter           *RateLimiter
-	startTime             time.Time
-	transparency          *keys.TransparencyLog
-	analytics             *keys.Analytics
-	trustPolicy           *keys.TrustPolicy
-	cluster               *cluster.Cluster
-	serverInfo            *ServerInfoService
-	enterpriseAccessToken string
+	config           *config.Config
+	notary           *keys.Notary
+	mux              *http.ServeMux
+	db               *sql.DB
+	rateLimiter      *RateLimiter
+	startTime        time.Time
+	transparency     *keys.TransparencyLog
+	analytics        *keys.Analytics
+	trustPolicy      *keys.TrustPolicy
+	cluster          *cluster.Cluster
+	serverInfo       *ServerInfoService
+	adminAccessToken string
 
 	// shuttingDown is set atomically at the start of graceful shutdown
 	// and is read by the readiness probe. When true, /_mxkeys/readyz
@@ -175,16 +175,16 @@ func New(cfg *config.Config) (*Server, error) {
 	}
 
 	s := &Server{
-		config:                cfg,
-		notary:                notary,
-		mux:                   http.NewServeMux(),
-		db:                    db,
-		rateLimiter:           rateLimiter,
-		startTime:             time.Now(),
-		enterpriseAccessToken: cfg.Security.EnterpriseAccessToken,
+		config:           cfg,
+		notary:           notary,
+		mux:              http.NewServeMux(),
+		db:               db,
+		rateLimiter:      rateLimiter,
+		startTime:        time.Now(),
+		adminAccessToken: cfg.Security.AdminAccessToken,
 	}
 
-	// Initialize optional enterprise features
+	// Initialize optional subsystems when they are enabled in config.
 	if cfg.TrustPolicy.Enabled {
 		s.trustPolicy = keys.NewTrustPolicy(keys.TrustPolicyConfig{
 			Enabled:                 cfg.TrustPolicy.Enabled,

@@ -153,7 +153,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'สถานะบริการโดยละเอียด: เวลาทำงาน เมทริกซ์แคช สถิติฐานข้อมูล และสถานะฟีเจอร์องค์กรเสริม',
+      description: 'สถานะบริการโดยละเอียด: เวลาทำงาน เมทริกซ์แคช สถิติฐานข้อมูล และสถานะของระบบย่อยที่เป็นทางเลือก',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -161,8 +161,8 @@ export default {
     },
     errorsTitle: 'โมเดลข้อผิดพลาด',
     errorsDescription: 'การตรวจสอบคำขอและการควบคุมการใช้งานในทางที่ผิดใช้รหัสข้อผิดพลาดที่เข้ากันได้กับ Matrix: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE และ M_LIMIT_EXCEEDED',
-    protectedTitle: 'เส้นทางปฏิบัติการที่ได้รับการป้องกัน',
-    protectedDescription: 'เส้นทางความโปร่งใส การวิเคราะห์ คลัสเตอร์ และนโยบาย ต้องมีโทเค็นการเข้าถึงองค์กรและจัดทำเอกสารแยกจาก API สหพันธ์สาธารณะที่เสถียร',
+    protectedTitle: 'เส้นทางปฏิบัติการสำหรับผู้ดูแลเท่านั้น',
+    protectedDescription: 'เส้นทางความโปร่งใส การวิเคราะห์ คลัสเตอร์ และนโยบายเป็นพื้นผิว ops/debug สำหรับผู้ดูแลเท่านั้น ปกป้องด้วยโทเค็น bearer (security.admin_access_token) และอยู่นอก API สหพันธ์สาธารณะที่เสถียร',
   },
 
   integration: {

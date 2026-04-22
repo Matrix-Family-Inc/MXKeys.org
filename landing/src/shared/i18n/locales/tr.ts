@@ -153,7 +153,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'Ayrıntılı servis durumu: çalışma süresi, önbellek metrikleri, veritabanı istatistikleri ve isteğe bağlı kurumsal özellik durumu.',
+      description: 'Ayrıntılı servis durumu: çalışma süresi, önbellek metrikleri, veritabanı istatistikleri ve isteğe bağlı alt sistemlerin durumu.',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -161,8 +161,8 @@ export default {
     },
     errorsTitle: 'Hata modeli',
     errorsDescription: 'İstek doğrulama ve kötüye kullanım kontrolleri Matrix uyumlu hata kodlarını kullanır: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE ve M_LIMIT_EXCEEDED.',
-    protectedTitle: 'Korumalı operasyonel rotalar',
-    protectedDescription: 'Şeffaflık, analitik, küme ve politika rotaları kurumsal erişim jetonu gerektirir ve kararlı genel federasyon API\'sinden ayrı olarak belgelenir.',
+    protectedTitle: 'Yalnızca admin operasyonel rotalar',
+    protectedDescription: 'Şeffaflık, analitik, küme ve politika rotaları yalnızca admin ops/debug yüzeyleridir. Bir bearer jetonu (security.admin_access_token) ile korunur ve kararlı genel federasyon API\'sinin dışında kalır.',
   },
 
   integration: {

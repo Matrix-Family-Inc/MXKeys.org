@@ -28,7 +28,7 @@ live under `docs/runbook/`.
 - PostgreSQL 14+.
 - TLS termination for public deployments.
 - Explicit `database.url`.
-- `security.enterprise_access_token` when protected operational routes are enabled.
+- `security.admin_access_token` when the admin-only operational routes are exposed.
 - `cluster.shared_secret` when cluster mode is enabled: minimum 32 characters, placeholder values rejected.
 - For cluster mode with Raft consensus, `cluster.raft_state_dir` (default `/var/lib/mxkeys/raft`) on a durable filesystem.
 

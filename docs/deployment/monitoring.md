@@ -9,7 +9,7 @@ Status: Updated
 
 ## Prometheus Metrics
 
-MXKeys exposes metrics at `GET /_mxkeys/metrics` (protected by enterprise access token when configured).
+MXKeys exposes metrics at `GET /_mxkeys/metrics` (gated by the admin access token when `security.admin_access_token` is configured).
 
 ### Key Metrics
 
@@ -42,7 +42,7 @@ scrape_configs:
   - job_name: mxkeys
     scheme: https
     authorization:
-      credentials: <enterprise-access-token>
+      credentials: <admin-access-token>
     static_configs:
       - targets: ['mxkeys.example.org:8448']
 ```

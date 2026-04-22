@@ -142,7 +142,7 @@ export default {
     },
     status: {
       title: 'GET /_mxkeys/status',
-      description: 'Детальний статус сервісу: час роботи, метрики кешу, статистика бази даних та опціональний статус enterprise-функцій.',
+      description: 'Детальний статус сервісу: час роботи, метрики кешу, статистика бази даних та статус опціональних підсистем.',
     },
     metrics: {
       title: 'GET /_mxkeys/metrics',
@@ -150,8 +150,8 @@ export default {
     },
     errorsTitle: 'Модель помилок',
     errorsDescription: 'Валідація запитів та контроль зловживань використовують Matrix-сумісні коди помилок: M_BAD_JSON, M_INVALID_PARAM, M_NOT_FOUND, M_TOO_LARGE та M_LIMIT_EXCEEDED.',
-    protectedTitle: 'Захищені операційні маршрути',
-    protectedDescription: 'Маршрути прозорості, аналітики, кластера та політик потребують enterprise-токен доступу та документовані окремо від стабільного публічного API федерації.',
+    protectedTitle: 'Admin-only операційні маршрути',
+    protectedDescription: 'Маршрути прозорості, аналітики, кластера та політик — admin-only ops/debug-поверхня. Закриваються bearer-токеном (security.admin_access_token) і перебувають поза стабільним публічним API федерації.',
   },
   integration: {
     title: 'Інтеграція',
