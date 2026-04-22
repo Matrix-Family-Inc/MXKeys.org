@@ -27,10 +27,10 @@ export function ApiSection() {
   return (
     <section id="api" className="py-20">
       <div className="max-w-7xl mx-auto px-6">
-        <h2 className="text-3xl font-bold text-center text-[var(--color-text)] mb-4">
+        <h2 className="text-3xl font-bold text-center text-text mb-4">
           {t('api.title')}
         </h2>
-        <p className="text-lg text-[var(--color-text-secondary)] text-center max-w-2xl mx-auto mb-12">
+        <p className="text-lg text-text-secondary text-center max-w-2xl mx-auto mb-12">
           {t('api.description')}
         </p>
 
@@ -41,31 +41,31 @@ export function ApiSection() {
                 <span className={endpoint.method === 'POST' ? 'method-post' : 'method-get'}>
                   {endpoint.method}
                 </span>
-                <code className="text-[var(--color-text)] font-mono text-sm">{endpoint.path}</code>
+                <code className="text-text font-mono text-sm">{endpoint.path}</code>
               </div>
-              <p className="text-[var(--color-text-secondary)] text-sm">
+              <p className="text-text-secondary text-sm">
                 {t(endpoint.i18nKey)}
               </p>
             </div>
           ))}
 
           <div className="card">
-            <h3 className="text-base font-semibold text-[var(--color-text)] mb-2">
+            <h3 className="text-base font-semibold text-text mb-2">
               {t('api.errorsTitle')}
             </h3>
-            <p className="text-[var(--color-text-secondary)] text-sm">
+            <p className="text-text-secondary text-sm">
               {t('api.errorsDescription')}
             </p>
           </div>
 
           <div className="card">
-            <h3 className="text-base font-semibold text-[var(--color-text)] mb-2">
+            <h3 className="text-base font-semibold text-text mb-2">
               {t('api.protectedTitle')}
             </h3>
-            <p className="text-[var(--color-text-secondary)] text-sm mb-3">
+            <p className="text-text-secondary text-sm mb-3">
               {t('api.protectedDescription')}
             </p>
-            <code className="block text-[var(--color-text)] font-mono text-sm">
+            <code className="block text-text font-mono text-sm">
               /_mxkeys/transparency/*, /_mxkeys/analytics/*, /_mxkeys/cluster/*, /_mxkeys/policy/*
             </code>
           </div>

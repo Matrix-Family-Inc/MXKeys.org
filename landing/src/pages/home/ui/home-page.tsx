@@ -7,16 +7,16 @@
  * Status: Created
  */
 
-import { AboutSection } from '../../../widgets/about';
-import { ApiSection } from '../../../widgets/api';
-import { EcosystemSection } from '../../../widgets/ecosystem';
-import { FeaturesSection } from '../../../widgets/features';
-import { HeroSection } from '../../../widgets/hero';
-import { HowItWorksSection } from '../../../widgets/how-it-works';
-import { IntegrationSection } from '../../../widgets/integration';
-import { LandingFooter } from '../../../widgets/landing-footer';
-import { LandingHeader } from '../../../widgets/landing-header';
-import { NotaryLookupSection } from '../../../widgets/notary-lookup';
+import { AboutSection } from '@/widgets/about';
+import { ApiSection } from '@/widgets/api';
+import { EcosystemSection } from '@/widgets/ecosystem';
+import { FeaturesSection } from '@/widgets/features';
+import { HeroSection } from '@/widgets/hero';
+import { HowItWorksSection } from '@/widgets/how-it-works';
+import { IntegrationSection } from '@/widgets/integration';
+import { LandingFooter } from '@/widgets/landing-footer';
+import { LandingHeader } from '@/widgets/landing-header';
+import { NotaryLookupSection } from '@/widgets/notary-lookup';
 
 /**
  * HomePage composes every marketing widget in the canonical order the

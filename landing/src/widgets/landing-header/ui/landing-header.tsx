@@ -10,9 +10,9 @@
 import { useTranslation } from 'react-i18next';
 import { Github, Menu, X } from 'lucide-react';
 
-import { useMobileNav } from '../../../features/mobile-nav';
-import { EXTERNAL, getLinkProps } from '../../../shared/config/urls';
-import { Logo } from '../../../shared/ui';
+import { useMobileNav } from '@/features/mobile-nav';
+import { EXTERNAL, getLinkProps } from '@/shared/config/urls';
+import { Logo } from '@/shared/ui';
 
 const navLinks = [
   { href: '#about', key: 'about' },
@@ -29,14 +29,14 @@ export function LandingHeader() {
 
   const menuLabel = open ? t('nav.closeMenu') : t('nav.openMenu');
   const iconBtn =
-    'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 transition-colors';
+    'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-secondary hover:text-primary hover:border-primary/40 transition-colors';
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-sm">
+    <header className="sticky top-0 z-50 border-b border-border bg-bg/95 backdrop-blur-sm">
       <div className="max-w-7xl mx-auto h-16 px-6 flex items-center justify-between">
         <a href="#home" aria-label={t('nav.homeAria')} className="flex items-center gap-3">
           <Logo size={32} />
-          <span className="text-lg font-semibold text-[var(--color-text)]">MXKeys</span>
+          <span className="text-lg font-semibold text-text">MXKeys</span>
         </a>
 
         <div className="hidden md:flex items-center gap-3">
@@ -81,7 +81,7 @@ export function LandingHeader() {
       </div>
 
       {open ? (
-        <div className="border-t border-[var(--color-border)] md:hidden">
+        <div className="border-t border-border md:hidden">
           <nav className="max-w-7xl mx-auto px-6 py-3 flex flex-col gap-1">
             {navLinks.map((link) => (
               <a key={link.key} href={link.href} className="nav-link" onClick={close}>
