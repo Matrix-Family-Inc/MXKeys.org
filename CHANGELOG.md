@@ -395,6 +395,13 @@ homeservers.
 
 ### Changed
 
+- Raft consensus graduated from experimental: startup warning and
+  `config.example.yaml` note removed. Raft mode is now covered by
+  WAL v3 (CRC32C + HMAC-SHA256), chunked `InstallSnapshot` with a
+  disk-backed spill, streaming installer, pre-vote, and an end-to-end
+  test against a 3-node cluster federating between two Synapse
+  homeservers. Selection between `crdt` and `raft` is an operator
+  choice documented in ADR-0001.
 - Go toolchain bumped from 1.22 to 1.26. `GOTOOLCHAIN` workaround
   for govulncheck removed from CI and the local preflight.
 - Dockerfile base images bumped to `golang:1.26-alpine` and

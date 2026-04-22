@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/badge/license-Apache%202.0-green)
 ![Matrix](https://img.shields.io/badge/matrix-federation-purple)
 ![Prometheus](https://img.shields.io/badge/metrics-prometheus-orange)
-![Dependencies](https://img.shields.io/badge/go%20deps-3-brightgreen)
+![Dependencies](https://img.shields.io/badge/go%20deps-4-brightgreen)
 
 **Matrix Federation Key Notary**
 
@@ -187,7 +187,7 @@ This script mirrors the PR gate workflow: unit + race + tagged integration tests
 - Deployment: `docs/deployment.md`
 - Build and verification: `docs/build.md`
 - Security: `docs/threat-model.md`
-- Runbooks: `docs/runbook/` (key rotation, cluster DR, schema migration)
+- Runbooks: `docs/runbook/`
 - ADRs: `docs/adr/`
 
 ---

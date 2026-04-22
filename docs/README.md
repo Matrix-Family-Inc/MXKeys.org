@@ -2,7 +2,7 @@ Project: MXKeys
 Company: Matrix Family Inc. (https://matrix.family)
 Maintainer: Brabus
 Contact: dev@matrix.family
-Date: Mon Apr 20 2026 UTC
+Date: Wed Apr 22 2026 UTC
 Status: Updated
 
 # Docs Index
@@ -21,6 +21,10 @@ Status: Updated
 - `runbook/key-rotation.md` — signing-key rotation procedure
 - `runbook/cluster-disaster-recovery.md` — CRDT and Raft recovery paths
 - `runbook/schema-migration.md` — PostgreSQL schema change procedure
+- `runbook/backup-restore.md` — database and signing-key backup/restore
+- `runbook/production-deploy.md` — production rollout procedure
+- `runbook/raft-wal-upgrade.md` — WAL format upgrade procedure
+- `runbook/release.md` — release cut, tagging, and artifact publication
 
 ## Supporting Material
 
