@@ -26,7 +26,7 @@ export function AppErrorBoundary({ children }: { children: ReactNode }) {
         >
           <div className="max-w-md space-y-4">
             <h1 className="text-2xl font-semibold">Something went wrong</h1>
-            <p className="text-[var(--color-text-secondary)]">
+            <p className="text-text-secondary">
               The page failed to render. Refresh to try again; if it keeps
               happening, the error has been reported.
             </p>
@@ -38,7 +38,7 @@ export function AppErrorBoundary({ children }: { children: ReactNode }) {
                   window.location.reload();
                 }
               }}
-              className="inline-flex h-10 items-center justify-center rounded-md border border-[var(--color-border)] px-4 text-sm font-medium hover:bg-[var(--color-surface-hover,transparent)]"
+              className="inline-flex h-10 items-center justify-center rounded-md border border-border px-4 text-sm font-medium hover:bg-bg-hover"
             >
               Reload
             </button>

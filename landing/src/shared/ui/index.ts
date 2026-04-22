@@ -13,3 +13,5 @@
 export { Logo } from './logo';
 export { TextField } from './text-field';
 export type { TextFieldProps } from './text-field';
+export { EcosystemBadge } from './ecosystem-badge';
+export type { EcosystemBadgeProps } from './ecosystem-badge';

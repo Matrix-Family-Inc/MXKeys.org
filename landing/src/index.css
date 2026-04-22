@@ -329,6 +329,19 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: var(--radius-sm);
 }
 
+/* Decorative diagonal stripe pattern used under hero sections. Lives
+   here rather than as inline JSX style so hero.tsx stays declarative
+   and the pattern is reusable. */
+.bg-diagonal-stripes {
+  background-image: repeating-linear-gradient(
+    -15deg,
+    transparent,
+    transparent 70px,
+    rgba(61, 153, 112, 0.15) 70px,
+    rgba(61, 153, 112, 0.15) 71px
+  );
+}
+
 /* Animations */
 @keyframes pulse-slow {
   0%, 100% {
