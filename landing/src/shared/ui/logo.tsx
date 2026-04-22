@@ -3,46 +3,56 @@
  * Company: Matrix Family Inc. (https://matrix.family)
  * Maintainer: Brabus
  * Contact: dev@matrix.family
- * Date: Mon Apr 20 2026 UTC
+ * Date: Wed Apr 22 2026 UTC
  * Status: Updated
  */
 
 type LogoProps = {
   size?: number;
   className?: string;
+  animated?: boolean;
 };
 
 /**
- * Logo renders the MXKeys mark as inline SVG. Kept as a shared primitive
- * so operators forking the landing for their own branded notary can swap
- * this file without touching widgets.
+ * Canonical MXKeys brand mark: dashed federation ring with a
+ * halo-bordered core node. Kept as a shared primitive so operators
+ * forking the landing for their own branded notary can swap this
+ * file without touching widgets. Colours route through
+ * `--color-primary` / `--color-bg-surface` so the mark follows the
+ * active theme without hard-coding hex values; the literal hex
+ * fallbacks preserve the original design when the mark is rendered
+ * outside the landing theme context (e.g. in Storybook stories or
+ * embedded previews).
  */
-export function Logo({ size = 32, className }: LogoProps) {
+export function Logo({ size = 32, className, animated = false }: LogoProps) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 64 64"
+      viewBox="0 0 1024 1024"
       width={size}
       height={size}
+      fill="none"
       role="img"
       aria-label="MXKeys logo"
-      className={className}
+      className={[animated ? 'animate-spin-slow' : '', className].filter(Boolean).join(' ')}
+      style={animated ? { animationDuration: '20s' } : undefined}
     >
-      <defs>
-        <linearGradient id="mxkeys-gradient" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#3D9970" />
-          <stop offset="100%" stopColor="#2E7D58" />
-        </linearGradient>
-      </defs>
-      <rect width="64" height="64" rx="12" fill="url(#mxkeys-gradient)" />
-      <path
-        d="M20 18 L32 32 L20 46 M32 32 L44 18 M32 32 L44 46"
-        stroke="white"
-        strokeWidth="4"
+      {/* Federation ring: broken arcs evoke federated servers. */}
+      <circle
+        cx="512"
+        cy="512"
+        r="360"
+        stroke="var(--color-primary, #3D9970)"
+        strokeWidth="76"
         strokeLinecap="round"
-        strokeLinejoin="round"
+        strokeDasharray="260 320 200 360 220 420"
+        transform="rotate(-18 512 512)"
         fill="none"
       />
+      {/* Inner halo: creates the negative-space eye around the node. */}
+      <circle cx="524" cy="500" r="96" fill="var(--color-bg-surface, #1c1c1e)" />
+      {/* Core node: the notary itself. */}
+      <circle cx="524" cy="500" r="52" fill="var(--color-primary, #3D9970)" />
     </svg>
   );
 }
