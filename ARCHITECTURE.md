@@ -131,6 +131,37 @@ bad-input rejection. End-to-end proof lives in the 3-node smoke
 test against live Synapse A/B in `test_servers/` (see the
 `federation_edge_test` harness under `mfos.sdk`).
 
+## Server Info Enrichment (`/_mxkeys/server-info`)
+
+Optional operator-facing endpoint that exposes the same Matrix
+discovery work the notary performs internally, plus optional
+WHOIS (TCP 43). Disabled by default; WHOIS is a separate
+enable switch so operators whose egress blocks TCP 43 still ship
+the same binary with DNS + reachability only.
+
+Pipeline (orchestrated in `internal/server/serverinfo_service.go`):
+
+1. Parse `server_name`, apply `ValidateServerName` and the
+   same rate-limit bucket as `/_matrix/key/v2/query` so an
+   anonymous client cannot weaponise the endpoint as a
+   reconnaissance proxy.
+2. Check the PostgreSQL-backed cache
+   (`server_info_cache` from migration 0004). A fresh row
+   short-circuits the fan-out.
+3. Fan out under the configured `request_timeout` budget:
+   - DNS + well-known + SRV + TCP/TLS probe
+     (`serverinfo_reachability.go`).
+   - WHOIS (`serverinfo_whois.go`), when `whois_enabled`.
+4. Aggregate. Every sub-task reports its own short error
+   string into the top-level `errors` map when it times out or
+   fails; the rest of the response still flows back.
+5. Upsert the combined response into the cache so the next
+   query within TTL is served from a single SELECT.
+
+Wire contract lives in `internal/server/serverinfo_types.go`.
+Frontend counterpart is `landing/src/features/server-info/` and
+the panel renders under the notary lookup result.
+
 ## Cache and Persistence
 
 - Memory cache: short-lived `ServerKeysResponse` objects with defensive cloning on every lookup.

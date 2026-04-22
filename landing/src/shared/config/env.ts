@@ -21,13 +21,20 @@ const envSchema = z.object({
   /**
    * Public-facing site URL, used in canonical tags, Open Graph metadata,
    * and any sitemap/robots-style content that needs an absolute URL.
-   * Operators deploying their own branded MXKeys notary landing override
-   * this without touching the code.
+   * Operators deploying their own branded MXKeys notary landing
+   * override this at build time via `VITE_SITE_URL=https://notary.example.org
+   * bun run build`.
+   *
+   * The empty default is intentional: runtime code that needs a base
+   * URL for API calls must fall back to `window.location.origin` so
+   * a visitor on any host (including localhost) talks to the notary
+   * their HTML was served from. See `apiBaseURL()` below.
    */
   VITE_SITE_URL: z
     .string()
     .url()
-    .default('https://notary.example.org'),
+    .optional()
+    .or(z.literal('')),
 
   /**
    * Optional Sentry DSN. When absent, Sentry is not initialized and every
@@ -64,5 +71,31 @@ function loadEnv(): Env {
 
 export const env = loadEnv();
 
-/** siteURL is the canonical absolute origin of the landing deployment. */
-export const siteURL = env.VITE_SITE_URL.replace(/\/+$/, '');
+/**
+ * siteURL is the absolute origin used for canonical tags, Open Graph
+ * metadata, and `link rel="canonical"`. Build-time `VITE_SITE_URL`
+ * overrides it; otherwise a build-time fallback is kept so tooling
+ * that only inspects the build (e.g. sitemap generators) still has a
+ * reasonable value. Runtime API calls MUST NOT use siteURL - they
+ * use apiBaseURL() which prefers the live browser origin.
+ */
+export const siteURL = (env.VITE_SITE_URL ?? 'https://mxkeys.org').replace(/\/+$/, '');
+
+/**
+ * apiBaseURL returns the origin the landing must talk to for
+ * /_matrix/* and /_mxkeys/* calls. On any real visitor request it
+ * is the origin the HTML was served from, so the same landing
+ * bundle works on mxkeys.org, a branded operator clone, and any
+ * localhost dev server without a build-time environment variable.
+ * A build-time `VITE_SITE_URL` still wins so operators that proxy
+ * the API through a different hostname than the landing can
+ * opt in.
+ */
+export function apiBaseURL(): string {
+  const explicit = env.VITE_SITE_URL;
+  if (explicit && explicit.length > 0) return explicit.replace(/\/+$/, '');
+  if (typeof window !== 'undefined' && window.location && window.location.origin) {
+    return window.location.origin.replace(/\/+$/, '');
+  }
+  return siteURL;
+}

@@ -244,4 +244,29 @@ func applyClusterMap(config *Config, m map[string]interface{}) {
 	if v := zeroconfig.GetString(m, "cluster.tls.server_name"); v != "" {
 		config.Cluster.TLS.ServerName = v
 	}
+
+	applyServerInfoMap(config, m)
+}
+
+// applyServerInfoMap wires the optional /_mxkeys/server-info
+// enrichment endpoint. Zero / empty values keep the built-in
+// defaults set by setDefaults so operators running unchanged
+// configs see identical behaviour to earlier builds.
+func applyServerInfoMap(config *Config, m map[string]interface{}) {
+	if zeroconfig.Has(m, "server_info.enabled") {
+		config.ServerInfo.Enabled = zeroconfig.GetBool(m, "server_info.enabled")
+	}
+	if v := zeroconfig.GetString(m, "server_info.cache_ttl"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			config.ServerInfo.CacheTTL = d
+		}
+	}
+	if v := zeroconfig.GetString(m, "server_info.request_timeout"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			config.ServerInfo.RequestTimeout = d
+		}
+	}
+	if zeroconfig.Has(m, "server_info.whois_enabled") {
+		config.ServerInfo.WhoisEnabled = zeroconfig.GetBool(m, "server_info.whois_enabled")
+	}
 }
