@@ -11,6 +11,10 @@ Status: Created
 
 Accepted
 
+## Visibility
+
+Public.
+
 ## Context
 
 MXKeys exposes both federation-facing core API endpoints and internal/operational endpoints.
@@ -44,5 +48,11 @@ Operational endpoints remain documented but are not part of the same strict comp
 
 ## References
 
-- `docs/federation-behavior.md`
-- `docs/matrix-v1.16-conformance-matrix.md`
+- `docs/federation-behavior.md` - behavior contract for stable key-notary
+  endpoints.
+- `docs/matrix-v1.16-conformance-matrix.md` - Matrix version conformance scope
+  tied to the stable API.
+
+## Alternatives
+
+None recorded at authoring time. Any future revision that modifies this decision must list the rejected options explicitly.

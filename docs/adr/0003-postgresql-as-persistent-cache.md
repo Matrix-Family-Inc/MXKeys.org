@@ -11,6 +11,10 @@ Status: Created
 
 Accepted
 
+## Visibility
+
+Public.
+
 ## Context
 
 MXKeys needs durable key-response storage beyond process lifetime, with deterministic query behavior and operational observability.
@@ -36,7 +40,13 @@ Use PostgreSQL as persistent cache/storage for verified federation key responses
 
 ## References
 
-- `internal/keys/storage.go`
-- `internal/keys/notary_query.go`
-- `internal/server/handlers.go`
-- `docs/deployment.md`
+- `internal/keys/storage.go` - PostgreSQL persistence layer for key responses.
+- `internal/keys/notary_query.go` - query path that reads and writes the
+  persistent cache.
+- `internal/server/handlers.go` - HTTP handlers that expose cached notary
+  responses.
+- `docs/deployment.md` - operator database configuration guidance.
+
+## Alternatives
+
+None recorded at authoring time. Any future revision that modifies this decision must list the rejected options explicitly.

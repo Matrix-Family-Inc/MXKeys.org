@@ -11,6 +11,10 @@ Status: Created
 
 Accepted
 
+## Visibility
+
+Public.
+
 ## Context
 
 Federation trust APIs require deterministic request validation and interoperable error reporting.
@@ -38,7 +42,13 @@ Enforce strict JSON decoding semantics and matrix-compatible error response shap
 
 ## References
 
-- `internal/server/json_decode.go`
-- `internal/server/handlers.go`
-- `internal/server/handlers_matrix_errors_test.go`
-- `docs/federation-behavior.md`
+- `internal/server/json_decode.go` - strict JSON decoder and payload checks.
+- `internal/server/handlers.go` - Matrix-facing HTTP error mapping.
+- `internal/server/handlers_matrix_errors_test.go` - regression coverage for
+  Matrix-compatible error envelopes.
+- `docs/federation-behavior.md` - external behavior contract for federation
+  clients.
+
+## Alternatives
+
+None recorded at authoring time. Any future revision that modifies this decision must list the rejected options explicitly.

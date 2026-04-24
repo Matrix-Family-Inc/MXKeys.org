@@ -2,7 +2,7 @@ Project: MXKeys
 Company: Matrix Family Inc. (https://matrix.family)
 Maintainer: Brabus
 Contact: dev@matrix.family
-Date: Mon Apr 20 2026 UTC
+Date: Fri Apr 24 2026 UTC
 Status: Updated
 
 # ADR-0009: Landing Stack and Architecture
@@ -10,6 +10,17 @@ Status: Updated
 ## Status
 
 Accepted.
+
+## Visibility
+
+Public.
+
+## Ecosystem Scope
+
+This ADR applies
+`../../../ecosystem-docs/adr/ECO-0007-frontend-fsd-stack.md` to the MXKeys
+landing site. The ecosystem ADR owns the frontend stack and FSD policy; this
+file owns the landing-specific layout, config, i18n, and test setup.
 
 ## Context
 
@@ -85,7 +96,8 @@ Environment-driven site URL:
 
 Bundle split via `manualChunks`: Sentry, TanStack (Router +
 Query), and i18next ship in separate chunks that cache
-independently. Main bundle is around 273 KB (gzip ~82 KB).
+independently. Bundle size is measured by the build tooling and is not
+normative in this ADR.
 
 ## Consequences
 
@@ -110,8 +122,15 @@ independently. Main bundle is around 273 KB (gzip ~82 KB).
 
 ## References
 
-- `landing/src/`
-- `landing/.storybook/`
-- `landing/eslint.config.mjs`
-- `landing/vite.config.ts`
-- `landing/playwright.config.ts`
+- ECO-0007 Frontend FSD Stack Policy - canonical ecosystem frontend stack and
+  layer policy.
+- `landing/src/` - MXKeys landing implementation governed by this ADR.
+- `landing/.storybook/` - isolated UI development setup for landing components.
+- `landing/eslint.config.mjs` - FSD boundary enforcement.
+- `landing/vite.config.ts` - routing, environment replacement, and bundle split
+  configuration.
+- `landing/playwright.config.ts` - landing smoke e2e coverage.
+
+## Alternatives
+
+None recorded at authoring time. Any future revision that modifies this decision must list the rejected options explicitly.

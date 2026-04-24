@@ -2,7 +2,7 @@ Project: MXKeys
 Company: Matrix Family Inc. (https://matrix.family)
 Maintainer: Brabus
 Contact: dev@matrix.family
-Date: Mon Apr 20 2026 UTC
+Date: Fri Apr 24 2026 UTC
 Status: Updated
 
 # ADR-0002: Zero-Dependency Core Packages
@@ -11,10 +11,14 @@ Status: Updated
 
 Accepted
 
+## Visibility
+
+Public.
+
 ## Context
 
 MXKeys aims to minimize supply-chain and runtime risk while keeping deterministic behavior for critical federation trust logic.
-Some infrastructure layers are security-sensitive and small enough to maintain in-tree: metrics, config helpers, canonical JSON, Merkle primitives, and raft internals. Routing relies on Go 1.22+ stdlib `http.ServeMux` with method/path patterns; no custom router is required.
+Some infrastructure layers are security-sensitive and small enough to maintain in-tree: metrics, config helpers, canonical JSON, Merkle primitives, and raft internals. The module targets Go 1.26. Routing relies on stdlib `http.ServeMux` method/path patterns introduced in Go 1.22; no custom router is required.
 
 ## Decision
 
@@ -35,9 +39,14 @@ Maintain internal `internal/zero/*` packages for core cross-cutting functionalit
 
 ## References
 
-- `internal/zero/canonical`
-- `internal/zero/config`
-- `internal/zero/log`
-- `internal/zero/merkle`
-- `internal/zero/metrics`
-- `internal/zero/raft`
+- `internal/zero/canonical` - canonical JSON implementation for signed
+  federation payloads.
+- `internal/zero/config` - small config helpers without a framework dependency.
+- `internal/zero/log` - structured logging wrapper.
+- `internal/zero/merkle` - Merkle primitives for transparency proofs.
+- `internal/zero/metrics` - in-tree metrics primitives.
+- `internal/zero/raft` - in-tree consensus implementation.
+
+## Alternatives
+
+None recorded at authoring time. Any future revision that modifies this decision must list the rejected options explicitly.

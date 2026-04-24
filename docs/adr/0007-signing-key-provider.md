@@ -2,7 +2,7 @@ Project: MXKeys
 Company: Matrix Family Inc. (https://matrix.family)
 Maintainer: Brabus
 Contact: dev@matrix.family
-Date: Mon Apr 20 2026 UTC
+Date: Fri Apr 24 2026 UTC
 Status: Updated
 
 # ADR-0007: Signing Key Provider Abstraction
@@ -10,6 +10,17 @@ Status: Updated
 ## Status
 
 Accepted.
+
+## Visibility
+
+Public.
+
+## Ecosystem Scope
+
+This ADR is the MXKeys implementation of
+`../../../ecosystem-docs/adr/ECO-0008-signing-key-lifecycle.md`. The ecosystem
+ADR owns signing-key lifecycle invariants; this file owns MXKeys provider
+interfaces, at-rest protection, and operator-facing backend choices.
 
 ## Context
 
@@ -96,7 +107,17 @@ with embedders that have not migrated. Server code uses
 
 ## References
 
-- `internal/keys/keyprovider/`
-- `internal/keys/keyprovider/file_crypto.go`
-- `docs/runbook/key-rotation.md`
-- `docs/runbook/backup-restore.md`
+- ECO-0008 Signing Key Lifecycle Policy - shared lifecycle invariants for
+  active, superseded, and rotated signing keys.
+- `internal/keys/keyprovider/` - provider interface and concrete signing-key
+  backends.
+- `internal/keys/keyprovider/file_crypto.go` - encrypted file-provider envelope
+  implementation.
+- `docs/runbook/key-rotation.md` - operator procedure for replacing signing
+  keys.
+- `docs/runbook/backup-restore.md` - backup and restore procedure for key
+  material and service state.
+
+## Alternatives
+
+None recorded at authoring time. Any future revision that modifies this decision must list the rejected options explicitly.

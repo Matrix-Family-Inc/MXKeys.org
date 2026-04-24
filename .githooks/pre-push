@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Project: MXKeys
+# Company: Matrix Family Inc.
+# Maintainer: Brabus
+# Contact: dev@matrix.family
+# Date: 2026-04-25
+# Status: Created
+#
+# Standalone pre-push for a direct clone of matrix-family/mxkeys.git.
+# Validates the local ADR pool against the canonical linter shipped with
+# the repository. Cross-pool link checking runs in the ecosystem-docs
+# workflow where every pool is reachable.
+#
+# To activate:  ./scripts/install-hooks.sh
+# To bypass:    git push --no-verify   (not recommended)
+
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+linter="$repo_root/scripts/adr_lint.py"
+
+if [[ ! -x "$linter" ]]; then
+    echo "pre-push: scripts/adr_lint.py missing from the working tree" >&2
+    exit 1
+fi
+
+if [[ ! -d "$repo_root/docs/adr" ]]; then
+    exit 0
+fi
+
+echo "pre-push: linting docs/adr"
+python3 "$linter" "$repo_root/docs/adr"
+echo "pre-push: ADR checks passed"

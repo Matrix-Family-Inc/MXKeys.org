@@ -2,7 +2,7 @@ Project: MXKeys
 Company: Matrix Family Inc. (https://matrix.family)
 Maintainer: Brabus
 Contact: dev@matrix.family
-Date: Mon Apr 20 2026 UTC
+Date: Fri Apr 24 2026 UTC
 Status: Updated
 
 # ADR-0008: Schema Migrations
@@ -10,6 +10,10 @@ Status: Updated
 ## Status
 
 Accepted.
+
+## Visibility
+
+Public.
 
 ## Context
 
@@ -61,6 +65,10 @@ Shipped migrations:
 - `0002_transparency_log.sql`: the transparency log table for
   the default configuration (`transparency.table_name =
   "key_transparency_log"`).
+- `0003_raw_server_response.sql`: `raw_response` bytes for preserving
+  origin-delivered canonical JSON across cache and replication boundaries.
+- `0004_server_info_cache.sql`: server metadata cache used by the
+  landing/server-info surface.
 
 Operators who set `transparency.table_name` to a non-default
 value continue to get lazy DDL via
@@ -89,7 +97,19 @@ warning and is documented as the single exception to the
 
 ## References
 
-- `internal/storage/migrations/migrations.go`
-- `internal/storage/migrations/sql/0001_initial.sql`
-- `internal/storage/migrations/sql/0002_transparency_log.sql`
-- `docs/runbook/schema-migration.md`
+- `internal/storage/migrations/migrations.go` - migration runner and ordering
+  rules.
+- `internal/storage/migrations/sql/0001_initial.sql` - initial key cache
+  schema.
+- `internal/storage/migrations/sql/0002_transparency_log.sql` - transparency
+  log schema.
+- `internal/storage/migrations/sql/0003_raw_server_response.sql` - raw
+  canonical response storage.
+- `internal/storage/migrations/sql/0004_server_info_cache.sql` - server info
+  cache schema.
+- `docs/runbook/schema-migration.md` - operator procedure for applying and
+  recovering migrations.
+
+## Alternatives
+
+None recorded at authoring time. Any future revision that modifies this decision must list the rejected options explicitly.

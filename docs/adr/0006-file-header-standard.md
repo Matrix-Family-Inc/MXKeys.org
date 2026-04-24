@@ -2,7 +2,7 @@ Project: MXKeys
 Company: Matrix Family Inc. (https://matrix.family)
 Maintainer: Brabus
 Contact: dev@matrix.family
-Date: Mon Apr 20 2026 UTC
+Date: Fri Apr 24 2026 UTC
 Status: Updated
 
 # ADR-0006: File Header Standard
@@ -10,6 +10,17 @@ Status: Updated
 ## Status
 
 Accepted.
+
+## Visibility
+
+Public.
+
+## Ecosystem Scope
+
+This ADR is the MXKeys rendering of
+`../../../ecosystem-docs/adr/ECO-0005-file-header-standard.md`. The ecosystem
+ADR owns the cross-project header policy; this file owns MXKeys-specific field
+values and comment rendering rules.
 
 ## Context
 
@@ -71,5 +82,11 @@ Fields dropped vs. the previous banner:
 
 ## References
 
-- `LICENSE`.
-- `docs/release-process.md`.
+- ECO-0005 File Header Standard - canonical ecosystem policy for provenance
+  headers.
+- `LICENSE` - repository legal context.
+- `docs/release-process.md` - release process that updates provenance metadata.
+
+## Alternatives
+
+None recorded at authoring time. Any future revision that modifies this decision must list the rejected options explicitly.

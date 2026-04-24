@@ -2,7 +2,7 @@ Project: MXKeys
 Company: Matrix Family Inc. (https://matrix.family)
 Maintainer: Brabus
 Contact: dev@matrix.family
-Date: Mon Apr 20 2026 UTC
+Date: Fri Apr 24 2026 UTC
 Status: Updated
 
 # ADR-0010: File Size Policy
@@ -10,6 +10,17 @@ Status: Updated
 ## Status
 
 Accepted.
+
+## Visibility
+
+Public.
+
+## Ecosystem Scope
+
+This ADR applies
+`../../../ecosystem-docs/adr/ECO-0006-file-size-policy.md` to MXKeys. The
+ecosystem ADR owns the cross-project cohesion policy; this file owns the
+MXKeys-specific warning and failure thresholds.
 
 ## Context
 
@@ -67,6 +78,11 @@ hard budget.
 
 ## References
 
-- Organization user-rule (size guideline).
-- `scripts/file-size-lint.sh`.
-- `.github/workflows/pr-gate.yml` (`file-size` job).
+- ECO-0006 File Size and Cohesion Policy - canonical ecosystem cohesion policy.
+- Organization user-rule - source guideline for the 250 to 300 line target.
+- `scripts/file-size-lint.sh` - MXKeys local line-count enforcement.
+- `.github/workflows/pr-gate.yml` - CI job that runs the file-size check.
+
+## Alternatives
+
+None recorded at authoring time. Any future revision that modifies this decision must list the rejected options explicitly.
