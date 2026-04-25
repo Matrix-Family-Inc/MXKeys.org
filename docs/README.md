@@ -11,10 +11,12 @@ Status: Updated
 
 - `federation-behavior.md` — normative public API and request/response behavior
 - `../ARCHITECTURE.md` — runtime architecture and data flow (top-level)
+- `architecture-visual.md` — visual diagrams and component summaries
 - `deployment.md` — deployment and operational guide
 - `build.md` — build, verification, and reproducibility commands
 - `threat-model.md` — security assumptions, risks, and controls
 - `matrix-v1.16-conformance-matrix.md` — Matrix v1.16 scope coverage
+- `matrix-v1.16-clause-map.md` — detailed clause-to-code mapping
 
 ## Runbooks
 
@@ -32,6 +34,7 @@ Status: Updated
 - `grafana/` — dashboard assets
 - `prometheus-alerts.yaml` — alert definitions
 - `release-process.md` — release traceability and evidence policy
+- `release-evidence/` — checksums and SBOM
 - `transparency-verification.md` — external STH verification guide
 - `deployment/monitoring.md` — Prometheus + Grafana setup notes
 

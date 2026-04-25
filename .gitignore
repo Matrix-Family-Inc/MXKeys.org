@@ -41,5 +41,12 @@ coverage.html
 
 # Internal-only artifacts
 docs/release-100-checklist.md
+docs/APPLIES.md
 matrix-family-info.md
 -project_info
+
+# Internal tooling (not for public GitHub)
+.forgejo/
+.githooks/
+scripts/adr_lint.py
+scripts/install-hooks.sh
