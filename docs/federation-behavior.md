@@ -1,0 +1,232 @@
+Project: MXKeys
+Company: Matrix Family Inc. (https://matrix.family)
+Maintainer: Brabus
+Contact: dev@matrix.family
+Date: Wed Apr 22 2026 UTC
+Status: Updated
+
+# Federation Behavior Specification
+
+## Purpose
+
+This document specifies deterministic federation-key behavior for MXKeys.
+It defines request/response semantics, validation rules, resolution order, and failure behavior.
+
+The **compatibility-stable** surface is the Matrix Key Server API and related
+`/_matrix/federation/v1/version` behavior. Other HTTP routes listed below are
+normative for operators and integrators (health, verification aids, optional
+enrichment); protected operational routes are documented here even though they
+are not part of the core federation contract.
+
+## Supported Endpoints
+
+### Matrix key API
+
+- `GET /_matrix/key/v2/server`
+- `GET /_matrix/key/v2/server/{keyID}`
+- `POST /_matrix/key/v2/query`
+- `GET /_matrix/federation/v1/version`
+
+### Public verification and notary key discovery
+
+Registered for every deployment. These routes are public and do **not**
+go through the admin-access gate:
+
+- `GET /_mxkeys/transparency/signed-head` — signed Merkle tree head JSON for
+  external verification. Returns `404` with Matrix error JSON when the
+  transparency log is not available at runtime.
+- `GET /_mxkeys/notary/key` — notary public key metadata JSON for STH
+  verification helpers.
+
+### Operational probes
+
+Always reachable without an access token:
+
+- `GET /_mxkeys/health`
+- `GET /_mxkeys/live`
+- `GET /_mxkeys/ready`
+
+### Operational detail (conditionally gated)
+
+- `GET /_mxkeys/status`
+- `GET /_mxkeys/metrics`
+
+When `security.admin_access_token` is **non-empty**, these endpoints
+require the same credential as the admin-only operational routes:
+`Authorization: Bearer <token>` or `X-MXKeys-Admin-Token: <token>`.
+Missing or invalid credential yields `401` (`M_UNAUTHORIZED`). When the
+token is **empty** in configuration, `status` and `metrics` are served
+**without** that check.
+
+### Optional server-info enrichment
+
+- `GET /_mxkeys/server-info?name=<host>` — optional operator-facing enrichment
+  (DNS, federation reachability, optional WHOIS). Shares the rate-limit bucket
+  with `POST /_matrix/key/v2/query`. Returns `503` when `server_info.enabled`
+  is false. Response shape and sub-sections are defined in `ARCHITECTURE.md`.
+
+### Admin-only operational routes (non-core contract)
+
+These routes are **registered only when** `security.admin_access_token`
+is configured. If the token is unset, they are absent from the mux
+(requests receive `404`). If the token is set, missing or invalid
+bearer/header yields `401` (`M_UNAUTHORIZED`). Individual routes may
+additionally require the underlying subsystem (transparency log,
+cluster, trust policy) to be enabled at runtime. These routes are local
+ops/debug surfaces, not a product tier.
+
+- `GET /_mxkeys/transparency/log`
+- `GET /_mxkeys/transparency/verify`
+- `GET /_mxkeys/transparency/stats`
+- `GET /_mxkeys/transparency/proof`
+- `GET /_mxkeys/analytics/summary`
+- `GET /_mxkeys/analytics/servers`
+- `GET /_mxkeys/analytics/anomalies`
+- `GET /_mxkeys/analytics/rotators`
+- `GET /_mxkeys/circuits`
+- `GET /_mxkeys/cluster/status`
+- `GET /_mxkeys/cluster/nodes`
+- `GET /_mxkeys/policy/status`
+- `GET /_mxkeys/policy/check`
+
+Note: `GET /_mxkeys/transparency/signed-head` is **not** in this list; it stays
+public as defined above.
+
+## Endpoint Status and Error Codes
+
+| Endpoint | Success Codes | Failure Codes / Behavior |
+|---|---|---|
+| `GET /_matrix/key/v2/server` | `200` | internal failures may produce `5xx` |
+| `GET /_matrix/key/v2/server/{keyID}` | `200` | `400` (`M_INVALID_PARAM`) for invalid `keyID`, `404` (`M_NOT_FOUND`) for unknown key |
+| `POST /_matrix/key/v2/query` | `200` | `400` (`M_BAD_JSON`, `M_INVALID_PARAM`), `413` (`M_TOO_LARGE`), `429` (`M_LIMIT_EXCEEDED`) |
+| `GET /_matrix/federation/v1/version` | `200` | internal failures may produce `5xx` |
+| `GET /_mxkeys/transparency/signed-head` | `200` | `404` (`M_NOT_FOUND`) when no signed head is available |
+| `GET /_mxkeys/notary/key` | `200` | internal failures may produce `5xx` |
+| `GET /_mxkeys/health` | `200` | internal failures may produce `5xx` |
+| `GET /_mxkeys/live` | `200` | internal failures may produce `5xx` |
+| `GET /_mxkeys/ready` | `200` | `503` when DB or signing-key readiness checks fail |
+| `GET /_mxkeys/status` | `200` | `401` when admin token is configured but missing/invalid; internal failures may produce `5xx` |
+| `GET /_mxkeys/metrics` | `200` | same `401` rule as `status` |
+| `GET /_mxkeys/server-info` | `200` | `503` when enrichment disabled; `400` for bad/missing `name`; `429` under query rate limit |
+
+Admin-only operational routes return `401` (`M_UNAUTHORIZED`) when the
+admin access token is missing or invalid, and `404` when the route is
+not registered (token not configured, or required subsystem disabled).
+
+## Deterministic Request Handling
+
+### `POST /_matrix/key/v2/query`
+
+MXKeys MUST process requests in this order:
+
+1. Enforce request body size limit.
+2. Decode strict JSON and reject trailing payload.
+3. Validate `server_keys` presence and server count limits.
+4. Validate each `server_name`, `key_id`, and criteria fields.
+5. Resolve/fetch/verify keys per server.
+6. Return `server_keys` and `failures` envelope.
+
+If validation fails, MXKeys MUST return matrix-compatible error shape:
+
+```json
+{"errcode":"<M_CODE>","error":"<message>"}
+```
+
+## Server Discovery Behavior
+
+For remote server key fetches, resolver MUST follow this order:
+
+1. `.well-known/matrix/server` delegation (when applicable),
+2. SRV records,
+3. explicit host/port rules,
+4. direct connection fallback behavior defined by resolver policy.
+
+Resolver behavior MUST remain deterministic for equivalent inputs.
+
+## Signature and Payload Verification
+
+For fetched server keys, MXKeys MUST:
+
+- validate canonical JSON/signature-compatible payload structure,
+- validate self-signatures cryptographically,
+- validate server-name consistency,
+- validate key and signature lengths,
+- reject invalid material before cache/store/sign.
+
+If configured, pinned fallback/notary signatures MUST be verified cryptographically.
+
+## Caching Behavior
+
+MXKeys uses memory and database caching.
+
+Cache behavior requirements:
+
+- only valid key material may be returned,
+- expired cryptographic material MUST NOT be served as valid,
+- stale fallbacks are allowed only under explicit logic constraints,
+- cleanup of expired entries MUST run periodically.
+
+## Failure Semantics
+
+### Query-level behavior
+
+- Partial upstream failures MUST be reported under `failures`.
+- Successful entries MUST still be returned in `server_keys`.
+- `server_keys` MUST contain only successfully resolved and verified entries.
+- `failures` MUST be a map keyed by requested server name.
+- A server MUST NOT appear in both `server_keys` and `failures` for the same request.
+- If all requested servers fail, response remains `200` with `server_keys: []` and populated `failures`.
+- Failure messages exposed to clients MUST remain generic and MUST NOT include internal network, TLS, or storage diagnostics.
+
+### Error codes
+
+Common matrix-compatible codes:
+
+- `M_BAD_JSON` for malformed/invalid JSON envelope,
+- `M_INVALID_PARAM` for invalid parameter semantics,
+- `M_NOT_FOUND` for missing key ID on own-key endpoint,
+- `M_TOO_LARGE` for oversized request body,
+- `M_LIMIT_EXCEEDED` for rate-limited requests,
+- `M_UNAUTHORIZED` for missing or invalid admin/operational access token.
+
+## Operational Endpoint Semantics
+
+- `/_mxkeys/health`: process health check.
+- `/_mxkeys/live`: liveness (process alive).
+- `/_mxkeys/ready`: readiness (DB + signing-key readiness).
+- `/_mxkeys/status`: detailed runtime status (cache/db/uptime fields); optional
+  bearer token when `security.admin_access_token` is set.
+- `/_mxkeys/metrics`: Prometheus exposition format; same optional gate as
+  `status`.
+- `/_mxkeys/transparency/signed-head`: public signed-tree head for verifiers.
+- `/_mxkeys/notary/key`: public notary key metadata for verifiers.
+- `/_mxkeys/server-info`: optional enrichment JSON; see `ARCHITECTURE.md`.
+
+## Performance and Abuse Controls
+
+MXKeys MUST enforce:
+
+- rate limiting,
+- request size limits,
+- max server-count per query,
+- concurrency limits for upstream fetch paths,
+- bounded message size for cluster and raft transport.
+
+## Timeout and Retry Policy
+
+For remote key fetch behavior:
+
+- fetch timeout is configuration-driven (`keys.fetch_timeout_s`),
+- direct fetch retries are attempted for transient/network errors,
+- retry backoff is exponential (base 200ms in current implementation),
+- non-retryable/permanent validation errors MUST fail fast,
+- retry attempts are bounded by implementation defaults unless explicitly wired through runtime configuration.
+
+## Compatibility Contract
+
+The core API behavior (`/_matrix/key/v2/server*`, `/_matrix/key/v2/query`) is treated as stable.
+Changes that modify response shape, validation semantics, or error-code mapping require:
+
+- explicit changelog entry,
+- test updates,
+- conformance matrix review.

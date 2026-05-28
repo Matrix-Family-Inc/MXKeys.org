@@ -1,0 +1,22 @@
+[Unit]
+Description=MXKeys cluster member node-b (raft smoke-test)
+Documentation=file:///opt/matrix-family/test_servers/mxkeys-cluster/../README.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/matrix-family/test_servers/mxkeys-cluster/node-b
+ExecStart=/opt/matrix-family/test_servers/mxkeys-cluster/bin/mxkeys -config /opt/matrix-family/test_servers/mxkeys-cluster/node-b/config.yaml
+Restart=on-failure
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=45
+LimitNOFILE=65536
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mxkeys-node-b
+
+[Install]
+WantedBy=multi-user.target

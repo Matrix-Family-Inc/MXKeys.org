@@ -1,0 +1,47 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Build artifacts
+/mxkeys
+/mxkeys-verify
+/release/
+*.exe
+*.test
+*.out
+coverage.*
+.preflight/
+
+# Test files
+*_test.go
+testdata/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Landing page
+landing/
+
+# Local config and secrets
+config.yaml
+.env
+.env.*
+*.key
+*.pem
+*.crt
+*.p12
+*.backup
+*.bak
+
+# Misc
+.DS_Store
+Thumbs.db

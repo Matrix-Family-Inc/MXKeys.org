@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" fill="none">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#000000"/>
+      <stop offset="50%" style="stop-color:#1c1c1e"/>
+      <stop offset="100%" style="stop-color:#000000"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bgGradient)"/>
+  
+  <!-- Decorative circles -->
+  <circle cx="100" cy="100" r="200" fill="#3D9970" opacity="0.03"/>
+  <circle cx="1100" cy="530" r="250" fill="#3D9970" opacity="0.03"/>
+  
+  <!-- Grid pattern -->
+  <g opacity="0.02" stroke="#3D9970" stroke-width="1">
+    <line x1="0" y1="0" x2="1200" y2="630"/>
+    <line x1="0" y1="630" x2="1200" y2="0"/>
+    <line x1="600" y1="0" x2="600" y2="630"/>
+    <line x1="0" y1="315" x2="1200" y2="315"/>
+  </g>
+  
+  <!-- Main Logo (Federation Ring) - centered -->
+  <g transform="translate(600, 260) scale(0.35)">
+    <!-- Federation ring -->
+    <circle cx="0" cy="0" r="360" stroke="#3D9970" stroke-width="76" stroke-linecap="round" stroke-dasharray="260 320 200 360 220 420" transform="rotate(-18 0 0)" fill="none"/>
+    <!-- Inner halo -->
+    <circle cx="12" cy="-12" r="96" fill="#1c1c1e"/>
+    <!-- Core node -->
+    <circle cx="12" cy="-12" r="52" fill="#3D9970"/>
+  </g>
+  
+  <!-- Title -->
+  <text x="600" y="430" font-family="Inter, -apple-system, BlinkMacSystemFont, sans-serif" font-size="72" font-weight="700" fill="#ffffff" text-anchor="middle">MXKeys</text>
+  
+  <!-- Tagline -->
+  <text x="600" y="480" font-family="Inter, -apple-system, BlinkMacSystemFont, sans-serif" font-size="24" font-weight="400" fill="#8e8e93" text-anchor="middle">Matrix Key Notary Server</text>
+  
+  <!-- Features row -->
+  <g transform="translate(600, 540)">
+    <!-- Verify -->
+    <g transform="translate(-280, 0)">
+      <circle cx="0" cy="0" r="6" fill="#3D9970"/>
+      <text x="16" y="5" font-family="Inter, -apple-system, sans-serif" font-size="16" fill="#8e8e93">Trust</text>
+    </g>
+    
+    <!-- Cache -->
+    <g transform="translate(0, 0)">
+      <circle cx="0" cy="0" r="6" fill="#3D9970"/>
+      <text x="16" y="5" font-family="Inter, -apple-system, sans-serif" font-size="16" fill="#8e8e93">Verify</text>
+    </g>
+    
+    <!-- Sign -->
+    <g transform="translate(220, 0)">
+      <circle cx="0" cy="0" r="6" fill="#3D9970"/>
+      <text x="16" y="5" font-family="Inter, -apple-system, sans-serif" font-size="16" fill="#8e8e93">Federate</text>
+    </g>
+  </g>
+  
+  <!-- URL -->
+  <text x="600" y="600" font-family="Inter, -apple-system, sans-serif" font-size="18" font-weight="500" fill="#3D9970" text-anchor="middle">mxkeys.org</text>
+</svg>

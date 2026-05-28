@@ -1,0 +1,168 @@
+# MXKeys Configuration Example
+# Copy to /etc/mxkeys/config.yaml or config.yaml in working directory
+
+server:
+  name: mxkeys.example.org
+  port: 8448
+  bind_address: "0.0.0.0"
+  # Graceful shutdown tuning. Both are Go-style durations (e.g. "45s", "2m").
+  # Defaults: shutdown_timeout=30s, predrain_delay=5s.
+  # predrain_delay is the pause after /_mxkeys/readyz starts returning
+  # 503 but before HTTP connections are drained, giving upstream load
+  # balancers time to propagate the "draining" state.
+  shutdown_timeout: 30s
+  predrain_delay: 5s
+
+database:
+  url: postgres://mxkeys:password@localhost/mxkeys?sslmode=disable
+  max_connections: 10
+  max_idle_connections: 2
+
+logging:
+  level: info    # debug, info, warn, error
+  format: text   # text, json
+
+keys:
+  storage_path: /var/lib/mxkeys/keys
+  validity_hours: 24
+  cache_ttl_hours: 1
+  fetch_timeout_s: 30
+  cleanup_hours: 6
+  # At-rest encryption for the signing key.
+  #
+  # Set passphrase_env to the name of an environment variable that holds
+  # the encryption passphrase. When set, the key is stored as an
+  # AES-256-GCM envelope (PBKDF2-HMAC-SHA256, 600k iterations) at
+  # <storage_path>/mxkeys_ed25519.key.enc. When left empty (the default)
+  # the key is stored as plaintext at 0600 for backward compatibility
+  # with pre-encryption installs.
+  #
+  # A legacy plaintext key is transparently upgraded on first start
+  # once this field is configured; the old file is removed after the
+  # encrypted copy is durable.
+  encryption:
+    passphrase_env: ""    # e.g. "MXKEYS_KEY_PASSPHRASE"
+
+trusted_servers:
+  fallback:
+    - matrix.org
+
+rate_limit:
+  requests_per_second: 50
+  burst: 100
+  query_per_second: 10
+  query_burst: 20
+
+security:
+  max_server_name_length: 255
+  max_servers_per_query: 100
+  max_json_depth: 10
+  max_signatures_per_key: 10
+  require_request_id: false
+  trust_forwarded_headers: false # enable only behind proxies that overwrite X-Forwarded-For / X-Real-IP
+  trusted_proxies: []
+  # admin_access_token gates the admin-only operational endpoints
+  # (/_mxkeys/transparency/*, /_mxkeys/analytics/*, /_mxkeys/cluster/*,
+  # /_mxkeys/policy/*, /_mxkeys/circuits) plus the optional gate on
+  # /_mxkeys/status and /_mxkeys/metrics. Leave empty to keep those
+  # routes unregistered. This is a plain shared secret; it is not a
+  # product tier.
+  admin_access_token: ""
+  # trusted_proxies:
+  #   Configure every trusted hop so MXKeys can derive the rightmost untrusted client IP.
+  #   Upstream proxies must scrub/append forwarded headers instead of passing client-supplied chains through unchanged.
+  #   - 127.0.0.1/32
+  #   - 10.0.0.0/8
+  # admin_access_token: "replace-with-long-random-token"
+
+# Optional: Pin trusted notary keys for fallback servers.
+# Leave the list empty until you have real pinned keys. Validation
+# refuses placeholder strings and non-ed25519 lengths at startup.
+trusted_notaries: []
+
+# Example of a real pinned entry once you have the key material:
+#
+# trusted_notaries:
+#   - server_name: matrix.org
+#     key_id: ed25519:auto
+#     public_key: "Nzxs2Mh0Fb+Uhv3uTE47iWBoCGY8oSa11BZX9S7W6RE"   # 32-byte ed25519 public key, base64
+
+
+trust_policy:
+  enabled: false
+  deny_list: []
+  allow_list: []
+  require_notary_signatures: 0
+  max_key_age_hours: 0
+  require_well_known: false
+  require_valid_tls: false
+  block_private_ips: true
+
+transparency:
+  enabled: false
+  log_all_keys: true
+  log_key_changes: true
+  log_anomalies: true
+  retention_days: 365
+  table_name: key_transparency_log
+
+cluster:
+  enabled: false
+  node_id: ""
+  bind_address: "0.0.0.0"
+  bind_port: 7946
+  advertise_address: "notary-node-a.internal"
+  advertise_port: 7946
+  seeds: []
+  consensus_mode: crdt # crdt | raft
+  sync_interval: 5
+  # Required when cluster.enabled=true. Must be at least 32 characters.
+  # Placeholder values (e.g. "replace-with-long-random-secret") are rejected.
+  shared_secret: "CHANGE-TO-A-LONG-RANDOM-SECRET-GTE-32-CHARS"
+  # Raft persistence. Directory created with 0700 if missing.
+  raft_state_dir: "/var/lib/mxkeys/raft"
+  raft_sync_on_append: true
+
+  # Raft log compaction tuning. Leave empty to keep the built-in
+  # defaults (30s interval, 1024 entries). Tune up for
+  # write-heavy clusters (compact less often), tune down for
+  # recovery-sensitive deployments (keep the WAL shorter).
+  # raft_compaction_interval must be >= 1s when set.
+  # raft_compaction_interval: "30s"
+  # raft_compaction_log_threshold: 1024
+
+  # Transport-level TLS for cluster traffic (both CRDT and Raft).
+  # Strongly recommended in production. When enabled the three file
+  # paths (cert/key/ca) are required and verified at startup.
+  # Set require_client_cert=true for mutual TLS (each node must
+  # present a certificate signed by the same CA). See
+  # docs/runbook/cluster-tls-rotation.md for key rotation.
+  tls:
+    enabled: false
+    cert_file: "/etc/mxkeys/cluster.crt"
+    key_file: "/etc/mxkeys/cluster.key"
+    ca_file: "/etc/mxkeys/cluster-ca.crt"
+    require_client_cert: true
+    min_version: "1.3"     # only "1.3" is accepted; the field stays for forward compatibility
+    server_name: ""        # optional SNI pin
+
+# Optional GET /_mxkeys/server-info enrichment endpoint. When
+# enabled the notary serves DNS + federation reachability +
+# optional WHOIS metadata for any Matrix server_name the visitor
+# queries. Disabled by default so the base binary runs without
+# outbound TCP 43 (WHOIS).
+server_info:
+  enabled: false
+  # How long a successful enrichment is cached before re-fetch.
+  # Must be >= 1m when set explicitly; zero selects the default
+  # (6h).
+  cache_ttl: "6h"
+  # Per-request overall budget. DNS / reachability / WHOIS run
+  # in parallel under this cap and the handler returns whatever
+  # succeeded. Must be >= 1s when set explicitly; zero selects
+  # the default (5s).
+  request_timeout: "5s"
+  # WHOIS is opt-in because it requires outbound TCP 43 and
+  # depends on per-TLD rate limits that the operator is
+  # responsible for respecting.
+  whois_enabled: false

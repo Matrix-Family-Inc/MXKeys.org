@@ -1,0 +1,12 @@
+# Project: MXKeys
+# Company: Matrix Family Inc. (https://matrix.family)
+# Maintainer: Brabus
+# Contact: dev@matrix.family
+
+User-agent: *
+Allow: /
+
+Sitemap: __MXKEYS_SITE_URL__/sitemap.xml
+
+Disallow: /src/
+Disallow: /node_modules/
