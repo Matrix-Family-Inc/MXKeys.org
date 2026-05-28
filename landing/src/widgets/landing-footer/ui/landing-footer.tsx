@@ -8,6 +8,7 @@
  */
 
 import { useTranslation } from 'react-i18next';
+import { Github } from 'lucide-react';
 import { Logo } from '@/shared/ui';
 import { MATRIX_CONTACTS, URLS, getLinkProps } from '@/shared/config/urls';
 
@@ -67,17 +68,18 @@ export function LandingFooter() {
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-border">
-          <p className="text-sm text-text-muted text-center">
-            {t('footer.copyrightPrefix')}
-            <a
-              href={URLS.matrixFamily}
-              {...getLinkProps(URLS.matrixFamily)}
-              className="text-text-muted underline decoration-primary/50 underline-offset-2 hover:text-primary"
-            >
-              {t('footer.copyrightLink')}
-            </a>
-            {t('footer.copyrightSuffix')}
+        <div className="mt-12 pt-8 border-t border-border flex flex-col items-center gap-4">
+          <a
+            href="https://github.com/Matrix-Family-Inc"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-text-muted hover:text-primary transition-colors"
+          >
+            <Github size={20} />
+            <span className="text-sm">github.com/Matrix-Family-Inc</span>
+          </a>
+          <p className="text-sm text-text-muted">
+            © {new Date().getFullYear()} Matrix Family Inc. All rights reserved.
           </p>
         </div>
       </div>
