@@ -129,9 +129,11 @@ Moving pieces:
 Regression guard: unit tests under `notary_raw_response_test.go`
 cover origin signatures surviving `old_verify_keys` being
 omitted / empty / populated, notary-signature validity, and
-bad-input rejection. End-to-end proof lives in the 3-node smoke
-test against live Synapse A/B in `test_servers/` (see the
-`federation_edge_test` harness under `mfos.sdk`).
+bad-input rejection. End-to-end proof lives in the federation smoke
+test against the live Synapse pair (see the `federation_edge_test`
+harness under `mfos.sdk`). The three-node raft smoke cluster that
+previously ran this on `test_servers/` has been decommissioned;
+production `mxkeys.org` runs as a single node today.
 
 ## Server Info Enrichment (`/_mxkeys/server-info`)
 
@@ -192,10 +194,13 @@ See ADR-0007.
 
 ## Cluster Model
 
-See ADR-0001.
+See ADR-0001. Production `mxkeys.org` currently runs as a single node
+(no cluster); the modes below apply when clustering is enabled, which
+is planned for a later project phase.
 
-- `crdt` (default): eventually consistent replication, LWW by timestamp.
-- `raft` (production): quorum commit with persistent WAL + snapshots under `cluster.raft_state_dir`.
+- `crdt`: eventually consistent replication, LWW by timestamp.
+- `raft`: quorum commit with persistent WAL + snapshots under
+  `cluster.raft_state_dir` (recommended mode once clustered).
 
 ### Cluster Transport Invariants
 
