@@ -1,13 +1,15 @@
-/*
- * Project: MXKeys
- * Company: Matrix Family Inc. (https://matrix.family)
- * Maintainer: Brabus
- * Contact: dev@matrix.family
- * Date: Mon Apr 20 2026 UTC
- * Status: Created
- */
-
 //go:build !linux
+
+/*
+ * Project: MXKeys (mxkeys.org)
+ * Company: Matrix Family Inc. (https://matrix.family)
+ * Owner: Matrix Family Inc.
+ * Contact: dev@matrix.family
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
+ * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Status: Updated
+ */
 
 package keyprovider
 

@@ -1,8 +1,10 @@
-Project: MXKeys
+Project: MXKeys (mxkeys.org)
 Company: Matrix Family Inc. (https://matrix.family)
-Maintainer: Brabus
+Owner: Matrix Family Inc.
 Contact: dev@matrix.family
-Date: Fri Apr 24 2026 UTC
+Support: support@matrix.family
+Matrix: @support:matrix.family
+Date: Mon 22 Jun 2026 00:51:51 UTC
 Status: Updated
 
 # ADR-0007: Signing Key Provider Abstraction
@@ -14,13 +16,6 @@ Accepted.
 ## Visibility
 
 Public.
-
-## Ecosystem Scope
-
-This ADR is the MXKeys implementation of
-`../../../ecosystem-docs/adr/ECO-0008-signing-key-lifecycle.md`. The ecosystem
-ADR owns signing-key lifecycle invariants; this file owns MXKeys provider
-interfaces, at-rest protection, and operator-facing backend choices.
 
 ## Context
 
@@ -54,15 +49,10 @@ type Provider interface {
 
 Implementations:
 
-- `FileProvider`. Disk storage. Generates on first call. Enforces
-  0700 on the directory and 0600 on the key file at every open so
-  an out-of-band `chmod` cannot weaken posture silently. When a
-  passphrase is configured the key is stored as an `MXKENC01`
-  envelope (AES-256-GCM, PBKDF2-HMAC-SHA256 at 600 000
-  iterations). A legacy plaintext key is upgraded in place on the
-  next load; the plaintext file is then removed. Plaintext mode
-  refuses to read an existing `.enc` file rather than silently
-  ignoring it.
+- `FileProvider`. Disk storage. Generates on first call, enforces
+  owner-only permissions, and can store the key encrypted at rest
+  when a passphrase is configured. Legacy plaintext keys are upgraded
+  in place on the next load.
 - `EnvProvider`. Reads a base64-encoded seed or full key from an
   environment variable. No generation; the operator provisions
   the key.
@@ -90,8 +80,6 @@ with embedders that have not migrated. Server code uses
   interface and adding a branch in `keyprovider.New`.
 - Operators running with `file` without a passphrase see the same
   on-disk layout as prior versions.
-- Operators who set a passphrase get AES-256-GCM at rest with
-  PBKDF2-HMAC-SHA256 at the OWASP-recommended iteration count.
 - Backup and rotation procedures operate at the provider
   boundary. See `docs/runbook/key-rotation.md` and
   `docs/runbook/backup-restore.md`.
@@ -107,17 +95,9 @@ with embedders that have not migrated. Server code uses
 
 ## References
 
-- ECO-0008 Signing Key Lifecycle Policy - shared lifecycle invariants for
-  active, superseded, and rotated signing keys.
 - `internal/keys/keyprovider/` - provider interface and concrete signing-key
   backends.
-- `internal/keys/keyprovider/file_crypto.go` - encrypted file-provider envelope
-  implementation.
 - `docs/runbook/key-rotation.md` - operator procedure for replacing signing
   keys.
 - `docs/runbook/backup-restore.md` - backup and restore procedure for key
   material and service state.
-
-## Alternatives
-
-None recorded at authoring time. Any future revision that modifies this decision must list the rejected options explicitly.

@@ -1,3 +1,12 @@
+Project: MXKeys (mxkeys.org)
+Company: Matrix Family Inc. (https://matrix.family)
+Owner: Matrix Family Inc.
+Contact: dev@matrix.family
+Support: support@matrix.family
+Matrix: @support:matrix.family
+Date: Mon 22 Jun 2026 00:51:51 UTC
+Status: Updated
+
 # MXKeys
 
 ![Go](https://img.shields.io/badge/go-1.26+-blue)
@@ -7,6 +16,9 @@
 ![Dependencies](https://img.shields.io/badge/go%20deps-4-brightgreen)
 
 **Matrix Federation Key Notary**
+
+Current release line: `v1.0.1` (cache-read, server-info, CI, and
+release-hygiene hardening).
 
 MXKeys verifies remote Matrix server keys, adds a perspective signature,
 and caches verified responses in PostgreSQL and memory. The default
@@ -182,6 +194,7 @@ This script mirrors the PR gate workflow: unit + race + tagged integration tests
 ## Documentation
 
 - Start here: `docs/README.md`
+- Matrix Family standardization: `docs/matrix-family-standardization.md`
 - Public contract: `docs/federation-behavior.md`
 - Architecture: `ARCHITECTURE.md`
 - Deployment: `docs/deployment.md`
@@ -189,6 +202,33 @@ This script mirrors the PR gate workflow: unit + race + tagged integration tests
 - Security: `docs/threat-model.md`
 - Runbooks: `docs/runbook/`
 - ADRs: `docs/adr/`
+
+## Source repository
+
+Matrix Family Git servers use **SSH port 42224 only** (never port 22).
+
+```text
+Web:  https://git.matrix.family/dev/MXKeys.org
+SSH:  git@git.matrix.family:dev/MXKeys.org.git
+Port: 42224
+```
+
+```bash
+git clone ssh://git@git.matrix.family:42224/dev/MXKeys.org.git
+```
+
+`~/.ssh/config`:
+
+```text
+Host git.matrix.family
+    HostName git.matrix.family
+    Port 42224
+    User git
+    IdentityFile ~/.ssh/<deploy_key>
+    IdentitiesOnly yes
+```
+
+Production checkout on `mxkeys.org`: `/opt/MXKeys.org`. Landing build served from `/var/www/mxkeys.org/`.
 
 ---
 
@@ -203,13 +243,14 @@ Apache License 2.0. See `LICENSE` and `SECURITY.md`.
 The `landing/` tree is an operator-forkable marketing page for a deployed
 notary. Feature-Sliced Design with Zustand for UI state, Zod for env
 validation, TanStack Router/Query ready for future pages, lazy-loaded i18n
-(22 locales, ~7-12 KB each), and Sentry opt-in via `VITE_SENTRY_DSN`.
+(20 locales, ~7-12 KB each), and Sentry opt-in via `VITE_SENTRY_DSN`.
 Set `VITE_SITE_URL` to rebrand without file edits.
 
 Supported languages: Arabic, Bengali, Chinese (Simplified), Dutch, English,
 French, German, Hebrew, Hindi, Indonesian, Italian, Japanese, Korean,
-Polish, Portuguese, Russian, Spanish, Thai, Turkish, Ukrainian, Urdu,
-Vietnamese. RTL languages (Arabic, Hebrew, Urdu) have automatic layout
+Polish, Portuguese, Spanish, Thai, Turkish, Urdu, Vietnamese. Cyrillic
+locales (Russian, Ukrainian) were removed per Matrix Family English-only
+source policy; RTL languages (Arabic, Hebrew, Urdu) keep automatic layout
 direction.
 
 See `docs/adr/0009-landing-fsd-stack.md` for stack rationale.
@@ -224,7 +265,8 @@ Conduit, MXCore). Operators deploy their own branded notary without
 coupling to any specific homeserver or ecosystem.
 
 Company: Matrix Family Inc. (https://matrix.family)
-Maintainer: Brabus
 Contact: dev@matrix.family
+Support: support@matrix.family
+Matrix: @support:matrix.family
 
 Copyright (c) 2026 Matrix Family Inc. All rights reserved.

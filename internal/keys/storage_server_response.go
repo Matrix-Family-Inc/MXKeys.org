@@ -1,10 +1,12 @@
 /*
- * Project: MXKeys
+ * Project: MXKeys (mxkeys.org)
  * Company: Matrix Family Inc. (https://matrix.family)
- * Maintainer: Brabus
+ * Owner: Matrix Family Inc.
  * Contact: dev@matrix.family
- * Date: Tue Apr 21 2026 UTC
- * Status: Created
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
+ * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Status: Updated
  */
 
 // Raw-preserving server_key_responses persistence. Splitting this out
@@ -58,7 +60,7 @@ func (s *Storage) StoreServerResponse(serverName string, response *ServerKeysRes
 // Raw == nil, and callers fall back to the struct-based pipeline.
 func (s *Storage) GetServerResponse(serverName string) (*ServerKeysResponse, error) {
 	var responseJSON []byte
-	var rawResponse sql.RawBytes
+	var rawResponse []byte
 	var validUntil time.Time
 
 	err := s.db.QueryRow(`

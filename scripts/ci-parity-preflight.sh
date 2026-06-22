@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Project: MXKeys
+# Project: MXKeys (mxkeys.org)
 # Company: Matrix Family Inc. (https://matrix.family)
-# Maintainer: Brabus
+# Owner: Matrix Family Inc.
 # Contact: dev@matrix.family
-# Date: Mon Apr 20 2026 UTC
+# Support: support@matrix.family
+# Matrix: @support:matrix.family
+# Date: Mon 22 Jun 2026 00:50:40 UTC
 # Status: Updated
-#
 # Locally reproduces every check that the PR gate runs on GitHub Actions.
 # Keep this script in lock-step with .github/workflows/pr-gate.yml; when a
 # new job is added to CI it must be added here too (and referenced by

@@ -1,10 +1,12 @@
 /*
- * Project: MXKeys
+ * Project: MXKeys (mxkeys.org)
  * Company: Matrix Family Inc. (https://matrix.family)
- * Maintainer: Brabus
+ * Owner: Matrix Family Inc.
  * Contact: dev@matrix.family
- * Date: Tue Apr 21 2026 UTC
- * Status: Created
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
+ * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Status: Updated
  */
 
 package raft
@@ -119,11 +121,6 @@ func LoadSnapshotReader(dir string) (*os.File, SnapshotMeta, error) {
 	}
 	return f, meta, nil
 }
-
-// streamBufSize is the chunk used while streaming a snapshot file
-// through a CRC hasher. 64 KiB matches typical OS page-cache read
-// granularity and keeps the hasher's working set in L1.
-const streamBufSize = 64 * 1024
 
 // verifySnapshotPayloadCRC reads exactly size bytes from r through
 // a Castagnoli hasher and compares the result against expected.

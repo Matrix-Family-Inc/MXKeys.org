@@ -1,15 +1,18 @@
 /*
- * Project: MXKeys
+ * Project: MXKeys (mxkeys.org)
  * Company: Matrix Family Inc. (https://matrix.family)
- * Maintainer: Brabus
+ * Owner: Matrix Family Inc.
  * Contact: dev@matrix.family
- * Date: Wed Apr 22 2026 UTC
- * Status: Created
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
+ * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Status: Updated
  */
 
 package server
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"net"
@@ -97,4 +100,59 @@ func TestClassifyReachabilityError(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIsPublicIP(t *testing.T) {
+	cases := []struct {
+		name string
+		ip   string
+		want bool
+	}{
+		{"public v4", "8.8.8.8", true},
+		{"public v6", "2001:4860:4860::8888", true},
+		{"loopback", "127.0.0.1", false},
+		{"private", "10.0.0.1", false},
+		{"link local", "169.254.1.1", false},
+		{"multicast", "224.0.0.1", false},
+		{"unspecified", "0.0.0.0", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isPublicIP(net.ParseIP(tc.ip)); got != tc.want {
+				t.Fatalf("isPublicIP(%s) = %v, want %v", tc.ip, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFirstPublicIPLiteral(t *testing.T) {
+	if got, err := firstPublicIP(context.Background(), "8.8.8.8"); err != nil || got.String() != "8.8.8.8" {
+		t.Fatalf("public literal = %v, %v", got, err)
+	}
+	if _, err := firstPublicIP(context.Background(), "127.0.0.1"); err == nil {
+		t.Fatal("loopback literal must be rejected")
+	}
+}
+
+func TestDialPublicOnlyRejectsPrivateLiteral(t *testing.T) {
+	if _, err := dialPublicOnly(context.Background(), "tcp", "127.0.0.1:443"); err == nil {
+		t.Fatal("private well-known dial target must be rejected")
+	}
+}
+
+func TestFetchWellKnownRejectsLocalhost(t *testing.T) {
+	if got, ok := fetchWellKnown(context.Background(), "127.0.0.1"); ok || got != "" {
+		t.Fatalf("localhost well-known fetch = (%q, %v), want rejection", got, ok)
+	}
+}
+
+func TestMetricsRecordersDoNotPanic(t *testing.T) {
+	RecordCacheHit("memory")
+	RecordCacheMiss("postgres")
+	RecordKeyFetch("ok", "direct", 0.01)
+	SetCachedKeys("memory", 3)
+	RecordUpstreamFailure("timeout")
+	RecordRefetch("stale")
+	RecordNegativeCacheHit()
+	RecordNegativeCacheWrite()
 }

@@ -1,10 +1,12 @@
 /*
- * Project: MXKeys
+ * Project: MXKeys (mxkeys.org)
  * Company: Matrix Family Inc. (https://matrix.family)
- * Maintainer: Brabus
+ * Owner: Matrix Family Inc.
  * Contact: dev@matrix.family
- * Date: Mon Apr 20 2026 UTC
- * Status: Created
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
+ * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Status: Updated
  */
 
 // Package walupgrade converts a legacy MXKS_WAL_v2 file to the
@@ -37,12 +39,12 @@ import (
 )
 
 const (
-	walFileName  = "raft.wal"
+	walFileName       = "raft.wal"
 	walV2BackupSuffix = ".v2-backup"
-	walMagicSize = 12
-	walV2HeaderSize = 8  // len(4) + crc(4)
-	walV3HeaderSize = 40 // len(4) + crc(4) + hmac(32)
-	walMaxRecord    = 8 << 20
+	walMagicSize      = 12
+	walV2HeaderSize   = 8  // len(4) + crc(4)
+	walV3HeaderSize   = 40 // len(4) + crc(4) + hmac(32)
+	walMaxRecord      = 8 << 20
 )
 
 var (

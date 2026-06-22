@@ -1,9 +1,11 @@
-Project: MXKeys
+Project: MXKeys (mxkeys.org)
 Company: Matrix Family Inc. (https://matrix.family)
-Maintainer: Brabus
+Owner: Matrix Family Inc.
 Contact: dev@matrix.family
-Date: Mon Mar 16 2026 UTC
-Status: Created
+Support: support@matrix.family
+Matrix: @support:matrix.family
+Date: Mon 22 Jun 2026 00:51:51 UTC
+Status: Updated
 
 # ADR-0003: PostgreSQL as Persistent Key Cache
 
@@ -46,7 +48,3 @@ Use PostgreSQL as persistent cache/storage for verified federation key responses
 - `internal/server/handlers.go` - HTTP handlers that expose cached notary
   responses.
 - `docs/deployment.md` - operator database configuration guidance.
-
-## Alternatives
-
-None recorded at authoring time. Any future revision that modifies this decision must list the rejected options explicitly.

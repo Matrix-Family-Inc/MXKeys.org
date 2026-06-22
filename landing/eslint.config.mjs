@@ -1,9 +1,11 @@
 /*
- * Project: MXKeys
+ * Project: MXKeys (mxkeys.org)
  * Company: Matrix Family Inc. (https://matrix.family)
- * Maintainer: Brabus
+ * Owner: Matrix Family Inc.
  * Contact: dev@matrix.family
- * Date: Mon Apr 20 2026 UTC
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
+ * Date: Mon 22 Jun 2026 00:50:40 UTC
  * Status: Updated
  */
 
@@ -34,7 +36,7 @@ const fsdElements = [
 
 export default tseslint.config(
   {
-    ignores: ['dist', 'node_modules', 'playwright-report', 'test-results', 'e2e'],
+    ignores: ['dist', 'storybook-static', 'node_modules', 'playwright-report', 'test-results', 'e2e'],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended, jsxA11y.flatConfigs.recommended],

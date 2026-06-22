@@ -1,9 +1,11 @@
-Project: MXKeys
+Project: MXKeys (mxkeys.org)
 Company: Matrix Family Inc. (https://matrix.family)
-Maintainer: Brabus
+Owner: Matrix Family Inc.
 Contact: dev@matrix.family
-Date: Wed Apr 22 2026 UTC
-Status: Created
+Support: support@matrix.family
+Matrix: @support:matrix.family
+Date: Mon 22 Jun 2026 00:51:51 UTC
+Status: Updated
 
 # Runbook — production deploy (mxkeys.org)
 
@@ -20,11 +22,12 @@ to `127.0.0.1`.
 
 | Artefact          | Canonical path                               |
 |-------------------|----------------------------------------------|
+| Source tree (git) | `/opt/MXKeys.org/`                           |
 | Go binary         | `/opt/mxkeys/mxkeys`                         |
 | Go config         | `/opt/mxkeys/config.yaml`                    |
 | Signing keys      | `/var/lib/mxkeys/keys/`                      |
-| Landing build     | `/opt/MXKeys.org/` (nginx `root`)            |
-| Landing snapshots | `/opt/MXKeys.org.prev.<timestamp>` (rollback)|
+| Landing build     | `/var/www/mxkeys.org/` (nginx `root`)        |
+| Landing snapshots | `/var/www/mxkeys.org.prev.<timestamp>` (rollback)|
 | Archive bin/tgz   | `/opt/deploy-backups/`                       |
 | systemd unit      | `/etc/systemd/system/mxkeys.service`         |
 | nginx vhost       | `/etc/nginx/sites-enabled/mxkeys.org`        |
@@ -33,7 +36,7 @@ to `127.0.0.1`.
 
 nginx vhost contract (summary):
 
-- `root /opt/MXKeys.org; index index.html;` serves landing statics.
+- `root /var/www/mxkeys.org; index index.html;` serves landing statics.
 - `location /` carries an SPA `try_files $uri $uri/ /index.html`.
 - `location /_matrix/key/`, `/_matrix/federation/v1/version`,
   `/_mxkeys/` each `proxy_pass http://127.0.0.1:8448;` to the Go
@@ -45,11 +48,14 @@ nginx vhost contract (summary):
 
 On the build host (wherever this runbook is executed from):
 
-- SSH config alias with `root@82.21.114.30` reachable under the
-  corporate key (see `matrix-family-info.md`).
+- SSH to `root@82.21.114.30` via the corporate deploy key.
+- Git over SSH uses **port 42224** on `git.matrix.family` (never port 22).
+  Production source tree: `/opt/MXKeys.org`.
+  Clone URL: `ssh://git@git.matrix.family:42224/dev/MXKeys.org.git`.
+  See `docs/matrix-family-standardization.md` for `~/.ssh/config`.
 - `rsync`, `scp`, `curl`, `sha256sum`, `file`, `bash` on PATH.
 - Go toolchain for binary builds; Bun for landing builds.
-- Working tree at the tag you intend to deploy (e.g. `git checkout v1.0.0`).
+- Working tree at the tag you intend to deploy (e.g. `git checkout v1.0.1`).
 
 ## 1) Deploy the Go binary
 
@@ -106,12 +112,12 @@ The script refuses to return success unless:
 - The main bundle does contain the expected `v${VERSION}` marker.
 
 Rollback: the script wrote a snapshot at
-`/opt/MXKeys.org.prev.<timestamp>`. Restore with:
+`/var/www/mxkeys.org.prev.<timestamp>`. Restore with:
 
 ```bash
 ssh root@82.21.114.30 '
-    rm -rf /opt/MXKeys.org &&
-    mv /opt/MXKeys.org.prev.<timestamp> /opt/MXKeys.org
+    rm -rf /var/www/mxkeys.org &&
+    mv /var/www/mxkeys.org.prev.<timestamp> /var/www/mxkeys.org
 '
 ```
 
@@ -159,12 +165,13 @@ should move snapshots older than 30 days into
 
 ```bash
 ssh root@82.21.114.30 '
-    for d in /opt/MXKeys.org.prev.* ; do
+    for d in /var/www/mxkeys.org.prev.* ; do
         [ -d "$d" ] || continue
         age=$(( ( $(date +%s) - $(stat -c %Y "$d") ) / 86400 ))
         if [ "$age" -gt 30 ]; then
             base=$(basename "$d")
-            tar czf "/opt/deploy-backups/${base}.tgz" -C /opt "$base"
+            mkdir -p /opt/deploy-backups
+            tar czf "/opt/deploy-backups/${base}.tgz" -C /var/www "$base"
             rm -rf "$d"
         fi
     done

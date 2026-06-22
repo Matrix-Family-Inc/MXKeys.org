@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Project: MXKeys
+# Project: MXKeys (mxkeys.org)
 # Company: Matrix Family Inc. (https://matrix.family)
-# Maintainer: Brabus
+# Owner: Matrix Family Inc.
 # Contact: dev@matrix.family
-# Date: Mon Apr 20 2026 UTC
-# Status: Created
-#
+# Support: support@matrix.family
+# Matrix: @support:matrix.family
+# Date: Mon 22 Jun 2026 00:50:40 UTC
+# Status: Updated
 # Coverage gate for CI. Runs the unit suite with -coverprofile and fails when:
 #   * total coverage drops below COVERAGE_TOTAL_MIN percent
 #   * any package with an explicit floor in COVERAGE_PACKAGE_FLOORS drops

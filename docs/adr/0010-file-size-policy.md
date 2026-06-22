@@ -1,8 +1,10 @@
-Project: MXKeys
+Project: MXKeys (mxkeys.org)
 Company: Matrix Family Inc. (https://matrix.family)
-Maintainer: Brabus
+Owner: Matrix Family Inc.
 Contact: dev@matrix.family
-Date: Fri Apr 24 2026 UTC
+Support: support@matrix.family
+Matrix: @support:matrix.family
+Date: Mon 22 Jun 2026 00:51:51 UTC
 Status: Updated
 
 # ADR-0010: File Size Policy
@@ -15,30 +17,13 @@ Accepted.
 
 Public.
 
-## Ecosystem Scope
-
-This ADR applies
-`../../../ecosystem-docs/adr/ECO-0006-file-size-policy.md` to MXKeys. The
-ecosystem ADR owns the cross-project cohesion policy; this file owns the
-MXKeys-specific warning and failure thresholds.
-
 ## Context
 
-The organization-wide rule calls for files of "250 - 300 lines". An
-earlier pass across this repository treated the bound as strict and
-split cohesive files to fit.
-
-Two costs of the strict reading were observed in review:
-
-1. Single algorithms (Raft election, canonical JSON, WAL read path)
-   were spread across six or seven files. Following a flow cost
-   extra file jumps; a single-change refactor touched many files.
-2. Test files that benefit from long case tables or golden vectors
-   were cut at arbitrary line counts, which hurt readability.
-
-The intent of the line budget is one responsibility per file with a
-reading cost that fits in a review window. It is a target, not a
-hard budget.
+The organization-wide rule calls for files of "250 - 300 lines".
+Treating that bound as a hard cap over-split cohesive algorithms and
+test case tables. The line budget is a reviewability target: one
+responsibility per file, with a hard stop only when a file accumulates
+unrelated concerns.
 
 ## Decision
 
@@ -60,9 +45,6 @@ hard budget.
   to alternate between.
 - The 400-line ceiling rejects files that accumulate unrelated
   responsibilities while leaving room for coherent test tables.
-- Files already split below 300 lines in earlier passes stay as
-  they are. They are recombined only if a reader finds the split
-  confusing.
 - Tests are subject to the same policy. A coherent 400-line case
   table is acceptable.
 
@@ -78,11 +60,5 @@ hard budget.
 
 ## References
 
-- ECO-0006 File Size and Cohesion Policy - canonical ecosystem cohesion policy.
-- Organization user-rule - source guideline for the 250 to 300 line target.
 - `scripts/file-size-lint.sh` - MXKeys local line-count enforcement.
 - `.github/workflows/pr-gate.yml` - CI job that runs the file-size check.
-
-## Alternatives
-
-None recorded at authoring time. Any future revision that modifies this decision must list the rejected options explicitly.

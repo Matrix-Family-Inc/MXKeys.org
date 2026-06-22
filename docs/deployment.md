@@ -1,8 +1,10 @@
-Project: MXKeys
+Project: MXKeys (mxkeys.org)
 Company: Matrix Family Inc. (https://matrix.family)
-Maintainer: Brabus
+Owner: Matrix Family Inc.
 Contact: dev@matrix.family
-Date: Mon Apr 20 2026 UTC
+Support: support@matrix.family
+Matrix: @support:matrix.family
+Date: Mon 22 Jun 2026 00:51:51 UTC
 Status: Updated
 
 # MXKeys Deployment Guide
@@ -161,7 +163,10 @@ Cluster-to-cluster traffic is authenticated with HMAC-SHA256 over
 canonical JSON of the message fields; replay protection caches MAC
 signatures for the 5-minute skew window.
 
-Transport-level encryption is **not** built in. Required deployment patterns:
+Cluster TLS is opt-in and covers both CRDT and Raft transport when
+`cluster.tls.enabled=true`. Production clusters should enable TLS 1.3
+with mutual authentication. If TLS is disabled, use one of these
+network controls:
 
 - Dedicated private VLAN or VPN between cluster nodes (strong recommendation).
 - WireGuard / Tailscale overlay for multi-datacenter clusters.

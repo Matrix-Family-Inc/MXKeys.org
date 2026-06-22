@@ -1,5 +1,6 @@
 node_modules/
 dist/
+storybook-static/
 .cursor/
 *.log
 .DS_Store
@@ -18,6 +19,10 @@ Thumbs.db
 config.yaml
 .env
 .env.*
+SECRET*
+decommission-snapshot-*/
+*.pgc
+*.zst
 *.key
 *.pem
 *.crt

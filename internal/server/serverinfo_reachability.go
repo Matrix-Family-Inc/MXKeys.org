@@ -1,10 +1,12 @@
 /*
- * Project: MXKeys
+ * Project: MXKeys (mxkeys.org)
  * Company: Matrix Family Inc. (https://matrix.family)
- * Maintainer: Brabus
+ * Owner: Matrix Family Inc.
  * Contact: dev@matrix.family
- * Date: Wed Apr 22 2026 UTC
- * Status: Created
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
+ * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Status: Updated
  */
 
 // DNS / well-known / SRV / TLS reachability probe for
@@ -104,12 +106,18 @@ func splitHostPort(serverName string) (string, int) {
 func fetchWellKnown(ctx context.Context, host string) (string, bool) {
 	ctx, cancel := context.WithTimeout(ctx, serverInfoWellKnownTimeout)
 	defer cancel()
+
+	client := guardedWellKnownClient()
+	url := "https://" + host + "/.well-known/matrix/server"
+	// #nosec G704 -- /_mxkeys/server-info intentionally probes Matrix well-known;
+	// the client below blocks non-public dial targets and redirects.
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		"https://"+host+"/.well-known/matrix/server", nil)
+		url, nil)
 	if err != nil {
 		return "", false
 	}
-	resp, err := http.DefaultClient.Do(req)
+	// #nosec G704 -- request uses guardedWellKnownClient, not http.DefaultClient.
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", false
 	}
@@ -132,6 +140,64 @@ func fetchWellKnown(ctx context.Context, host string) (string, bool) {
 		return "", false
 	}
 	return wk.Server, true
+}
+
+func guardedWellKnownClient() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	transport.DialContext = dialPublicOnly
+	transport.TLSHandshakeTimeout = serverInfoWellKnownTimeout
+	transport.ResponseHeaderTimeout = serverInfoWellKnownTimeout
+	return &http.Client{
+		Transport: transport,
+		Timeout:   serverInfoWellKnownTimeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
+func dialPublicOnly(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+	ip, err := firstPublicIP(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	var d net.Dialer
+	return d.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+}
+
+func firstPublicIP(ctx context.Context, host string) (net.IP, error) {
+	if ip := net.ParseIP(host); ip != nil {
+		if isPublicIP(ip) {
+			return ip, nil
+		}
+		return nil, errors.New("server-info: non-public well-known target")
+	}
+	var r net.Resolver
+	addrs, err := r.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	for _, addr := range addrs {
+		if isPublicIP(addr.IP) {
+			return addr.IP, nil
+		}
+	}
+	return nil, errors.New("server-info: no public well-known target")
+}
+
+func isPublicIP(ip net.IP) bool {
+	return ip != nil &&
+		!ip.IsUnspecified() &&
+		!ip.IsLoopback() &&
+		!ip.IsPrivate() &&
+		!ip.IsLinkLocalUnicast() &&
+		!ip.IsLinkLocalMulticast() &&
+		!ip.IsMulticast()
 }
 
 // lookupSRV returns `_matrix-fed._tcp.<host>` records first and
