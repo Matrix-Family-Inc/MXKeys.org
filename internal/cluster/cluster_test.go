@@ -1,3 +1,14 @@
+/*
+ * Project: MXKeys (mxkeys.org)
+ * Company: Matrix Family Inc. (https://matrix.family)
+ * Owner: Matrix Family Inc.
+ * Contact: dev@matrix.family
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
+ * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Status: Updated
+ */
+
 package cluster
 
 import (
@@ -319,12 +330,8 @@ func TestBroadcastKeyUpdateDisabledIsNoop(t *testing.T) {
 	}
 }
 
-// TestBroadcastKeyUpdateRaftModeDoesNotBypassConsensus documents the
-// strict-Raft contract: in raft mode BroadcastKeyUpdate must not write
-// into the local LWW cache before Submit succeeds. Only the apply
-// callback (triggered after a committed entry) is allowed to populate
-// c.state.keys. Without a running raft node we cannot observe a
-// committed apply, so the cache must stay empty.
+// TestBroadcastKeyUpdateRaftModeDoesNotBypassConsensus documents the strict-Raft
+// contract: local cache writes happen only from the committed apply callback.
 func TestBroadcastKeyUpdateRaftModeDoesNotBypassConsensus(t *testing.T) {
 	c, err := NewCluster(ClusterConfig{
 		Enabled:       true,

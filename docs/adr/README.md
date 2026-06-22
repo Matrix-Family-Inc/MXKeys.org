@@ -1,8 +1,10 @@
-Project: MXKeys
-Company: Matrix Family Inc.
-Maintainer: Brabus
+Project: MXKeys (mxkeys.org)
+Company: Matrix Family Inc. (https://matrix.family)
+Owner: Matrix Family Inc.
 Contact: dev@matrix.family
-Date: 2026-04-25
+Support: support@matrix.family
+Matrix: @support:matrix.family
+Date: Mon 22 Jun 2026 00:51:51 UTC
 Status: Updated
 
 # Architecture Decision Records (ADR)
@@ -31,28 +33,4 @@ Use zero-padded sequence with short slug:
 
 ## Required Sections
 
-Each ADR should include:
-
-- Title
-- Status
-- Context
-- Decision
-- Consequences
-- Alternatives considered
-- References
-
-## Current ADRs
-
-- `0001-cluster-consensus-modes.md`
-- `0002-zero-dependency-core-packages.md`
-- `0003-postgresql-as-persistent-cache.md`
-- `0004-strict-json-and-matrix-error-contract.md`
-- `0005-core-api-stability-scope.md`
-- `0006-file-header-standard.md` (ecosystem policy mapping; see `../../../ecosystem-docs/adr/ECO-0005-file-header-standard.md`)
-- `0007-signing-key-provider.md`
-- `0008-schema-migrations.md`
-- `0009-landing-fsd-stack.md` (ecosystem frontend policy mapping; see `../../../ecosystem-docs/adr/ECO-0007-frontend-fsd-stack.md`)
-- `0010-file-size-policy.md` (ecosystem policy mapping; see `../../../ecosystem-docs/adr/ECO-0006-file-size-policy.md`)
-
-Ecosystem decisions live in `../../../ecosystem-docs/adr/`. MXKeys ADRs should
-reference ecosystem ADRs instead of duplicating cross-project policy.
+Use `TEMPLATE.md` for new records.

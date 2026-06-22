@@ -1,9 +1,11 @@
-Project: MXKeys
-Company: Matrix Family Inc.
-Maintainer: Brabus
+Project: MXKeys (mxkeys.org)
+Company: Matrix Family Inc. (https://matrix.family)
+Owner: Matrix Family Inc.
 Contact: dev@matrix.family
-Date: <YYYY-MM-DD>
-Status: Created
+Support: support@matrix.family
+Matrix: @support:matrix.family
+Date: Mon 22 Jun 2026 00:51:51 UTC
+Status: Updated
 
 # MXK-<NNNN> - <title>
 
@@ -37,13 +39,12 @@ State the decision precisely and in the active voice.
 Positive and negative outcomes. What becomes easier? What becomes harder?
 What must be re-verified if the decision is reversed later?
 
-## Alternatives
+## Alternatives Considered
 
 List the options that were considered and explicitly rejected, with one-
 sentence reasons per option. Never leave this section empty.
 
 ## References
 
-- Related ADRs as plain IDs (`ECO-NNNN`, `MXK-NNNN`) so the link checker
-  can validate them.
+- Related ADRs or local documents.
 - External specs or runbooks (full URLs).

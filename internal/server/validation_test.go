@@ -1,3 +1,14 @@
+/*
+ * Project: MXKeys (mxkeys.org)
+ * Company: Matrix Family Inc. (https://matrix.family)
+ * Owner: Matrix Family Inc.
+ * Contact: dev@matrix.family
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
+ * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Status: Updated
+ */
+
 package server
 
 import (
@@ -116,6 +127,29 @@ func TestIPv6ServerNames(t *testing.T) {
 		}
 		if !tt.isValid && err == nil {
 			t.Errorf("%q should be invalid", tt.name)
+		}
+	}
+}
+
+func TestDefaultValidationConfig(t *testing.T) {
+	cfg := DefaultValidationConfig()
+	if cfg.MaxServerNameLength <= 0 || cfg.MaxJSONDepth <= 0 {
+		t.Fatalf("default validation config must set positive limits: %+v", cfg)
+	}
+}
+
+func TestIPv4FormatEdges(t *testing.T) {
+	tests := map[string]bool{
+		"1.2.3.4":       true,
+		"255.255.255.0": true,
+		"256.1.1.1":     false,
+		"1.2.3":         false,
+		"1.2.3.4.5":     false,
+		"1.2.3.x":       false,
+	}
+	for in, want := range tests {
+		if got := isValidIPv4(in); got != want {
+			t.Fatalf("isValidIPv4(%q) = %v, want %v", in, got, want)
 		}
 	}
 }

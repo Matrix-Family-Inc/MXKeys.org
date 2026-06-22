@@ -1,3 +1,12 @@
+Project: MXKeys (mxkeys.org)
+Company: Matrix Family Inc. (https://matrix.family)
+Owner: Matrix Family Inc.
+Contact: dev@matrix.family
+Support: support@matrix.family
+Matrix: @support:matrix.family
+Date: Mon 22 Jun 2026 00:51:51 UTC
+Status: Updated
+
 # Changelog
 
 All notable changes to MXKeys are documented in this file.
@@ -5,6 +14,46 @@ All notable changes to MXKeys are documented in this file.
 ## [Unreleased]
 
 No entries.
+
+## [1.0.1] - 2026-06-23
+
+Patch hardening release. No Matrix federation API contract changes.
+
+### Fixed
+
+- Fixed PostgreSQL whole-response cache reads for
+  `server_key_responses.raw_response BYTEA`. The cache reader now scans
+  raw bytes into `[]byte` instead of `sql.RawBytes`, which is not valid
+  for `QueryRow.Scan`. This removes the production warning
+  `sql: RawBytes isn't allowed on Row.Scan`, restores the raw-preserving
+  cache fast path, and avoids unnecessary remote fetches that could
+  surface as intermittent nginx `502` responses for slow clients.
+- Moved integration-test build constraints before file headers so Go 1.26
+  accepts the `integration` test package without `misplaced +build
+  comment` failures.
+- Removed an unused raft snapshot-load constant reported by
+  `staticcheck`.
+- Added an explicit public-IP-only HTTP transport for the optional
+  `/_mxkeys/server-info` well-known probe. The endpoint still performs
+  intentional Matrix discovery, but private, loopback, link-local,
+  multicast, and unspecified dial targets are rejected before connect.
+- Removed the decommissioned raft testbed snapshot and ignored future
+  decommission snapshots, database dumps, compressed state archives, and
+  `SECRET*` files.
+
+### Changed
+
+- Bumped backend and landing release tags to `1.0.1`.
+- Updated local release/deploy examples for the `v1.0.1` line.
+- Ignored generated Storybook build output (`storybook-static/`).
+
+### Verification
+
+- `./scripts/ci-parity-preflight.sh` passes on the production host with
+  Go 1.26.4, Node 22.23.0, and Bun 1.3.14.
+- `govulncheck` reports no called vulnerabilities.
+- `gosec -severity high` reports zero issues; the two `#nosec G704`
+  annotations are scoped to the guarded Matrix well-known probe.
 
 ## [1.0.0] - 2026-04-22
 

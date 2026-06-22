@@ -1,8 +1,10 @@
-Project: MXKeys
+Project: MXKeys (mxkeys.org)
 Company: Matrix Family Inc. (https://matrix.family)
-Maintainer: Brabus
+Owner: Matrix Family Inc.
 Contact: dev@matrix.family
-Date: Fri Apr 24 2026 UTC
+Support: support@matrix.family
+Matrix: @support:matrix.family
+Date: Mon 22 Jun 2026 00:51:51 UTC
 Status: Updated
 
 # ADR-0001: Cluster Consensus Modes
@@ -59,29 +61,25 @@ care about. It is a decision aid, not a service-level agreement.
 | Data on restart | Lost (requires re-sync from peers) | Preserved (WAL replay + snapshot install) |
 | Log compaction | N/A | Snapshot via `Node.CompactLog`, truncates WAL prefix |
 | Catch-up for lagging peers | Full re-sync via CRDT merge | `InstallSnapshot` RPC + AppendEntries |
-| Authentication | HMAC-SHA256 over canonical JSON | HMAC-SHA256 over canonical JSON |
-| Transport encryption | None (plaintext TCP) | None (plaintext TCP) |
 
 ### Operational Implications
 
 - **CRDT**: clock skew between nodes can cause LWW conflicts; NTP synchronization required.
-- **Raft**: configure `cluster.raft_state_dir` to a local directory with 0700 permissions (e.g. `/var/lib/mxkeys/raft`). The WAL (`raft.wal`) and snapshot file (`raft.snapshot`) live there. Each record is length-prefixed and CRC32C-protected with the Castagnoli polynomial; a torn tail after a crash is truncated to the last well-formed record on replay. `cluster.raft_sync_on_append=true` fsyncs every append for strict power-loss durability.
-- Both modes require `cluster.shared_secret` for message authentication (>=32 chars, placeholders rejected). Transport-level encryption (TLS) is not implemented; deploy behind a secure network boundary or VPN.
+- **Raft**: configure `cluster.raft_state_dir` on durable local storage; WAL and snapshot handling are covered by `docs/runbook/cluster-disaster-recovery.md`.
+- Both modes require `cluster.shared_secret` for message authentication (>=32 chars, placeholders rejected). TLS 1.3 is available for cluster transport and should be enabled for production clusters; deployments that leave TLS disabled must keep cluster ports on a private network or VPN.
 
 ## Alternatives Considered
 
-- Raft-only cluster architecture.
-- CRDT-only cluster architecture.
-- External consensus dependency.
+- Raft-only cluster architecture. Rejected because it forces quorum
+  operations on deployments that only need cache propagation.
+- CRDT-only cluster architecture. Rejected because some deployments
+  need stronger replicated coordination.
+- External consensus dependency. Rejected to keep the cluster core
+  self-contained and aligned with ADR-0002.
 
 ## References
 
 - `internal/cluster/runtime.go` - cluster-mode selection and lifecycle wiring.
-- `internal/cluster/network.go` - authenticated cluster transport.
 - `internal/zero/raft/` - in-tree Raft implementation used by strong
   consistency mode.
 - `internal/config/config.go` - cluster configuration surface.
-
-## Alternatives
-
-None recorded at authoring time. Any future revision that modifies this decision must list the rejected options explicitly.

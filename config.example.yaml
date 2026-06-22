@@ -1,3 +1,11 @@
+# Project: MXKeys (mxkeys.org)
+# Company: Matrix Family Inc. (https://matrix.family)
+# Owner: Matrix Family Inc.
+# Contact: dev@matrix.family
+# Support: support@matrix.family
+# Matrix: @support:matrix.family
+# Date: Mon 22 Jun 2026 00:50:40 UTC
+# Status: Updated
 # MXKeys Configuration Example
 # Copy to /etc/mxkeys/config.yaml or config.yaml in working directory
 
@@ -135,8 +143,8 @@ cluster:
   # Strongly recommended in production. When enabled the three file
   # paths (cert/key/ca) are required and verified at startup.
   # Set require_client_cert=true for mutual TLS (each node must
-  # present a certificate signed by the same CA). See
-  # docs/runbook/cluster-tls-rotation.md for key rotation.
+  # present a certificate signed by the same CA). Rotate certificates
+  # with a rolling restart of cluster nodes.
   tls:
     enabled: false
     cert_file: "/etc/mxkeys/cluster.crt"

@@ -1,10 +1,12 @@
 /*
- * Project: MXKeys
+ * Project: MXKeys (mxkeys.org)
  * Company: Matrix Family Inc. (https://matrix.family)
- * Maintainer: Brabus
+ * Owner: Matrix Family Inc.
  * Contact: dev@matrix.family
- * Date: Wed Apr 22 2026 UTC
- * Status: Created
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
+ * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Status: Updated
  */
 
 /**
@@ -19,7 +21,7 @@
  *   - landing/package.json         (npm package version)
  *   - landing/src/shared/config/version.ts (this file)
  */
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.0.1';
 
 /** Human-readable release tag with a leading `v`. */
 export const APP_VERSION_TAG = `v${APP_VERSION}`;

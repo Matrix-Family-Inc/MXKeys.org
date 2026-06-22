@@ -1,8 +1,10 @@
-Project: MXKeys
+Project: MXKeys (mxkeys.org)
 Company: Matrix Family Inc. (https://matrix.family)
-Maintainer: Brabus
+Owner: Matrix Family Inc.
 Contact: dev@matrix.family
-Date: Tue Apr 22 2026 UTC
+Support: support@matrix.family
+Matrix: @support:matrix.family
+Date: Mon 22 Jun 2026 00:51:51 UTC
 Status: Updated
 
 # Checksums
@@ -14,7 +16,7 @@ Release artifact checksums are published in GitHub Releases.
 Download the release and verify:
 
 ```bash
-sha256sum mxkeys-linux-amd64
+sha256sum mxkeys-v1.0.1-linux-amd64
 ```
 
 Compare against the checksum published in the release notes.

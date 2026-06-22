@@ -1,14 +1,17 @@
-Project: MXKeys
+Project: MXKeys (mxkeys.org)
 Company: Matrix Family Inc. (https://matrix.family)
-Maintainer: Brabus
+Owner: Matrix Family Inc.
 Contact: dev@matrix.family
-Date: Wed Apr 22 2026 UTC
+Support: support@matrix.family
+Matrix: @support:matrix.family
+Date: Mon 22 Jun 2026 00:51:51 UTC
 Status: Updated
 
 # Docs Index
 
 ## Core Set
 
+- `matrix-family-standardization.md` — Matrix Family headers, branding, git SSH (port 42224)
 - `federation-behavior.md` — normative public API and request/response behavior
 - `../ARCHITECTURE.md` — runtime architecture and data flow (top-level)
 - `architecture-visual.md` — visual diagrams and component summaries

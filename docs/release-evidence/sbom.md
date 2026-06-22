@@ -1,13 +1,15 @@
-Project: MXKeys
+Project: MXKeys (mxkeys.org)
 Company: Matrix Family Inc. (https://matrix.family)
-Maintainer: Brabus
+Owner: Matrix Family Inc.
 Contact: dev@matrix.family
-Date: Tue Apr 22 2026 UTC
+Support: support@matrix.family
+Matrix: @support:matrix.family
+Date: Mon 22 Jun 2026 00:51:51 UTC
 Status: Updated
 
 # SBOM (Software Bill of Materials)
 
-## Go Modules (v1.0.0)
+## Go Modules
 
 Source: `go.mod`
 

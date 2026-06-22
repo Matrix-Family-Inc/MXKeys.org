@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
-# Project: MXKeys
+# Project: MXKeys (mxkeys.org)
 # Company: Matrix Family Inc. (https://matrix.family)
-# Maintainer: Brabus
+# Owner: Matrix Family Inc.
 # Contact: dev@matrix.family
-# Date: Wed Apr 22 2026 UTC
-# Status: Created
-#
+# Support: support@matrix.family
+# Matrix: @support:matrix.family
+# Date: Mon 22 Jun 2026 00:50:40 UTC
+# Status: Updated
 # Idempotent prod-landing deploy for https://mxkeys.org/.
 #
 # What it does, in order:
 #   1. Validate that a local landing `dist/` exists and looks sane.
 #   2. Snapshot the currently-served tree to
-#      `/opt/MXKeys.org.prev.<timestamp>` so a rollback is a plain
+#      `/var/www/mxkeys.org.prev.<timestamp>` so a rollback is a plain
 #      `mv`.
-#   3. rsync `dist/` into `/opt/MXKeys.org/` with `--delete` so
+#   3. rsync `dist/` into `/var/www/mxkeys.org/` with `--delete` so
 #      stale hashed bundles are removed (Vite asset hashes rotate
 #      per content).
 #   4. chown -R to the canonical landing owner so permissions stay
@@ -21,7 +22,7 @@
 #   5. Probe `https://mxkeys.org/` for presence of the expected
 #      release string.
 #
-# nginx reload is NOT required: the file `root /opt/MXKeys.org;`
+# nginx reload is NOT required: the file `root /var/www/mxkeys.org;`
 # is static, nginx re-stats files on every request. Cache-Control
 # is `public, immutable` on hashed assets; hashed filenames change
 # on every build so clients never see a stale bundle.
@@ -32,7 +33,7 @@
 #
 # Example:
 #
-#     bash scripts/deploy-landing.sh root@82.21.114.30 1.0.0
+#     bash scripts/deploy-landing.sh root@82.21.114.30 1.0.1
 #
 # Exits non-zero on any step failure. Safe to re-run after a
 # partial failure: the snapshot it creates is timestamped per
@@ -49,7 +50,7 @@ if [[ -z "$REMOTE" ]]; then
 fi
 
 LANDING_DIST="landing/dist"
-REMOTE_ROOT="/opt/MXKeys.org"
+REMOTE_ROOT="/var/www/mxkeys.org"
 REMOTE_OWNER="1000:1000"
 HEALTH_URL="https://mxkeys.org/"
 
@@ -71,7 +72,7 @@ echo "[1/5] local dist ok: $(du -sh "$LANDING_DIST" | awk '{print $1}')"
 
 # Step 2 ─ snapshot current tree on remote.
 STAMP="$(date -u +%Y%m%d_%H%M%S)"
-SNAPSHOT="/opt/MXKeys.org.prev.${STAMP}"
+SNAPSHOT="/var/www/mxkeys.org.prev.${STAMP}"
 echo "[2/5] snapshot current tree → ${SNAPSHOT}"
 ssh -o BatchMode=yes "$REMOTE" "
   set -e

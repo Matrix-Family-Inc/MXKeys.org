@@ -1,9 +1,11 @@
 /*
- * Project: MXKeys
+ * Project: MXKeys (mxkeys.org)
  * Company: Matrix Family Inc. (https://matrix.family)
- * Maintainer: Brabus
+ * Owner: Matrix Family Inc.
  * Contact: dev@matrix.family
- * Date: Wed Apr 22 2026 UTC
+ * Support: support@matrix.family
+ * Matrix: @support:matrix.family
+ * Date: Mon 22 Jun 2026 00:50:40 UTC
  * Status: Updated
  */
 
@@ -20,8 +22,8 @@ import { z } from 'zod';
  * Error codes are deliberately machine-friendly identifiers
  * (`empty`, `too_long`, `bad_shape`, `bad_port`). The React
  * form resolver maps them to localised strings via
- * `t('lookup.validation.<code>')` so the same schema drives
- * both English and Russian builds.
+ * `t('lookup.validation.<code>')` so the same schema drives every
+ * supported locale build.
  */
 const SCHEME_PREFIX = /^https?:\/\//i;
 const HOST_AND_OPTIONAL_PORT = /^(?:\[[0-9a-f:]+\]|[a-z0-9.\-_]+)(?::[0-9]{1,5})?$/i;

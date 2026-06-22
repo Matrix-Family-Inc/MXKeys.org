@@ -1,8 +1,10 @@
-Project: MXKeys
+Project: MXKeys (mxkeys.org)
 Company: Matrix Family Inc. (https://matrix.family)
-Maintainer: Brabus
+Owner: Matrix Family Inc.
 Contact: dev@matrix.family
-Date: Fri Apr 24 2026 UTC
+Support: support@matrix.family
+Matrix: @support:matrix.family
+Date: Mon 22 Jun 2026 00:51:51 UTC
 Status: Updated
 
 # ADR-0009: Landing Stack and Architecture
@@ -15,28 +17,12 @@ Accepted.
 
 Public.
 
-## Ecosystem Scope
-
-This ADR applies
-`../../../ecosystem-docs/adr/ECO-0007-frontend-fsd-stack.md` to the MXKeys
-landing site. The ecosystem ADR owns the frontend stack and FSD policy; this
-file owns the landing-specific layout, config, i18n, and test setup.
-
 ## Context
 
-The `landing/` site started as a flat `src/components/` tree with
-a thin `App.tsx`, 22 eager-loaded i18n bundles, a hard-coded
-`https://mxkeys.org` site URL, and no state-management or routing
-libraries. The organization stack prescribes React 19, Tailwind,
-Zustand, TanStack Router/Query, Zod, CVA, Storybook, Playwright,
-MSW, Sentry, and Feature-Sliced Design.
-
-Site-specific constraints:
-
-- The site is mostly static: one route, no session, no API calls
-  in the shipping build.
-- Operator forks need a runtime-configurable site URL.
-- Eager i18n inflated first paint.
+The `landing/` site is mostly static, but it still needs enforceable
+frontend boundaries, lazy i18n, a runtime-configurable site URL, and
+space for small interactive features such as mobile navigation and
+notary lookup.
 
 ## Decision
 
@@ -59,53 +45,25 @@ Layer direction enforced by `eslint-plugin-boundaries`:
 app > pages > widgets > features > entities > shared
 ```
 
-Stack members in active use:
+Additional landing rules:
 
-| Library | Usage |
-|---|---|
-| `@tanstack/react-router` | Root route + index route |
-| `@tanstack/react-query` | Provider configured at the app boundary |
-| `zustand` | `useMobileNav` store |
-| `zod` | `envSchema` validates `VITE_SITE_URL`, `VITE_SENTRY_DSN`, `VITE_ENVIRONMENT` at module load; form schemas in `features/*/model` |
-| `react-hook-form` + `@hookform/resolvers/zod` | `features/notary-lookup` form |
-| `@sentry/react` | Conditional init and `AppErrorBoundary` |
-| `i18next-resources-to-backend` | Lazy per-locale JSON via `import()` |
-| `msw` | Node handler setup in `src/shared/api/mocks/server.ts` used by Vitest; browser handler wired in `browser.ts` for local dev |
-| `storybook` (10.x) | `.storybook/main.ts` + `preview.ts`; stories for `Logo` and `NotaryLookupForm` |
-| `@playwright/test` | Smoke e2e (home render, RTL toggle, mobile nav) |
-| `eslint-plugin-boundaries` | FSD layer enforcement |
+- use TanStack Router at the app boundary;
+- keep UI state in the `mobile-nav` Zustand store;
+- validate `VITE_SITE_URL`, `VITE_SENTRY_DSN`, and
+  `VITE_ENVIRONMENT` with Zod at module load;
+- lazy-load i18n resources by locale;
+- add `shared/ui` primitives only with a real consumer.
 
-Shared UI primitives are added per consumer, not scaffolded ahead
-of demand. Current contents of `src/shared/ui`:
-
-- `Logo`: consumed by widgets.
-- `TextField`: consumed by `NotaryLookupForm`.
-
-An earlier scaffold (`Button`, `Container`, `ExternalLink`) was
-removed because no widget imported it and the variants did not
-match real widget needs. The next primitive is introduced
-alongside the first real consumer.
-
-Environment-driven site URL:
-
-- `VITE_SITE_URL` (default `https://notary.example.org`) is
-  validated by the Zod schema at module load and substituted into
-  `index.html`, `robots.txt`, `sitemap.xml` via the
-  `htmlEnvReplace` Vite plugin on `__MXKEYS_SITE_URL__` and
-  `__MXKEYS_ENVIRONMENT__` placeholders.
-
-Bundle split via `manualChunks`: Sentry, TanStack (Router +
-Query), and i18next ship in separate chunks that cache
-independently. Bundle size is measured by the build tooling and is not
-normative in this ADR.
+`VITE_SITE_URL` defaults to `https://notary.example.org` and is
+substituted into static assets through the Vite HTML replacement
+plugin.
 
 ## Consequences
 
 - Widgets, features, and shared are testable in isolation.
 - Operators fork the landing by setting `VITE_SITE_URL` and
   `VITE_SENTRY_DSN` in their environment.
-- Lazy i18n cuts the non-active locales (21 of 22) out of the
-  first-paint payload.
+- Lazy i18n keeps non-active locales out of the first-paint payload.
 - The e2e suite catches "the page renders at all" regressions
   that lint and unit cannot.
 
@@ -117,20 +75,11 @@ normative in this ADR.
   Rejected for this pass. The Vite + React pipeline already
   covers the static-marketing requirement.
 - Scaffold all declared stack members before the first consumer
-  exists. Rejected for `Button` / `Container` / `ExternalLink`
-  when that experiment produced dead code.
+  exists. Rejected because unused primitives produced dead code.
 
 ## References
 
-- ECO-0007 Frontend FSD Stack Policy - canonical ecosystem frontend stack and
-  layer policy.
 - `landing/src/` - MXKeys landing implementation governed by this ADR.
-- `landing/.storybook/` - isolated UI development setup for landing components.
 - `landing/eslint.config.mjs` - FSD boundary enforcement.
 - `landing/vite.config.ts` - routing, environment replacement, and bundle split
   configuration.
-- `landing/playwright.config.ts` - landing smoke e2e coverage.
-
-## Alternatives
-
-None recorded at authoring time. Any future revision that modifies this decision must list the rejected options explicitly.
