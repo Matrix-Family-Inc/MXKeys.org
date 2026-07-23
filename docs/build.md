@@ -179,4 +179,6 @@ go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
 cyclonedx-gomod mod -json -output sbom.json
 ```
 
-Release traceability expectations are defined in `docs/release-process.md`.
+The full release procedure, including required evidence (checksums,
+SBOM, CI-parity results, live interop evidence), is defined in
+`docs/runbook/release.md`.

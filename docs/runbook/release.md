@@ -43,6 +43,10 @@ Also confirm:
   git tag to be created.
 - `docs/` matches shipped behaviour (no stale runbook references,
   ADR numbering contiguous).
+- Required check names in branch protection stay aligned with
+  `.github/workflows/pr-gate.yml`,
+  `.github/workflows/release-live-interop-gate.yml`, and
+  `scripts/verify-github-branch-protection.sh`.
 
 ## Build
 

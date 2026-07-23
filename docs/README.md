@@ -14,7 +14,6 @@ Status: Updated
 - `matrix-family-standardization.md` — Matrix Family headers, branding, git SSH (port 42224)
 - `federation-behavior.md` — normative public API and request/response behavior
 - `../ARCHITECTURE.md` — runtime architecture and data flow (top-level)
-- `architecture-visual.md` — visual diagrams and component summaries
 - `deployment.md` — deployment and operational guide
 - `build.md` — build, verification, and reproducibility commands
 - `threat-model.md` — security assumptions, risks, and controls
@@ -36,10 +35,8 @@ Status: Updated
 - `adr/` — architecture decision records
 - `grafana/` — dashboard assets
 - `prometheus-alerts.yaml` — alert definitions
-- `release-process.md` — release traceability and evidence policy
-- `release-evidence/` — checksums and SBOM
+- `monitoring.md` — metrics reference and Prometheus + Grafana setup notes
 - `transparency-verification.md` — external STH verification guide
-- `deployment/monitoring.md` — Prometheus + Grafana setup notes
 
 ## Usage
 
