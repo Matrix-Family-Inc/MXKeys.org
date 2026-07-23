@@ -20,6 +20,8 @@ config.yaml
 .env
 .env.*
 SECRET*
+*-token
+*.token
 decommission-snapshot-*/
 *.pgc
 *.zst
@@ -41,6 +43,7 @@ coverage.html
 # Editor/IDE
 .idea/
 .vscode/
+.project/
 *.swp
 *.swo
 
