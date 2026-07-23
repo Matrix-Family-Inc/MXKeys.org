@@ -189,6 +189,7 @@ This script mirrors the PR gate workflow: unit + race + tagged integration tests
 - Public contract: `docs/federation-behavior.md`
 - Architecture: `ARCHITECTURE.md`
 - Deployment: `docs/deployment.md`
+- Monitoring: `docs/monitoring.md`
 - Build and verification: `docs/build.md`
 - Security: `docs/threat-model.md`
 - Runbooks: `docs/runbook/`

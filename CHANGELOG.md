@@ -13,7 +13,34 @@ All notable changes to MXKeys are documented in this file.
 
 ## [Unreleased]
 
-No entries.
+### Added
+
+- `landing/go.mod` module-boundary stub so `./...` patterns from the
+  repository root no longer descend into `landing/node_modules`
+  (some npm packages ship `.go` files).
+- `.gitignore` patterns for local token files (`*-token`, `*.token`)
+  and the `.project/` IDE workspace directory.
+
+### Changed
+
+- Consolidated release documentation: the unique branch-protection
+  alignment note from `docs/release-process.md` moved into
+  `docs/runbook/release.md`, which is now the single release
+  reference.
+- Moved `docs/deployment/monitoring.md` to `docs/monitoring.md` and
+  linked it from the README documentation index.
+
+### Removed
+
+- `docs/release-process.md` (fully covered by
+  `docs/runbook/release.md`).
+- `docs/release-evidence/` static stubs. Release evidence lives in
+  CI artifacts and release attachments, matching the stated policy;
+  the hand-maintained SBOM table duplicated `go.mod` and would
+  drift.
+- `docs/architecture-visual.md`. `ARCHITECTURE.md` is the single
+  architecture reference; the visual overview duplicated its
+  component, data-flow, security, and metrics sections.
 
 ## [1.0.1] - 2026-06-23
 
