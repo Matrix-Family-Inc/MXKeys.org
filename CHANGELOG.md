@@ -13,6 +13,18 @@ All notable changes to MXKeys are documented in this file.
 
 ## [Unreleased]
 
+### Security
+
+- Updated Go module dependencies (`lib/pq` v1.12.3, `x/net` v0.57.0,
+  `x/sync` v0.22.0, `x/time` v0.15.0); `govulncheck` reports zero
+  vulnerabilities in required modules.
+- Cleared all landing `bun audit` advisories: refreshed dev
+  dependencies within semver ranges and pinned fixed transitive
+  versions (`handlebars` 4.7.9, `esbuild` 0.28.1) via package
+  overrides; targeted `brace-expansion` update within consumer
+  ranges. Runtime bundle was not affected; all advisories sat in
+  dev tooling.
+
 ### Added
 
 - `landing/go.mod` module-boundary stub so `./...` patterns from the
