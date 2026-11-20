@@ -88,10 +88,7 @@ func NewFetcherWithConfig(cfg FetcherConfig) *Fetcher {
 				return http.ErrUseLastResponse
 			},
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					MinVersion:         tls.VersionTLS12,
-					InsecureSkipVerify: false,
-				},
+				TLSClientConfig: defaultFederationTLSConfig(),
 				DialContext: (&net.Dialer{
 					Timeout:   10 * time.Second,
 					KeepAlive: 30 * time.Second,
@@ -120,6 +117,11 @@ func NewFetcherWithConfig(cfg FetcherConfig) *Fetcher {
 		blockPrivate = *cfg.BlockPrivateIPs
 	}
 	f.blockPrivateIPs.Store(blockPrivate)
+	f.resolver.blockPrivate = f.blockPrivateIPs.Load
 
 	return f
+}
+
+func defaultFederationTLSConfig() *tls.Config {
+	return &tls.Config{MinVersion: tls.VersionTLS12}
 }

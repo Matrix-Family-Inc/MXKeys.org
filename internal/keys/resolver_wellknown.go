@@ -5,7 +5,7 @@
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
- * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Date: Fri 20 Nov 2026 22:39:55 UTC
  * Status: Updated
  */
 
@@ -18,7 +18,7 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"sync"
+	"strings"
 	"time"
 
 	"mxkeys/internal/zero/log"
@@ -46,53 +46,39 @@ type wellKnownEntry struct {
 }
 
 type wellKnownCache struct {
-	mu      sync.RWMutex
-	entries map[string]*wellKnownEntry
+	entries *boundedCache[*wellKnownEntry]
 }
 
 func newWellKnownCache() *wellKnownCache {
-	return &wellKnownCache{entries: make(map[string]*wellKnownEntry)}
+	return &wellKnownCache{entries: newBoundedCache(maxResolverCacheEntries, wellKnownTTL, func(e *wellKnownEntry) bool { return e.isError })}
+}
+
+func wellKnownTTL(entry *wellKnownEntry) time.Duration {
+	if !entry.isError {
+		return 24 * time.Hour
+	}
+	switch entry.errType {
+	case errNotFound:
+		return 1 * time.Hour
+	case errInvalid:
+		return 30 * time.Minute
+	case errTemporary:
+		return 2 * time.Minute
+	default:
+		return 5 * time.Minute
+	}
 }
 
 func (c *wellKnownCache) get(hostname string) (*wellKnownEntry, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	entry, ok := c.entries[hostname]
-	if !ok {
-		return nil, false
-	}
-
-	var ttl time.Duration
-	if !entry.isError {
-		ttl = 24 * time.Hour
-	} else {
-		switch entry.errType {
-		case errNotFound:
-			ttl = 1 * time.Hour // 404 is likely permanent, cache longer
-		case errInvalid:
-			ttl = 30 * time.Minute // malformed response, medium cache
-		case errTemporary:
-			ttl = 2 * time.Minute // network/timeout, retry soon
-		default:
-			ttl = 5 * time.Minute
-		}
-	}
-
-	if time.Since(entry.fetchedAt) > ttl {
-		return nil, false
-	}
-	return entry, true
+	return c.entries.get(hostname, time.Now())
 }
 
 func (c *wellKnownCache) set(hostname string, entry *wellKnownEntry) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.entries[hostname] = entry
+	c.entries.set(hostname, entry, entry.fetchedAt)
 }
 
 // resolveWellKnown fetches .well-known/matrix/server and returns delegated host:port.
 func (r *Resolver) resolveWellKnown(ctx context.Context, hostname string) (*wellKnownEntry, error) {
-	// Check cache
 	if entry, ok := r.cache.get(hostname); ok {
 		if entry.isError {
 			recordNegativeCacheHit(ResolverTypeWellKnown)
@@ -103,7 +89,7 @@ func (r *Resolver) resolveWellKnown(ctx context.Context, hostname string) (*well
 	}
 	recordWellKnownCacheMiss()
 
-	url := fmt.Sprintf("https://%s/.well-known/matrix/server", hostname)
+	url := "https://" + hostname + "/.well-known/matrix/server"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		r.cacheErrorWithType(hostname, errTemporary)
@@ -138,18 +124,18 @@ func (r *Resolver) resolveWellKnown(ctx context.Context, hostname string) (*well
 		return nil, err
 	}
 
-	if wk.Server == "" {
+	delegatedHost, delegatedPort, _ := parseServerName(strings.TrimSpace(wk.Server))
+	if !validDelegatedHost(delegatedHost) {
 		r.cacheErrorWithType(hostname, errInvalid)
-		return nil, fmt.Errorf("empty m.server in well-known")
+		return nil, fmt.Errorf("invalid m.server in well-known: %q", wk.Server)
 	}
-
-	delegatedHost, delegatedPort, _ := parseServerName(wk.Server)
 	entry := &wellKnownEntry{
 		host:      delegatedHost,
 		port:      delegatedPort,
 		fetchedAt: time.Now(),
 	}
 	r.cache.set(hostname, entry)
+	r.updateCacheMetrics()
 
 	log.Debug("Well-known resolved",
 		"hostname", hostname,
@@ -171,34 +157,32 @@ func (r *Resolver) cacheErrorWithType(hostname string, et errorType) {
 }
 
 // resolveDelegated processes the delegated server name from well-known.
+// The certificate must be valid for the delegated hostname in every
+// branch, and the Host header carries the delegated name.
 func (r *Resolver) resolveDelegated(ctx context.Context, wk *wellKnownEntry, originalServerName string) (*ResolvedServer, error) {
 	hostname := wk.host
 	port := wk.port
-	isIP := net.ParseIP(hostname) != nil
+	authority := hostname
+	if port != 0 {
+		authority = net.JoinHostPort(hostname, fmt.Sprint(port))
+	}
 
-	// 3.1: Delegated IP literal
-	if isIP {
+	// 3.1: delegated IP literal. 3.2: delegated hostname with explicit port.
+	if net.ParseIP(hostname) != nil || port != 0 {
 		if port == 0 {
 			port = 8448
 		}
-		return &ResolvedServer{Host: hostname, Port: port, ServerName: originalServerName}, nil
+		return &ResolvedServer{Host: hostname, Port: port, ServerName: originalServerName, TLSName: hostname, Authority: authority}, nil
 	}
 
-	// 3.2: Delegated hostname with explicit port
-	if port != 0 {
-		return &ResolvedServer{Host: hostname, Port: port, ServerName: originalServerName}, nil
+	// 3.3 and 3.4: SRV records for the delegated hostname.
+	if resolved, err := r.resolveSRV(ctx, hostname, originalServerName); err == nil {
+		return resolved, nil
 	}
-
-	// 3.3: SRV _matrix-fed._tcp for delegated hostname
-	if resolved, err := r.resolveSRV(hostname, originalServerName); err == nil {
+	if resolved, err := r.resolveSRVLegacy(ctx, hostname, originalServerName); err == nil {
 		return resolved, nil
 	}
 
-	// 3.4: SRV _matrix._tcp for delegated hostname (deprecated)
-	if resolved, err := r.resolveSRVLegacy(hostname, originalServerName); err == nil {
-		return resolved, nil
-	}
-
-	// 3.5: Delegated hostname with default port 8448
-	return &ResolvedServer{Host: hostname, Port: 8448, ServerName: originalServerName}, nil
+	// 3.5: delegated hostname with default port 8448.
+	return &ResolvedServer{Host: hostname, Port: 8448, ServerName: originalServerName, TLSName: hostname, Authority: hostname}, nil
 }

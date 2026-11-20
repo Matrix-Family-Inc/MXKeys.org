@@ -49,7 +49,7 @@ func (f *Fetcher) fetchFromNotary(ctx context.Context, notary, serverName string
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Host = resolved.ServerName
+	req.Host = resolved.HostHeader()
 
 	resp, err := f.clientForResolved(resolved).Do(req)
 	if err != nil {

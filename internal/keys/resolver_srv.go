@@ -5,18 +5,18 @@
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
- * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Date: Fri 20 Nov 2026 22:39:55 UTC
  * Status: Updated
  */
 
 package keys
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"strings"
-	"sync"
 	"time"
 
 	"mxkeys/internal/zero/log"
@@ -31,68 +31,62 @@ type srvEntry struct {
 }
 
 type srvCache struct {
-	mu      sync.RWMutex
-	entries map[string]*srvEntry
+	entries *boundedCache[*srvEntry]
 }
 
 func newSRVCache() *srvCache {
-	return &srvCache{entries: make(map[string]*srvEntry)}
+	return &srvCache{entries: newBoundedCache(maxResolverCacheEntries, srvTTL, func(e *srvEntry) bool { return e.isError })}
+}
+
+func srvTTL(entry *srvEntry) time.Duration {
+	switch {
+	case !entry.isError:
+		return 1 * time.Hour
+	case entry.isNotFound:
+		return 30 * time.Minute
+	default:
+		return 2 * time.Minute
+	}
 }
 
 func (c *srvCache) get(key string) (*srvEntry, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	entry, ok := c.entries[key]
-	if !ok {
-		return nil, false
-	}
-
-	var ttl time.Duration
-	if !entry.isError {
-		ttl = 1 * time.Hour
-	} else if entry.isNotFound {
-		ttl = 30 * time.Minute // NXDOMAIN - likely permanent
-	} else {
-		ttl = 2 * time.Minute // temporary DNS error
-	}
-
-	if time.Since(entry.fetchedAt) > ttl {
-		return nil, false
-	}
-	return entry, true
+	return c.entries.get(key, time.Now())
 }
 
 func (c *srvCache) set(key string, entry *srvEntry) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.entries[key] = entry
+	c.entries.set(key, entry, entry.fetchedAt)
 }
 
-// resolveSRV looks up _matrix-fed._tcp SRV record.
-func (r *Resolver) resolveSRV(hostname, serverName string) (*ResolvedServer, error) {
-	return r.lookupSRV("_matrix-fed", "_tcp", hostname, serverName)
+// resolveSRV looks up the _matrix-fed._tcp SRV record of hostname.
+func (r *Resolver) resolveSRV(ctx context.Context, hostname, serverName string) (*ResolvedServer, error) {
+	return r.lookupSRVRecord(ctx, "matrix-fed", hostname, serverName)
 }
 
-// resolveSRVLegacy looks up _matrix._tcp SRV record (deprecated).
-func (r *Resolver) resolveSRVLegacy(hostname, serverName string) (*ResolvedServer, error) {
-	return r.lookupSRV("_matrix", "_tcp", hostname, serverName)
+// resolveSRVLegacy looks up the deprecated _matrix._tcp SRV record.
+func (r *Resolver) resolveSRVLegacy(ctx context.Context, hostname, serverName string) (*ResolvedServer, error) {
+	return r.lookupSRVRecord(ctx, "matrix", hostname, serverName)
 }
 
-func (r *Resolver) lookupSRV(service, proto, hostname, serverName string) (*ResolvedServer, error) {
-	cacheKey := fmt.Sprintf("%s.%s.%s", service, proto, hostname)
+// lookupSRVRecord resolves an SRV record. The connection goes to the SRV
+// target, but the certificate and the Host header stay bound to hostname,
+// the name the SRV record was looked up for.
+func (r *Resolver) lookupSRVRecord(ctx context.Context, service, hostname, serverName string) (*ResolvedServer, error) {
+	cacheKey := fmt.Sprintf("_%s._tcp.%s", service, hostname)
+	resolved := func(target string, port int) *ResolvedServer {
+		return &ResolvedServer{Host: target, Port: port, ServerName: serverName, TLSName: hostname, Authority: hostname}
+	}
 
-	// Check cache
 	if entry, ok := r.srvCache.get(cacheKey); ok {
 		if entry.isError {
 			recordNegativeCacheHit(ResolverTypeSRV)
 			return nil, fmt.Errorf("cached SRV error for %s", cacheKey)
 		}
 		recordSRVCacheHit()
-		return &ResolvedServer{Host: entry.target, Port: entry.port, ServerName: serverName}, nil
+		return resolved(entry.target, entry.port), nil
 	}
 	recordSRVCacheMiss()
 
-	_, addrs, err := net.LookupSRV(service, proto, hostname)
+	_, addrs, err := r.lookupSRV(ctx, service, "tcp", hostname)
 	if err != nil || len(addrs) == 0 {
 		isNotFound := len(addrs) == 0 || isNXDOMAIN(err)
 		recordNegativeCacheWrite(ResolverTypeSRV)
@@ -106,21 +100,11 @@ func (r *Resolver) lookupSRV(service, proto, hostname, serverName string) (*Reso
 
 	target := strings.TrimSuffix(addrs[0].Target, ".")
 	port := int(addrs[0].Port)
+	r.srvCache.set(cacheKey, &srvEntry{target: target, port: port, fetchedAt: time.Now()})
+	r.updateCacheMetrics()
 
-	r.srvCache.set(cacheKey, &srvEntry{
-		target:    target,
-		port:      port,
-		fetchedAt: time.Now(),
-	})
-
-	log.Debug("SRV resolved",
-		"service", service,
-		"hostname", hostname,
-		"target", target,
-		"port", port,
-	)
-
-	return &ResolvedServer{Host: target, Port: port, ServerName: serverName}, nil
+	log.Debug("SRV resolved", "service", service, "hostname", hostname, "target", target, "port", port)
+	return resolved(target, port), nil
 }
 
 func isNXDOMAIN(err error) bool {
@@ -134,26 +118,10 @@ func isNXDOMAIN(err error) bool {
 	return false
 }
 
-// updateCacheMetrics updates the negative cache size metrics
+// updateCacheMetrics publishes the negative cache sizes.
 func (r *Resolver) updateCacheMetrics() {
-	r.cache.mu.RLock()
-	wkNegCount := 0
-	for _, e := range r.cache.entries {
-		if e.isError {
-			wkNegCount++
-		}
-	}
-	r.cache.mu.RUnlock()
-
-	r.srvCache.mu.RLock()
-	srvNegCount := 0
-	for _, e := range r.srvCache.entries {
-		if e.isError {
-			srvNegCount++
-		}
-	}
-	r.srvCache.mu.RUnlock()
-
-	updateNegativeCacheSize(ResolverTypeWellKnown, wkNegCount)
-	updateNegativeCacheSize(ResolverTypeSRV, srvNegCount)
+	_, wkNeg := r.cache.entries.stats()
+	_, srvNeg := r.srvCache.entries.stats()
+	updateNegativeCacheSize(ResolverTypeWellKnown, wkNeg)
+	updateNegativeCacheSize(ResolverTypeSRV, srvNeg)
 }

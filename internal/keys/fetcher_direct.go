@@ -48,7 +48,7 @@ func (f *Fetcher) fetchDirect(ctx context.Context, serverName string) (*ServerKe
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Host = resolved.ServerName
+	req.Host = resolved.HostHeader()
 
 	resp, err := f.clientForResolved(resolved).Do(req)
 	if err != nil {
