@@ -54,37 +54,11 @@ func (n *Notary) QueryKeys(ctx context.Context, request *KeyQueryRequest) *KeyQu
 			continue
 		}
 
-		// Work on a detached copy to avoid mutating cache/storage-backed objects.
-		keysForResponse := cloneServerKeysResponse(keys)
-		if err := n.addNotarySignature(keysForResponse); err != nil {
+		keysForResponse, err := n.countersign(keys)
+		if err != nil {
 			log.Error("Failed to add notary signature", "server", serverName, "error", err)
 			response.Failures[serverName] = matrixFailure("M_UNKNOWN", "Internal signing error")
 			continue
-		}
-
-		// When origin raw bytes are available, rebuild the delivered
-		// canonical JSON with this notary's signature attached
-		// without re-marshalling origin fields. This preserves
-		// origin-signed fields (including `old_verify_keys: {}` or
-		// any future schema extension) byte-for-byte so every
-		// downstream client can verify origin self-signature.
-		// Non-raw paths (legacy cache, fallback notary fetch) keep
-		// the struct-based delivery intact.
-		if len(keysForResponse.Raw) > 0 {
-			finalRaw, rawErr := AttachNotarySignature(
-				keysForResponse.Raw,
-				n.serverName,
-				n.serverKeyID,
-				n.serverKeyPair,
-			)
-			if rawErr != nil {
-				log.Warn("Raw notary attach failed; falling back to struct-based delivery",
-					"server", serverName,
-					"error", rawErr,
-				)
-			} else {
-				keysForResponse.Raw = finalRaw
-			}
 		}
 
 		if violation := n.checkResponsePolicy(serverName, keysForResponse); violation != nil {
@@ -109,6 +83,24 @@ func (n *Notary) QueryKeys(ctx context.Context, request *KeyQueryRequest) *KeyQu
 	}
 
 	return response
+}
+
+// countersign returns a copy of a verified key document with this notary's
+// perspective signature added to the document bytes. The struct fields are
+// re-read from the signed bytes so policy checks see what is served.
+func (n *Notary) countersign(keys *ServerKeysResponse) (*ServerKeysResponse, error) {
+	if keys == nil || len(keys.Raw) == 0 {
+		return nil, fmt.Errorf("verified key document bytes are unavailable")
+	}
+	signed, err := AttachNotarySignature(keys.Raw, n.serverName, n.serverKeyID, n.serverKeyPair)
+	if err != nil {
+		return nil, err
+	}
+	countersigned, _, err := parseServerKeys(signed)
+	if err != nil {
+		return nil, err
+	}
+	return countersigned, nil
 }
 
 func sanitizeQueryFailure(err error) map[string]interface{} {
@@ -226,7 +218,7 @@ func (n *Notary) GetServerKeys(ctx context.Context, serverName string) (*ServerK
 	if dbErr != nil {
 		log.Warn("Database cache unavailable, continuing with remote fetch", "error", dbErr)
 	}
-	if stored != nil && stored.ValidUntilTS > now.UnixMilli() {
+	if stored != nil && len(stored.Raw) > 0 && stored.ValidUntilTS > now.UnixMilli() {
 		recordDBCacheHit()
 		n.storeInMemoryCache(serverName, stored)
 

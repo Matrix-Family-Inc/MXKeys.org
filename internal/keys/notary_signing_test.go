@@ -18,48 +18,45 @@ import (
 	"time"
 )
 
-func TestAddNotarySignatureIsStableAcrossResign(t *testing.T) {
+func TestCountersignIsStableAcrossResign(t *testing.T) {
 	_, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("failed to generate notary key: %v", err)
 	}
+	n := &Notary{serverName: "mxkeys.example.org", serverKeyID: "ed25519:mxkeys", serverKeyPair: priv}
 
-	n := &Notary{
-		serverName:    "mxkeys.example.org",
-		serverKeyID:   "ed25519:mxkeys",
-		serverKeyPair: priv,
+	raw, _ := createSignedKeysResponse(t, "origin.example.org")
+	origin, _, err := parseServerKeys(raw)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	resp := &ServerKeysResponse{
+	first, err := n.countersign(origin)
+	if err != nil {
+		t.Fatalf("first countersign: %v", err)
+	}
+	second, err := n.countersign(first)
+	if err != nil {
+		t.Fatalf("second countersign: %v", err)
+	}
+	if string(first.Raw) != string(second.Raw) {
+		t.Fatalf("countersigning twice must not change the document")
+	}
+	if first.Signatures[n.serverName][n.serverKeyID] == "" {
+		t.Fatal("countersigned struct must expose the notary signature")
+	}
+}
+
+func TestCountersignRequiresDocumentBytes(t *testing.T) {
+	_, priv, _ := ed25519.GenerateKey(nil)
+	n := &Notary{serverName: "mxkeys.example.org", serverKeyID: "ed25519:mxkeys", serverKeyPair: priv}
+	legacy := &ServerKeysResponse{
 		ServerName:   "origin.example.org",
 		ValidUntilTS: time.Now().Add(time.Hour).UnixMilli(),
-		VerifyKeys: map[string]VerifyKeyResponse{
-			"ed25519:origin": {Key: base64.RawStdEncoding.EncodeToString(make([]byte, ed25519.PublicKeySize))},
-		},
-		OldVerifyKeys: map[string]OldKeyResponse{},
-		Signatures: map[string]map[string]string{
-			"origin.example.org": {"ed25519:origin": "origin-signature"},
-		},
+		VerifyKeys:   map[string]VerifyKeyResponse{"ed25519:origin": {Key: base64.RawStdEncoding.EncodeToString(make([]byte, ed25519.PublicKeySize))}},
 	}
-
-	if err := n.addNotarySignature(resp); err != nil {
-		t.Fatalf("addNotarySignature() first call failed: %v", err)
-	}
-	sigFirst := resp.Signatures[n.serverName][n.serverKeyID]
-	if sigFirst == "" {
-		t.Fatal("expected notary signature after first signing")
-	}
-
-	if err := n.addNotarySignature(resp); err != nil {
-		t.Fatalf("addNotarySignature() second call failed: %v", err)
-	}
-	sigSecond := resp.Signatures[n.serverName][n.serverKeyID]
-	if sigSecond == "" {
-		t.Fatal("expected notary signature after second signing")
-	}
-
-	if sigFirst != sigSecond {
-		t.Fatalf("notary signature changed between re-signs")
+	if _, err := n.countersign(legacy); err == nil {
+		t.Fatal("a document without its delivered bytes must not be countersigned")
 	}
 }
 

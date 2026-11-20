@@ -13,7 +13,6 @@ package keys
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -68,9 +67,9 @@ func (f *Fetcher) fetchDirect(ctx context.Context, serverName string) (*ServerKe
 		return nil, err
 	}
 
-	var keysResp ServerKeysResponse
-	if err := json.Unmarshal(body, &keysResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response from %s: %w", url, err)
+	keysResp, obj, err := parseServerKeys(body)
+	if err != nil {
+		return nil, NewValidationError(serverName, fmt.Errorf("response from %s: %w", url, err))
 	}
 
 	if keysResp.ServerName != serverName {
@@ -82,16 +81,10 @@ func (f *Fetcher) fetchDirect(ctx context.Context, serverName string) (*ServerKe
 		}
 	}
 
-	if err := f.verifySelfSignature(&keysResp, body); err != nil {
+	if err := f.checkSelfSignature(keysResp, obj); err != nil {
 		recordUpstreamFailure(UpstreamFailureInvalidSignature)
 		return nil, NewSignatureError(serverName, err)
 	}
-
-	// Preserve the exact origin-delivered bytes. This is what later
-	// lets notary_query attach a perspective signature without
-	// reshaping origin fields and keeps origin self-signature
-	// verification valid end-to-end.
-	keysResp.Raw = append([]byte(nil), body...)
 
 	log.Info("Successfully fetched server keys",
 		"server", serverName,
@@ -99,7 +92,7 @@ func (f *Fetcher) fetchDirect(ctx context.Context, serverName string) (*ServerKe
 		"valid_until", time.UnixMilli(keysResp.ValidUntilTS).Format(time.RFC3339),
 	)
 
-	return &keysResp, nil
+	return keysResp, nil
 }
 
 // classifyUpstreamFailure records the best-matching upstream failure reason

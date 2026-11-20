@@ -66,9 +66,9 @@ func buildSignedOriginPayload(
 	return raw
 }
 
-// verifyOriginSignature mirrors the stripped-canonical verification
-// that every Matrix client performs on notary responses: strip
-// signatures/unsigned, canonicalize, verify origin signature.
+// verifyOriginSignature is an independent implementation of the Matrix
+// "Checking for a signature" algorithm: strip signatures and unsigned,
+// canonicalize, verify. It works for any signer, origin or notary.
 func verifyOriginSignature(
 	t *testing.T,
 	raw []byte,
@@ -195,32 +195,8 @@ func TestAttachNotarySignatureAddsVerifiableNotarySig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AttachNotarySignature: %v", err)
 	}
-
-	var obj map[string]interface{}
-	dec := json.NewDecoder(bytes.NewReader(out))
-	dec.UseNumber()
-	if err := dec.Decode(&obj); err != nil {
-		t.Fatalf("parse out: %v", err)
-	}
-	sigs, _ := obj["signatures"].(map[string]interface{})
-	notaryBlock, _ := sigs["notary.example"].(map[string]interface{})
-	sigB64, _ := notaryBlock["ed25519:n"].(string)
-	sig, err := base64.RawStdEncoding.DecodeString(sigB64)
-	if err != nil {
-		t.Fatalf("decode notary sig: %v", err)
-	}
-
-	// Rebuild the signable payload exactly as AttachNotarySignature
-	// would: strip signatures/unsigned, then re-attach non-self
-	// signers.
-	existing := extractSignatures(obj)
-	signable := buildSignable(obj, existing, "notary.example")
-	signBytes, err := canonical.Marshal(signable)
-	if err != nil {
-		t.Fatalf("canonicalize signable for verify: %v", err)
-	}
-	if !ed25519.Verify(notaryPub, signBytes, sig) {
-		t.Fatalf("notary perspective signature must verify against canonical(payload + non-self signers)")
+	if !verifyOriginSignature(t, out, "notary.example", "ed25519:n", notaryPub) {
+		t.Fatalf("notary perspective signature must verify with the Matrix algorithm: %s", out)
 	}
 }
 

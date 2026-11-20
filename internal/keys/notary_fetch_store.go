@@ -19,7 +19,6 @@ package keys
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"time"
 
 	"mxkeys/internal/zero/log"
@@ -61,22 +60,9 @@ func (n *Notary) fetchAndStoreWithSource(ctx context.Context, serverName, source
 
 	n.storeInMemoryCache(serverName, keys)
 
-	if broadcastHook := n.getKeyBroadcastHook(); broadcastHook != nil {
-		// Prefer origin raw bytes over a struct re-marshal. Raw is
-		// what lets peers preserve origin-signed fields across the
-		// replication boundary and serve signature-verifiable
-		// notary replies of their own.
-		var payload []byte
-		if len(keys.Raw) > 0 {
-			payload = keys.Raw
-		} else if marshalled, err := json.Marshal(keys); err == nil {
-			payload = marshalled
-		} else {
-			log.Warn("Failed to marshal key response for cluster broadcast", "server", serverName, "error", err)
-		}
-		if len(payload) > 0 {
-			broadcastHook(serverName, ClusterReplicatedResponseKeyID, string(payload), keys.ValidUntilTS)
-		}
+	// Peers re-verify the origin self-signature on these exact bytes.
+	if broadcastHook := n.getKeyBroadcastHook(); broadcastHook != nil && len(keys.Raw) > 0 {
+		broadcastHook(serverName, ClusterReplicatedResponseKeyID, string(keys.Raw), keys.ValidUntilTS)
 	}
 
 	return keys, nil

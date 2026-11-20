@@ -25,6 +25,7 @@ import (
 	"mxkeys/internal/keys/keyprovider"
 	"mxkeys/internal/zero/canonical"
 	"mxkeys/internal/zero/log"
+	"mxkeys/internal/zero/signedjson"
 )
 
 // Notary is the main key notary service
@@ -142,97 +143,30 @@ func NewNotary(
 	})
 }
 
-// GetOwnKeys returns this notary's own public keys
+// GetOwnKeys returns this notary's own key document, signed by itself. Raw
+// holds the signed canonical bytes, which are what the handler serves.
 func (n *Notary) GetOwnKeys() (*ServerKeysResponse, error) {
 	publicKey := n.serverKeyPair.Public().(ed25519.PublicKey)
-	publicKeyB64 := base64.RawStdEncoding.EncodeToString(publicKey)
-
 	validUntil := time.Now().Add(time.Duration(n.validityHours) * time.Hour)
 
-	response := &ServerKeysResponse{
-		ServerName:   n.serverName,
-		ValidUntilTS: validUntil.UnixMilli(),
-		VerifyKeys: map[string]VerifyKeyResponse{
-			n.serverKeyID: {Key: publicKeyB64},
+	unsigned, err := canonical.Marshal(map[string]interface{}{
+		"server_name":    n.serverName,
+		"valid_until_ts": validUntil.UnixMilli(),
+		"verify_keys": map[string]interface{}{
+			n.serverKeyID: map[string]interface{}{"key": base64.RawStdEncoding.EncodeToString(publicKey)},
 		},
-		OldVerifyKeys: make(map[string]OldKeyResponse),
+		"old_verify_keys": map[string]interface{}{},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode own keys document: %w", err)
 	}
-
-	if err := n.signResponse(response); err != nil {
-		return nil, fmt.Errorf("failed to sign own keys response: %w", err)
+	signed, err := signedjson.Sign(unsigned, n.serverName, n.serverKeyID, n.serverKeyPair)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign own keys document: %w", err)
 	}
-
+	response, _, err := parseServerKeys(signed)
+	if err != nil {
+		return nil, fmt.Errorf("own keys document is malformed: %w", err)
+	}
 	return response, nil
-}
-
-// signResponse signs a response with this notary's key
-func (n *Notary) signResponse(response *ServerKeysResponse) error {
-	toSign := map[string]interface{}{
-		"server_name":     response.ServerName,
-		"valid_until_ts":  response.ValidUntilTS,
-		"verify_keys":     response.VerifyKeys,
-		"old_verify_keys": response.OldVerifyKeys,
-	}
-
-	canonicalBytes, err := canonical.Marshal(toSign)
-	if err != nil {
-		return fmt.Errorf("canonical JSON marshaling failed: %w", err)
-	}
-
-	signature := ed25519.Sign(n.serverKeyPair, canonicalBytes)
-	signatureB64 := base64.RawStdEncoding.EncodeToString(signature)
-
-	if response.Signatures == nil {
-		response.Signatures = make(map[string]map[string]string)
-	}
-	response.Signatures[n.serverName] = map[string]string{
-		n.serverKeyID: signatureB64,
-	}
-	return nil
-}
-
-// addNotarySignature adds notary's perspective signature to response
-func (n *Notary) addNotarySignature(response *ServerKeysResponse) error {
-	toSign := map[string]interface{}{
-		"server_name":     response.ServerName,
-		"valid_until_ts":  response.ValidUntilTS,
-		"verify_keys":     response.VerifyKeys,
-		"old_verify_keys": response.OldVerifyKeys,
-	}
-
-	// Include signatures from other signers only.
-	// Our own prior signature must never be part of the payload we sign.
-	if response.Signatures != nil {
-		signatures := make(map[string]map[string]string, len(response.Signatures))
-		for signer, signerSigs := range response.Signatures {
-			if signer == n.serverName {
-				continue
-			}
-			copied := make(map[string]string, len(signerSigs))
-			for keyID, value := range signerSigs {
-				copied[keyID] = value
-			}
-			signatures[signer] = copied
-		}
-		if len(signatures) > 0 {
-			toSign["signatures"] = signatures
-		}
-	}
-
-	canonicalBytes, err := canonical.Marshal(toSign)
-	if err != nil {
-		return fmt.Errorf("canonical JSON marshaling failed: %w", err)
-	}
-
-	signature := ed25519.Sign(n.serverKeyPair, canonicalBytes)
-	signatureB64 := base64.RawStdEncoding.EncodeToString(signature)
-
-	if response.Signatures == nil {
-		response.Signatures = make(map[string]map[string]string)
-	}
-	if response.Signatures[n.serverName] == nil {
-		response.Signatures[n.serverName] = make(map[string]string)
-	}
-	response.Signatures[n.serverName][n.serverKeyID] = signatureB64
-	return nil
 }

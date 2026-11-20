@@ -13,7 +13,6 @@ package keys
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -61,18 +60,12 @@ func (n *Notary) validateReplicatedServerResponse(serverName string, rawResponse
 		return nil, fmt.Errorf("replicated response payload is empty")
 	}
 
-	var response ServerKeysResponse
-	if err := json.Unmarshal([]byte(rawResponse), &response); err != nil {
+	response, obj, err := parseServerKeys([]byte(rawResponse))
+	if err != nil {
 		return nil, fmt.Errorf("failed to decode replicated response: %w", err)
-	}
-	if response.ServerName == "" {
-		return nil, fmt.Errorf("replicated response server_name is missing")
 	}
 	if response.ServerName != serverName {
 		return nil, fmt.Errorf("replicated response server mismatch: expected %s got %s", serverName, response.ServerName)
-	}
-	if response.ValidUntilTS <= 0 {
-		return nil, fmt.Errorf("replicated response valid_until_ts is missing")
 	}
 	if response.ValidUntilTS != validUntilTS {
 		return nil, fmt.Errorf("replicated response valid_until_ts mismatch: expected %d got %d", validUntilTS, response.ValidUntilTS)
@@ -80,14 +73,10 @@ func (n *Notary) validateReplicatedServerResponse(serverName string, rawResponse
 	if n.fetcher == nil {
 		return nil, fmt.Errorf("replicated response verification is unavailable")
 	}
-	if err := n.fetcher.verifySelfSignature(&response, []byte(rawResponse)); err != nil {
+	if err := n.fetcher.checkSelfSignature(response, obj); err != nil {
 		return nil, fmt.Errorf("replicated response failed verification: %w", err)
 	}
-	// Preserve the replicated raw bytes so a peer that receives the
-	// payload over cluster replication can still serve notary
-	// replies that keep origin self-signatures verifiable.
-	response.Raw = []byte(rawResponse)
-	return &response, nil
+	return response, nil
 }
 
 // decodeBase64 accepts both raw-URL and standard base64 inputs.

@@ -249,32 +249,21 @@ func TestCircuitBreakerCleansUpIdleServers(t *testing.T) {
 	}
 }
 
-func TestFallbackSuccessDoesNotOpenCircuitBreaker(t *testing.T) {
-	targetServer := "127.0.0.1:1"
-	responseData, _ := createSignedKeysResponse(t, targetServer)
-
-	var keysResp ServerKeysResponse
-	if err := json.Unmarshal(responseData, &keysResp); err != nil {
-		t.Fatalf("failed to decode signed keys response: %v", err)
-	}
-
+// fallbackNotary serves document as the only server_keys entry, byte for
+// byte, the way a notary relays the origin's document.
+func fallbackNotary(t *testing.T, document []byte) (*httptest.Server, *Fetcher) {
+	t.Helper()
 	notary := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/_matrix/key/v2/query" {
 			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(KeyQueryResponse{
-			ServerKeys: []ServerKeysResponse{keysResp},
-		}); err != nil {
-			t.Fatalf("failed to write notary response: %v", err)
-		}
+		_, _ = w.Write([]byte(`{"server_keys":[` + string(document) + `]}`))
 	}))
-	defer notary.Close()
 
 	client := notary.Client()
 	client.Timeout = time.Second
-
 	f := NewFetcherWithConfig(FetcherConfig{
 		FallbackServers: []string{strings.TrimPrefix(notary.URL, "https://")},
 		Timeout:         time.Second,
@@ -282,6 +271,53 @@ func TestFallbackSuccessDoesNotOpenCircuitBreaker(t *testing.T) {
 	})
 	f.SetBlockPrivateIPs(false) // Allow localhost for testing
 	f.client = client
+	return notary, f
+}
+
+func TestFallbackRejectsDocumentWithoutValidSelfSignature(t *testing.T) {
+	const targetServer = "127.0.0.1:1"
+	valid, _ := createSignedKeysResponse(t, targetServer)
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(valid, &parsed); err != nil {
+		t.Fatal(err)
+	}
+	delete(parsed, "old_verify_keys") // what a struct re-marshal with omitempty does
+	reshaped, _ := json.Marshal(parsed)
+
+	forged := strings.Replace(string(valid), `"ed25519:test":"`, `"ed25519:test":"AAAA`, 1)
+
+	for name, document := range map[string][]byte{"reshaped": reshaped, "forged": []byte(forged)} {
+		t.Run(name, func(t *testing.T) {
+			notary, f := fallbackNotary(t, document)
+			defer notary.Close()
+			if _, err := f.FetchServerKeys(context.Background(), targetServer); err == nil {
+				t.Fatal("fallback must not accept a document whose origin self-signature does not verify")
+			}
+		})
+	}
+}
+
+func TestFallbackKeepsDeliveredBytes(t *testing.T) {
+	const targetServer = "127.0.0.1:1"
+	document, _ := createSignedKeysResponse(t, targetServer)
+	notary, f := fallbackNotary(t, document)
+	defer notary.Close()
+
+	resp, err := f.FetchServerKeys(context.Background(), targetServer)
+	if err != nil {
+		t.Fatalf("FetchServerKeys: %v", err)
+	}
+	if string(resp.Raw) != string(document) {
+		t.Fatalf("fallback must keep the delivered document bytes")
+	}
+}
+
+func TestFallbackSuccessDoesNotOpenCircuitBreaker(t *testing.T) {
+	targetServer := "127.0.0.1:1"
+	responseData, _ := createSignedKeysResponse(t, targetServer)
+	notary, f := fallbackNotary(t, responseData)
+	defer notary.Close()
 
 	for i := 0; i < 6; i++ {
 		resp, err := f.FetchServerKeys(context.Background(), targetServer)

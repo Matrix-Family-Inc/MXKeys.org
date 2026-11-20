@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"mxkeys/internal/zero/canonical"
+	"mxkeys/internal/zero/signedjson"
 )
 
 // fakeTimeoutError implements net.Error with Timeout()=true, which is how
@@ -115,91 +116,70 @@ func TestTrustedNotaryKeyStruct(t *testing.T) {
 	}
 }
 
-func TestVerifyNotarySignatureValid(t *testing.T) {
-	notaryPub, notaryPriv, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		t.Fatalf("failed to generate notary key: %v", err)
-	}
-
-	f := NewFetcherWithConfig(FetcherConfig{
+func pinnedNotaryFetcher(pub ed25519.PublicKey) *Fetcher {
+	return NewFetcherWithConfig(FetcherConfig{
 		Timeout: time.Second,
 		TrustedNotaries: []TrustedNotaryKey{
-			{
-				ServerName: "notary.example.org",
-				KeyID:      "ed25519:notary",
-				PublicKey:  notaryPub,
-			},
+			{ServerName: "notary.example.org", KeyID: "ed25519:notary", PublicKey: pub},
 		},
 	})
+}
 
-	resp := &ServerKeysResponse{
-		ServerName:   "server.example.org",
-		ValidUntilTS: time.Now().Add(time.Hour).UnixMilli(),
-		VerifyKeys: map[string]VerifyKeyResponse{
-			"ed25519:server": {Key: base64.RawStdEncoding.EncodeToString(make([]byte, ed25519.PublicKeySize))},
-		},
-		OldVerifyKeys: map[string]OldKeyResponse{},
-		Signatures: map[string]map[string]string{
-			"server.example.org": {"ed25519:server": "origin-sig"},
-		},
-	}
-
-	toSign := map[string]interface{}{
-		"server_name":     resp.ServerName,
-		"valid_until_ts":  resp.ValidUntilTS,
-		"verify_keys":     resp.VerifyKeys,
-		"old_verify_keys": resp.OldVerifyKeys,
-		"signatures": map[string]map[string]string{
-			"server.example.org": {"ed25519:server": "origin-sig"},
-		},
-	}
-	canonicalBytes, err := canonical.Marshal(toSign)
+func TestVerifyNotarySignatureAcceptsSpecSignature(t *testing.T) {
+	notaryPub, notaryPriv, err := ed25519.GenerateKey(nil)
 	if err != nil {
-		t.Fatalf("failed to canonicalize: %v", err)
+		t.Fatal(err)
+	}
+	origin, _ := createSignedKeysResponse(t, "server.example.org")
+	countersigned, err := signedjson.Sign(origin, "notary.example.org", "ed25519:notary", notaryPriv)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	resp.Signatures["notary.example.org"] = map[string]string{
-		"ed25519:notary": base64.RawStdEncoding.EncodeToString(ed25519.Sign(notaryPriv, canonicalBytes)),
-	}
-
-	if err := f.verifyNotarySignature("notary.example.org", resp); err != nil {
-		t.Fatalf("verifyNotarySignature returned error: %v", err)
+	if err := pinnedNotaryFetcher(notaryPub).verifyNotarySignature("notary.example.org", countersigned); err != nil {
+		t.Fatalf("spec-compliant notary signature rejected: %v", err)
 	}
 }
 
-func TestVerifyNotarySignatureMismatch(t *testing.T) {
-	notaryPub, _, err := ed25519.GenerateKey(nil)
+func TestVerifyNotarySignatureRejectsSignatureOverSignatures(t *testing.T) {
+	notaryPub, notaryPriv, err := ed25519.GenerateKey(nil)
 	if err != nil {
-		t.Fatalf("failed to generate notary key: %v", err)
+		t.Fatal(err)
+	}
+	origin, _ := createSignedKeysResponse(t, "server.example.org")
+	obj, err := signedjson.Decode(origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The pre-1.1 scheme signed the object together with the origin's
+	// signatures. Matrix verifiers strip signatures, so such a signature
+	// must not verify.
+	msg, err := canonical.Marshal(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	obj["signatures"].(map[string]interface{})["notary.example.org"] = map[string]interface{}{
+		"ed25519:notary": base64.RawStdEncoding.EncodeToString(ed25519.Sign(notaryPriv, msg)),
+	}
+	raw, err := canonical.Marshal(obj)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	f := NewFetcherWithConfig(FetcherConfig{
-		Timeout: time.Second,
-		TrustedNotaries: []TrustedNotaryKey{
-			{
-				ServerName: "notary.example.org",
-				KeyID:      "ed25519:notary",
-				PublicKey:  notaryPub,
-			},
-		},
-	})
-
-	resp := &ServerKeysResponse{
-		ServerName:   "server.example.org",
-		ValidUntilTS: time.Now().Add(time.Hour).UnixMilli(),
-		VerifyKeys: map[string]VerifyKeyResponse{
-			"ed25519:server": {Key: base64.RawStdEncoding.EncodeToString(make([]byte, ed25519.PublicKeySize))},
-		},
-		OldVerifyKeys: map[string]OldKeyResponse{},
-		Signatures: map[string]map[string]string{
-			"server.example.org": {"ed25519:server": "origin-sig"},
-			"notary.example.org": {"ed25519:notary": base64.RawStdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))},
-		},
-	}
-
-	err = f.verifyNotarySignature("notary.example.org", resp)
+	err = pinnedNotaryFetcher(notaryPub).verifyNotarySignature("notary.example.org", raw)
 	if !errors.Is(err, ErrNotaryKeyMismatch) {
 		t.Fatalf("expected ErrNotaryKeyMismatch, got %v", err)
+	}
+}
+
+func TestVerifyNotarySignatureMissingPinnedKey(t *testing.T) {
+	notaryPub, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	origin, _ := createSignedKeysResponse(t, "server.example.org")
+	if err := pinnedNotaryFetcher(notaryPub).verifyNotarySignature("notary.example.org", origin); err == nil {
+		t.Fatal("a document without the pinned notary signature must be rejected")
 	}
 }
 
