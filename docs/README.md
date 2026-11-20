@@ -4,7 +4,7 @@ Owner: Matrix Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
-Date: Mon 22 Jun 2026 00:51:51 UTC
+Date: Sat 29 Aug 2026 16:11:22 UTC
 Status: Updated
 
 # Docs Index
@@ -33,6 +33,9 @@ Status: Updated
 ## Supporting Material
 
 - `adr/` — architecture decision records
+- `../../ecosystem-docs/adr/ECO-0011-mxkeys-remains-a-separate-notary-product.md`
+  — MXKeys remains a separate notary product; hostname `mxkeys.org` is the
+  Matrix `server_name` and is not collapsed into the client brand
 - `grafana/` — dashboard assets
 - `prometheus-alerts.yaml` — alert definitions
 - `monitoring.md` — metrics reference and Prometheus + Grafana setup notes

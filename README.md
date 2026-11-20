@@ -47,6 +47,11 @@ surface. A dedicated notary:
 - Lets multiple homeservers share a single audit and observability point.
 - Makes trust policy (allow and deny lists, signature requirements, TLS rules) explicit and configurable independently of any homeserver.
 
+The public hostname `mxkeys.org` is the notary Matrix `server_name`. MXKeys
+stays a separate infrastructure product and is not folded into the Matrix
+Family client brand or served as the notary under `matrix.family`. See
+`ecosystem-docs` ADR ECO-0011.
+
 ## Use cases
 
 - Perspective notary for Synapse, Dendrite, Conduit, or MXCore via `trusted_key_servers`.
