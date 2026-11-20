@@ -118,10 +118,10 @@ func (cb *CircuitBreaker) Allow(serverName string) bool {
 		return true
 
 	case CircuitOpen:
-		// Check if we should transition to half-open
+		// The request that moves the circuit to half-open is its first probe.
 		if now.Sub(sc.lastFailure) > cb.resetTimeout {
 			sc.state = CircuitHalfOpen
-			sc.halfOpenReqs = 0
+			sc.halfOpenReqs = 1
 			return true
 		}
 		return false
@@ -136,6 +136,18 @@ func (cb *CircuitBreaker) Allow(serverName string) bool {
 	}
 
 	return true
+}
+
+// Release returns the probe slot of an allowed request that ended without
+// an outcome, for example because it never got a fetch slot. Without it a
+// half-open circuit would stop admitting probes for good.
+func (cb *CircuitBreaker) Release(serverName string) {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	if sc, exists := cb.servers[serverName]; exists && sc.state == CircuitHalfOpen && sc.halfOpenReqs > 0 {
+		sc.halfOpenReqs--
+	}
 }
 
 // RecordSuccess records a successful request

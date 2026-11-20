@@ -12,9 +12,48 @@
 package keys
 
 import (
+	"context"
 	"testing"
 	"time"
 )
+
+func TestHalfOpenAdmitsOneProbeAtATime(t *testing.T) {
+	cb := NewCircuitBreaker(1, 10*time.Millisecond)
+	cb.RecordFailure("s")
+	time.Sleep(20 * time.Millisecond)
+
+	if !cb.Allow("s") {
+		t.Fatal("the first request after the reset timeout must be admitted as a probe")
+	}
+	if cb.Allow("s") {
+		t.Fatal("a second probe must wait for the first one's outcome")
+	}
+	cb.Release("s")
+	if !cb.Allow("s") {
+		t.Fatal("a released probe slot must admit the next probe")
+	}
+}
+
+func TestAbandonedProbesDoNotWedgeTheCircuit(t *testing.T) {
+	f := NewFetcherWithConfig(FetcherConfig{Timeout: time.Second})
+	f.circuitBreaker = NewCircuitBreaker(1, 10*time.Millisecond)
+	f.circuitBreaker.RecordFailure("busy.example")
+	time.Sleep(20 * time.Millisecond)
+
+	if err := f.fetchSem.Acquire(context.Background(), maxConcurrentFetches); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+		_, _ = f.FetchServerKeys(ctx, "busy.example")
+		cancel()
+	}
+	f.fetchSem.Release(maxConcurrentFetches)
+
+	if !f.circuitBreaker.Allow("busy.example") {
+		t.Fatal("probes abandoned on the fetch semaphore must not keep the circuit closed to new probes")
+	}
+}
 
 func TestNewBreakerIsClosed(t *testing.T) {
 	cb := NewCircuitBreaker(5, time.Minute)

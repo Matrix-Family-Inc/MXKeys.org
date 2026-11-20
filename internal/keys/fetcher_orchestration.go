@@ -33,6 +33,7 @@ func (f *Fetcher) FetchServerKeys(ctx context.Context, serverName string) (*Serv
 	}
 
 	if err := f.fetchSem.Acquire(ctx, 1); err != nil {
+		f.circuitBreaker.Release(serverName)
 		return nil, &KeyError{Op: "fetch", ServerName: serverName, Err: fmt.Errorf("%w: %v", ErrConcurrencyLimit, err)}
 	}
 	defer f.fetchSem.Release(1)
