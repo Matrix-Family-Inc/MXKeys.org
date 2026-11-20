@@ -171,6 +171,9 @@ func applyEnvOverrides(c *Config) error {
 	if err := envBool("MXKEYS_TRANSPARENCY_ENABLED", &c.Transparency.Enabled); err != nil {
 		return err
 	}
+	if err := envBool("MXKEYS_ANALYTICS_ENABLED", &c.Analytics.Enabled); err != nil {
+		return err
+	}
 	if err := envBool("MXKEYS_TRANSPARENCY_LOG_ALL_KEYS", &c.Transparency.LogAllKeys); err != nil {
 		return err
 	}

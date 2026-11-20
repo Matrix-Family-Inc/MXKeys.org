@@ -12,8 +12,6 @@
 package keys
 
 import (
-	"context"
-	"database/sql"
 	"sort"
 	"sync"
 	"time"
@@ -22,19 +20,17 @@ import (
 	"mxkeys/internal/zero/metrics"
 )
 
-// Analytics tracks federation key statistics and anomalies
+// Analytics tracks federation key statistics and anomalies in memory.
 type Analytics struct {
-	db      *sql.DB
 	enabled bool
 
 	mu    sync.RWMutex
 	stats *AnalyticsStats
 
 	// Metrics
-	serversObserved    *metrics.Gauge
-	keyRotationsTotal  *metrics.Counter
-	anomaliesDetected  *metrics.Counter
-	avgKeyValidityDays *metrics.Gauge
+	serversObserved   *metrics.Gauge
+	keyRotationsTotal *metrics.Counter
+	anomaliesDetected *metrics.Counter
 }
 
 // AnalyticsStats holds aggregated statistics
@@ -43,7 +39,6 @@ type AnalyticsStats struct {
 	TotalKeysObserved    int64
 	TotalKeyRotations    int64
 	TotalAnomalies       int64
-	AvgKeyValidityHours  float64
 	ShortestKeyValidity  time.Duration
 	LongestKeyValidity   time.Duration
 	MostActiveServer     string
@@ -54,11 +49,13 @@ type AnalyticsStats struct {
 	ServerStats map[string]*ServerAnalytics
 }
 
-// ServerAnalytics holds per-server statistics
+// ServerAnalytics holds per-server statistics. CurrentKeyID is the sorted,
+// comma-separated set of verify key IDs last seen.
 type ServerAnalytics struct {
 	ServerName       string
 	FirstSeen        time.Time
 	LastSeen         time.Time
+	KeysChangedAt    time.Time
 	KeyCount         int
 	RotationCount    int
 	AvgKeyValidity   time.Duration
@@ -67,6 +64,16 @@ type ServerAnalytics struct {
 	AnomalyCount     int
 	FetchSuccessRate float64
 	LastFetchStatus  string
+
+	version string
+	seen    map[string]struct{}
+}
+
+// snapshot returns a copy that shares no state with the tracked entry.
+func (s *ServerAnalytics) snapshot() *ServerAnalytics {
+	c := *s
+	c.seen = nil
+	return &c
 }
 
 // AnomalyType describes detected anomalies
@@ -98,9 +105,8 @@ type AnalyticsConfig struct {
 }
 
 // NewAnalytics creates a new analytics engine
-func NewAnalytics(db *sql.DB, cfg AnalyticsConfig) *Analytics {
+func NewAnalytics(cfg AnalyticsConfig) *Analytics {
 	a := &Analytics{
-		db:      db,
 		enabled: cfg.Enabled,
 		stats: &AnalyticsStats{
 			ServerStats: make(map[string]*ServerAnalytics),
@@ -123,12 +129,6 @@ func NewAnalytics(db *sql.DB, cfg AnalyticsConfig) *Analytics {
 			Name:      "anomalies_detected_total",
 			Help:      "Total anomalies detected",
 		}),
-		avgKeyValidityDays: metrics.NewGauge(metrics.GaugeOpts{
-			Namespace: "mxkeys",
-			Subsystem: "analytics",
-			Name:      "avg_key_validity_days",
-			Help:      "Average key validity in days",
-		}),
 	}
 
 	if cfg.Enabled {
@@ -149,7 +149,6 @@ func (a *Analytics) GetStats() *AnalyticsStats {
 		TotalKeysObserved:    a.stats.TotalKeysObserved,
 		TotalKeyRotations:    a.stats.TotalKeyRotations,
 		TotalAnomalies:       a.stats.TotalAnomalies,
-		AvgKeyValidityHours:  a.stats.AvgKeyValidityHours,
 		ShortestKeyValidity:  a.stats.ShortestKeyValidity,
 		LongestKeyValidity:   a.stats.LongestKeyValidity,
 		MostActiveServer:     a.stats.MostActiveServer,
@@ -159,7 +158,7 @@ func (a *Analytics) GetStats() *AnalyticsStats {
 	}
 
 	for k, v := range a.stats.ServerStats {
-		stats.ServerStats[k] = v
+		stats.ServerStats[k] = v.snapshot()
 	}
 
 	return stats
@@ -170,7 +169,10 @@ func (a *Analytics) GetServerStats(serverName string) *ServerAnalytics {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	return a.stats.ServerStats[serverName]
+	if stats, ok := a.stats.ServerStats[serverName]; ok {
+		return stats.snapshot()
+	}
+	return nil
 }
 
 // GetTopRotators returns servers with most key rotations
@@ -184,7 +186,7 @@ func (a *Analytics) GetTopRotators(limit int) []*ServerAnalytics {
 
 	servers := make([]*ServerAnalytics, 0, len(a.stats.ServerStats))
 	for _, stats := range a.stats.ServerStats {
-		servers = append(servers, stats)
+		servers = append(servers, stats.snapshot())
 	}
 
 	sort.Slice(servers, func(i, j int) bool {
@@ -206,45 +208,11 @@ func (a *Analytics) GetAnomalousServers() []*ServerAnalytics {
 	var anomalous []*ServerAnalytics
 	for _, stats := range a.stats.ServerStats {
 		if stats.AnomalyCount > 0 {
-			anomalous = append(anomalous, stats)
+			anomalous = append(anomalous, stats.snapshot())
 		}
 	}
 
 	return anomalous
-}
-
-// ComputeAggregates updates aggregate statistics from database
-func (a *Analytics) ComputeAggregates(ctx context.Context) error {
-	if !a.enabled || a.db == nil {
-		return nil
-	}
-
-	// Query aggregate stats from server_keys table
-	var totalServers, totalKeys int64
-	var avgValidityMs float64
-	row := a.db.QueryRowContext(ctx, `
-		SELECT 
-			COUNT(DISTINCT server_name),
-			COUNT(*),
-			COALESCE(AVG(EXTRACT(EPOCH FROM (valid_until - NOW())) * 1000), 0)
-		FROM server_keys
-		WHERE valid_until > NOW()
-	`)
-
-	err := row.Scan(&totalServers, &totalKeys, &avgValidityMs)
-	if err != nil && err != sql.ErrNoRows {
-		return err
-	}
-
-	a.mu.Lock()
-	a.stats.TotalServersObserved = totalServers
-	a.stats.TotalKeysObserved = totalKeys
-	a.stats.AvgKeyValidityHours = avgValidityMs / (1000 * 60 * 60)
-	a.serversObserved.Set(float64(totalServers))
-	a.avgKeyValidityDays.Set(a.stats.AvgKeyValidityHours / 24)
-	a.mu.Unlock()
-
-	return nil
 }
 
 // Summary returns a JSON-serializable summary
@@ -258,7 +226,6 @@ func (a *Analytics) Summary() map[string]interface{} {
 		"total_keys_observed":    a.stats.TotalKeysObserved,
 		"total_key_rotations":    a.stats.TotalKeyRotations,
 		"total_anomalies":        a.stats.TotalAnomalies,
-		"avg_key_validity_hours": a.stats.AvgKeyValidityHours,
 		"shortest_validity":      a.stats.ShortestKeyValidity.String(),
 		"longest_validity":       a.stats.LongestKeyValidity.String(),
 		"most_active_server":     a.stats.MostActiveServer,

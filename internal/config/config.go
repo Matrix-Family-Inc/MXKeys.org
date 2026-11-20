@@ -30,8 +30,15 @@ type Config struct {
 	Security       SecurityConfig
 	TrustPolicy    TrustPolicyConfig
 	Transparency   TransparencyConfig
+	Analytics      AnalyticsConfig
 	Cluster        ClusterConfig
 	ServerInfo     ServerInfoConfig
+}
+
+// AnalyticsConfig controls the in-memory key analytics behind the admin
+// /_mxkeys/analytics/* routes. Disabled by default.
+type AnalyticsConfig struct {
+	Enabled bool
 }
 
 // ServerConfig server settings

@@ -221,11 +221,11 @@ func New(cfg *config.Config) (*Server, error) {
 		log.Info("Transparency log enabled")
 	}
 
-	// Analytics is always available (lightweight)
-	s.analytics = keys.NewAnalytics(db, keys.AnalyticsConfig{
-		Enabled: true,
-	})
-	s.notary.SetAnalytics(s.analytics)
+	if cfg.Analytics.Enabled {
+		s.analytics = keys.NewAnalytics(keys.AnalyticsConfig{Enabled: true})
+		s.notary.SetAnalytics(s.analytics)
+		log.Info("Analytics enabled")
+	}
 
 	if cfg.Cluster.Enabled {
 		clusterNodeID := cfg.Cluster.NodeID

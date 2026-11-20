@@ -5,7 +5,7 @@
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
- * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Date: Fri 20 Nov 2026 22:39:55 UTC
  * Status: Updated
  */
 
@@ -16,65 +16,78 @@ import (
 	"time"
 )
 
-func TestAnalyticsRapidRotationUsesRealElapsedTime(t *testing.T) {
-	a := NewAnalytics(nil, AnalyticsConfig{Enabled: true})
-	server := "analytics.test"
-
-	first := &ServerKeysResponse{
+func analyticsDocument(server string, validUntil time.Time, keyIDs ...string) *ServerKeysResponse {
+	resp := &ServerKeysResponse{
 		ServerName:   server,
-		ValidUntilTS: time.Now().Add(2 * time.Hour).UnixMilli(),
-		VerifyKeys: map[string]VerifyKeyResponse{
-			"ed25519:key1": {Key: "AQ"},
-		},
-		Signatures: map[string]map[string]string{
-			server: {"ed25519:key1": "sig"},
-		},
+		ValidUntilTS: validUntil.UnixMilli(),
+		VerifyKeys:   map[string]VerifyKeyResponse{},
+		Signatures:   map[string]map[string]string{server: {}},
 	}
-	a.RecordKeyObservation(server, first)
+	for _, keyID := range keyIDs {
+		resp.VerifyKeys[keyID] = VerifyKeyResponse{Key: "AQ"}
+		resp.Signatures[server][keyID] = "sig"
+	}
+	return resp
+}
 
+func TestAnalyticsRapidRotationUsesTimeSincePreviousChange(t *testing.T) {
+	a := NewAnalytics(AnalyticsConfig{Enabled: true})
+	const server = "analytics.test"
+	validUntil := time.Now().Add(2 * time.Hour)
+
+	a.RecordKeyObservation(server, analyticsDocument(server, validUntil, "ed25519:key1"))
 	a.mu.Lock()
-	a.stats.ServerStats[server].LastSeen = time.Now().Add(-48 * time.Hour)
+	a.stats.ServerStats[server].KeysChangedAt = time.Now().Add(-48 * time.Hour)
 	a.mu.Unlock()
 
-	second := &ServerKeysResponse{
-		ServerName:   server,
-		ValidUntilTS: time.Now().Add(2 * time.Hour).UnixMilli(),
-		VerifyKeys: map[string]VerifyKeyResponse{
-			"ed25519:key2": {Key: "Ag"},
-		},
-		Signatures: map[string]map[string]string{
-			server: {"ed25519:key2": "sig"},
-		},
-	}
-	anomalies := a.RecordKeyObservation(server, second)
-
-	for _, anomaly := range anomalies {
+	for _, anomaly := range a.RecordKeyObservation(server, analyticsDocument(server, validUntil, "ed25519:key2")) {
 		if anomaly.Type == AnomalyRapidRotation {
-			t.Fatalf("unexpected rapid rotation anomaly for 48h interval: %+v", anomaly)
+			t.Fatalf("a change 48h after the previous one is not rapid: %+v", anomaly)
 		}
+	}
+	if got := a.GetServerStats(server).RotationCount; got != 1 {
+		t.Fatalf("RotationCount = %d, want 1", got)
 	}
 }
 
-func TestAnalyticsMultipleKeysIncrementsTotalAnomalies(t *testing.T) {
-	a := NewAnalytics(nil, AnalyticsConfig{Enabled: true})
-	server := "multi.test"
+func TestAnalyticsIgnoresRepeatedObservationsOfOneDocument(t *testing.T) {
+	a := NewAnalytics(AnalyticsConfig{Enabled: true})
+	const server = "multi.test"
+	doc := analyticsDocument(server, time.Now().Add(2*time.Hour), "ed25519:key1", "ed25519:key2")
 
-	resp := &ServerKeysResponse{
-		ServerName:   server,
-		ValidUntilTS: time.Now().Add(2 * time.Hour).UnixMilli(),
-		VerifyKeys: map[string]VerifyKeyResponse{
-			"ed25519:key1": {Key: "AQ"},
-			"ed25519:key2": {Key: "Ag"},
-		},
-		Signatures: map[string]map[string]string{
-			server: {"ed25519:key1": "sig"},
-		},
+	for i := 0; i < 5; i++ {
+		a.RecordKeyObservation(server, doc)
 	}
-
-	a.RecordKeyObservation(server, resp)
 	stats := a.GetStats()
+	if stats.TotalKeyRotations != 0 {
+		t.Fatalf("an unchanged two-key document must not count as rotations, got %d", stats.TotalKeyRotations)
+	}
+	if stats.TotalAnomalies != 1 {
+		t.Fatalf("the multiple-keys anomaly must be counted once per document, got %d", stats.TotalAnomalies)
+	}
+	if stats.TotalKeysObserved != 2 {
+		t.Fatalf("TotalKeysObserved = %d, want 2", stats.TotalKeysObserved)
+	}
+}
 
-	if stats.TotalAnomalies == 0 {
-		t.Fatalf("expected TotalAnomalies to increment for multiple keys anomaly")
+func TestAnalyticsDoesNotTrackUnknownFailures(t *testing.T) {
+	a := NewAnalytics(AnalyticsConfig{Enabled: true})
+	for i := 0; i < 100; i++ {
+		a.RecordFetchFailure("random-" + string(rune('a'+i%26)) + ".invalid")
+	}
+	if got := len(a.GetStats().ServerStats); got != 0 {
+		t.Fatalf("failed lookups of unknown names must not be tracked, got %d entries", got)
+	}
+}
+
+func TestAnalyticsSnapshotsAreDetached(t *testing.T) {
+	a := NewAnalytics(AnalyticsConfig{Enabled: true})
+	const server = "copy.test"
+	a.RecordKeyObservation(server, analyticsDocument(server, time.Now().Add(time.Hour), "ed25519:a"))
+
+	snapshot := a.GetStats().ServerStats[server]
+	a.RecordKeyObservation(server, analyticsDocument(server, time.Now().Add(2*time.Hour), "ed25519:b"))
+	if snapshot.CurrentKeyID != "ed25519:a" {
+		t.Fatalf("a returned snapshot must not change with later observations")
 	}
 }

@@ -27,7 +27,7 @@ func newAdminRouteTestServer(token string) *Server {
 		},
 		mux:              http.NewServeMux(),
 		rateLimiter:      NewRateLimiter(DefaultRateLimitConfig()),
-		analytics:        keys.NewAnalytics(nil, keys.AnalyticsConfig{Enabled: true}),
+		analytics:        keys.NewAnalytics(keys.AnalyticsConfig{Enabled: true}),
 		adminAccessToken: token,
 	}
 	s.setupRoutes()

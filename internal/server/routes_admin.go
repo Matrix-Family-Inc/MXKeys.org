@@ -36,10 +36,12 @@ func (s *Server) registerAdminRoutes() {
 		register("GET /_mxkeys/transparency/proof", s.handleTransparencyProof)
 	}
 
-	register("GET /_mxkeys/analytics/summary", s.handleAnalyticsSummary)
-	register("GET /_mxkeys/analytics/servers", s.handleAnalyticsServers)
-	register("GET /_mxkeys/analytics/anomalies", s.handleAnalyticsAnomalies)
-	register("GET /_mxkeys/analytics/rotators", s.handleAnalyticsTopRotators)
+	if s.analytics != nil {
+		register("GET /_mxkeys/analytics/summary", s.handleAnalyticsSummary)
+		register("GET /_mxkeys/analytics/servers", s.handleAnalyticsServers)
+		register("GET /_mxkeys/analytics/anomalies", s.handleAnalyticsAnomalies)
+		register("GET /_mxkeys/analytics/rotators", s.handleAnalyticsTopRotators)
+	}
 
 	register("GET /_mxkeys/circuits", s.handleCircuitBreakerStats)
 

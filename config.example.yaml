@@ -118,6 +118,10 @@ transparency:
   retention_days: 365
   table_name: key_transparency_log
 
+# In-memory key statistics behind the admin /_mxkeys/analytics/* routes.
+analytics:
+  enabled: false
+
 cluster:
   enabled: false
   node_id: ""

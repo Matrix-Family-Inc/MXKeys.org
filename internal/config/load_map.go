@@ -86,6 +86,9 @@ func applyMapConfig(config *Config, m map[string]interface{}, _ string) {
 	applySecurityMap(config, m)
 	applyTrustPolicyMap(config, m)
 	applyTransparencyMap(config, m)
+	if zeroconfig.Has(m, "analytics.enabled") {
+		config.Analytics.Enabled = zeroconfig.GetBool(m, "analytics.enabled")
+	}
 	applyClusterMap(config, m)
 
 	if trusted := parseTrustedNotariesFromMap(m); len(trusted) > 0 {
