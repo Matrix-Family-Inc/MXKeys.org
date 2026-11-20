@@ -58,3 +58,6 @@ matrix-family-info.md
 .githooks/
 scripts/adr_lint.py
 scripts/install-hooks.sh
+
+# MF Authenticator lives in its own git repository
+/mf-authenticator/
