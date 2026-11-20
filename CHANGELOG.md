@@ -4,7 +4,7 @@ Owner: Matrix Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
-Date: Mon 22 Jun 2026 00:51:51 UTC
+Date: Fri 20 Nov 2026 23:30:00 UTC
 Status: Updated
 
 # Changelog
@@ -15,6 +15,24 @@ All notable changes to MXKeys are documented in this file.
 
 ### Security
 
+- Federation discovery checks the TLS certificate and sends the `Host`
+  header for the name from that discovery step (the server name, or the
+  delegated hostname). The connection may go to an SRV target; the
+  certificate and `Host` stay on the discovery name. SRV is looked up
+  as `_matrix-fed._tcp`, then the deprecated `_matrix._tcp`. With
+  private-address blocking on, `.well-known` dials only public
+  addresses, and a key fetch dials the addresses resolved for that
+  check.
+- Key documents are signed and verified with the Matrix signing
+  algorithm: canonical JSON of the object without `signatures` and
+  `unsigned`, unpadded base64. The bytes served are those signed bytes,
+  so `old_verify_keys` is no longer dropped. A current document must
+  be signed by a key in `verify_keys`. A document taken from a fallback
+  notary must carry a valid origin self-signature.
+- The operator config loader rejects YAML it cannot represent. Inline
+  comments are stripped. `[]` and `[a, b]` become lists, `{}` becomes
+  an empty mapping, and quoted scalars stay strings. A flow-style
+  trusted-proxy list is therefore applied instead of being ignored.
 - Updated Go module dependencies (`lib/pq` v1.12.3, `x/net` v0.57.0,
   `x/sync` v0.22.0, `x/time` v0.15.0); `govulncheck` reports zero
   vulnerabilities in required modules.
@@ -24,6 +42,20 @@ All notable changes to MXKeys are documented in this file.
   overrides; targeted `brace-expansion` update within consumer
   ranges. Runtime bundle was not affected; all advisories sat in
   dev tooling.
+
+### Fixed
+
+- `POST /_matrix/key/v2/query` looks up the requested servers in
+  parallel, under a deadline that finishes inside the HTTP write
+  timeout. A disconnecting client does not fail the shared fetch. When
+  `minimum_valid_until_ts` is later than the cached document, the
+  origin is asked again at most once per five minutes. If the origin
+  cannot be reached, the last stored document is served so signatures
+  made while it was valid can still be checked. Expired documents are
+  kept for `keys.expired_retention_days` (default 365).
+- The circuit breaker treats the request that moves a server to
+  half-open as its probe, and releases that probe when the request
+  never starts a fetch.
 
 ### Added
 
@@ -35,6 +67,9 @@ All notable changes to MXKeys are documented in this file.
 
 ### Changed
 
+- In-memory key analytics run only when `analytics.enabled` is true.
+  A failed lookup does not create an entry. Counts move when a
+  server's document changes, and readers receive a copy.
 - Consolidated release documentation: the unique branch-protection
   alignment note from `docs/release-process.md` moved into
   `docs/runbook/release.md`, which is now the single release

@@ -5,7 +5,7 @@
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
- * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Date: Fri 20 Nov 2026 23:15:00 UTC
  * Status: Updated
  */
 
@@ -34,7 +34,14 @@ func WithEnvOverride(m map[string]interface{}, prefix string) {
 		path := strings.ToLower(strings.TrimPrefix(key, prefix+"_"))
 		path = strings.ReplaceAll(path, "_", ".")
 
-		setPath(m, path, parseValue(value))
+		parsed, err := parseValue(value)
+		if err != nil {
+			// Environment values are raw strings, not a YAML document.
+			// A value this subset rejects is still applied verbatim.
+			setPath(m, path, value)
+			continue
+		}
+		setPath(m, path, parsed)
 	}
 }
 

@@ -5,7 +5,7 @@
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
- * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Date: Fri 20 Nov 2026 22:39:55 UTC
  * Status: Updated
  */
 
@@ -13,82 +13,100 @@ package config
 
 import (
 	"bufio"
+	"fmt"
+	"io"
 	"os"
 	"strings"
 )
 
-// Load reads a minimal-subset YAML config file into a nested map.
-// Supports: scalars, nested mappings, string/scalar list items, and one-level
-// mapping list items (e.g. `- key_id: value`). Comments start with `#`.
-// Not a full YAML parser: suitable for simple operator config only.
+// Load reads a YAML subset into a nested map: block mappings, block
+// sequences of scalars or of one-level mappings, flow sequences of scalars
+// ("[]", "[a, b]"), the empty flow mapping "{}", plain, 'single' and
+// "double" quoted scalars, and comments ("#" at line start or after
+// whitespace, outside quotes). Anything else is an error, so a file the
+// loader cannot represent fails instead of being read differently.
 func Load(path string) (map[string]interface{}, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
+	return parse(file)
+}
 
+func parse(r io.Reader) (map[string]interface{}, error) {
 	result := make(map[string]interface{})
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(r)
 	var currentPath []string
 	var indentStack []int
 	var activeListItem map[string]interface{}
 	activeListIndent := -1
 
-	for scanner.Scan() {
-		line := scanner.Text()
-
+	for lineNo := 1; scanner.Scan(); lineNo++ {
+		line, err := stripComment(scanner.Text())
+		if err != nil {
+			return nil, fmt.Errorf("line %d: %w", lineNo, err)
+		}
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+		if trimmed == "" {
 			continue
 		}
 
 		indent := lineIndent(line)
-
 		for len(indentStack) > 0 && indent <= indentStack[len(indentStack)-1] {
 			indentStack = indentStack[:len(indentStack)-1]
-			if len(currentPath) > 0 {
-				currentPath = currentPath[:len(currentPath)-1]
+			if len(currentPath) == 0 {
+				return nil, fmt.Errorf("line %d: indentation does not match the document structure", lineNo)
 			}
+			currentPath = currentPath[:len(currentPath)-1]
 		}
-		if activeListItem != nil && indent <= activeListIndent {
+		if activeListIndent >= 0 && indent <= activeListIndent {
 			activeListItem = nil
 			activeListIndent = -1
 		}
 
-		if strings.HasPrefix(trimmed, "- ") {
-			activeListItem, activeListIndent = consumeListItem(result, currentPath, trimmed, indent)
-			continue
-		}
-
-		if activeListItem != nil && indent > activeListIndent {
-			k, v, ok := parseKeyValue(trimmed)
-			if !ok {
-				continue
+		if trimmed == "-" || strings.HasPrefix(trimmed, "- ") {
+			if len(currentPath) == 0 {
+				return nil, fmt.Errorf("line %d: sequence item outside of a mapping key", lineNo)
 			}
-			if v == "" {
-				activeListItem[k] = make(map[string]interface{})
-				continue
+			activeListItem, err = consumeListItem(result, currentPath, strings.TrimSpace(strings.TrimPrefix(trimmed, "-")))
+			if err != nil {
+				return nil, fmt.Errorf("line %d: %w", lineNo, err)
 			}
-			activeListItem[k] = parseValue(v)
+			activeListIndent = indent
 			continue
 		}
 
-		parts := strings.SplitN(trimmed, ":", 2)
-		if len(parts) != 2 {
+		key, raw, err := splitKeyValue(trimmed)
+		if err != nil {
+			return nil, fmt.Errorf("line %d: %w", lineNo, err)
+		}
+
+		if activeListIndent >= 0 && indent > activeListIndent {
+			if activeListItem == nil {
+				return nil, fmt.Errorf("line %d: nested content under a scalar sequence item", lineNo)
+			}
+			if raw == "" {
+				return nil, fmt.Errorf("line %d: nested mappings inside sequence items are not supported", lineNo)
+			}
+			value, err := parseValue(raw)
+			if err != nil {
+				return nil, fmt.Errorf("line %d: %s: %w", lineNo, key, err)
+			}
+			activeListItem[key] = value
 			continue
 		}
 
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-
-		if value == "" {
+		if raw == "" {
 			currentPath = append(currentPath, key)
 			indentStack = append(indentStack, indent)
-		} else {
-			fullPath := strings.Join(append(currentPath, key), ".")
-			setPath(result, fullPath, parseValue(value))
+			continue
 		}
+		value, err := parseValue(raw)
+		if err != nil {
+			return nil, fmt.Errorf("line %d: %s: %w", lineNo, key, err)
+		}
+		setPath(result, strings.Join(append(append([]string(nil), currentPath...), key), "."), value)
 	}
 
 	return result, scanner.Err()
@@ -109,36 +127,43 @@ func lineIndent(line string) int {
 	return indent
 }
 
-// consumeListItem parses a list element line and returns the mapping head and
-// its indent so subsequent nested keys can be attached.
-func consumeListItem(result map[string]interface{}, currentPath []string, trimmed string, indent int) (map[string]interface{}, int) {
-	item := strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))
+// consumeListItem appends one sequence item at listPath. An item of the
+// form "key: value" starts a mapping that following deeper lines extend;
+// it is returned so they can be attached.
+func consumeListItem(result map[string]interface{}, currentPath []string, item string) (map[string]interface{}, error) {
 	listPath := strings.Join(currentPath, ".")
-	existing := getPath(result, listPath)
 	var list []interface{}
-	if l, ok := existing.([]interface{}); ok {
-		list = l
+	switch existing := getPath(result, listPath).(type) {
+	case nil:
+	case []interface{}:
+		list = existing
+	default:
+		return nil, fmt.Errorf("%s: sequence item mixed with a scalar or mapping", listPath)
 	}
 
 	if item == "" {
 		itemMap := make(map[string]interface{})
-		list = append(list, itemMap)
-		setPath(result, listPath, list)
-		return itemMap, indent
+		setPath(result, listPath, append(list, itemMap))
+		return itemMap, nil
 	}
 
-	if strings.Contains(item, ": ") {
-		k, v, ok := parseKeyValue(item)
-		if !ok {
-			return nil, -1
+	if key, raw, err := splitKeyValue(item); err == nil {
+		if raw == "" {
+			return nil, fmt.Errorf("%s: nested mappings inside sequence items are not supported", listPath)
 		}
-		itemMap := map[string]interface{}{k: parseValue(v)}
-		list = append(list, itemMap)
-		setPath(result, listPath, list)
-		return itemMap, indent
+		value, err := parseValue(raw)
+		if err != nil {
+			return nil, fmt.Errorf("%s.%s: %w", listPath, key, err)
+		}
+		itemMap := map[string]interface{}{key: value}
+		setPath(result, listPath, append(list, itemMap))
+		return itemMap, nil
 	}
 
-	list = append(list, parseValue(item))
-	setPath(result, listPath, list)
-	return nil, -1
+	value, err := parseValue(item)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", listPath, err)
+	}
+	setPath(result, listPath, append(list, value))
+	return nil, nil
 }

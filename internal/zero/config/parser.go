@@ -5,54 +5,15 @@
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
- * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Date: Fri 20 Nov 2026 23:15:00 UTC
  * Status: Updated
  */
 
 package config
 
 import (
-	"strconv"
 	"strings"
 )
-
-// parseValue converts a raw YAML scalar into a typed value.
-// Precedence: quoted string -> bool -> int64 -> float64 -> string fallback.
-func parseValue(s string) interface{} {
-	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
-		return s[1 : len(s)-1]
-	}
-
-	if s == "true" {
-		return true
-	}
-	if s == "false" {
-		return false
-	}
-
-	if i, err := strconv.ParseInt(s, 10, 64); err == nil {
-		return i
-	}
-
-	if f, err := strconv.ParseFloat(s, 64); err == nil {
-		return f
-	}
-
-	return s
-}
-
-// parseKeyValue splits a single "key: value" line.
-// Surrounding quotes on value are stripped.
-func parseKeyValue(s string) (string, string, bool) {
-	parts := strings.SplitN(s, ":", 2)
-	if len(parts) != 2 {
-		return "", "", false
-	}
-	key := strings.TrimSpace(parts[0])
-	value := strings.TrimSpace(parts[1])
-	value = strings.Trim(value, `"`)
-	return key, value, key != ""
-}
 
 // setPath sets a value at dot-separated path, creating intermediate maps.
 func setPath(m map[string]interface{}, path string, value interface{}) {
