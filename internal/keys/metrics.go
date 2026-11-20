@@ -167,7 +167,20 @@ var (
 		},
 		[]string{"type"},
 	)
+
+	staleServes = metrics.NewCounter(
+		metrics.CounterOpts{
+			Namespace: "mxkeys",
+			Subsystem: "keys",
+			Name:      "stale_serves_total",
+			Help:      "Key documents served from storage after the origin could not be reached",
+		},
+	)
 )
+
+func recordStaleServe() {
+	staleServes.Inc()
+}
 
 func recordMemoryCacheHit() {
 	keyCacheHits.WithLabelValues("memory").Inc()

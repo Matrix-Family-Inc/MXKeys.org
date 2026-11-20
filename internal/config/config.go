@@ -74,6 +74,11 @@ type KeysConfig struct {
 	FetchTimeoutS int
 	CleanupHours  int
 
+	// ExpiredRetentionDays is how long a key document is kept after it
+	// expires. Expired documents are served when the origin is offline,
+	// because they are needed to verify events signed in the past.
+	ExpiredRetentionDays int
+
 	// EncryptionPassphraseEnv is the environment variable that holds
 	// the passphrase used to encrypt the on-disk signing key. When
 	// empty, the file-backed provider stores the key as plaintext at
@@ -284,6 +289,7 @@ func setDefaults(c *Config) {
 	c.Keys.CacheTTLHours = 1
 	c.Keys.FetchTimeoutS = 30
 	c.Keys.CleanupHours = 6
+	c.Keys.ExpiredRetentionDays = 365
 
 	c.TrustedServers.Fallback = []string{"matrix.org"}
 

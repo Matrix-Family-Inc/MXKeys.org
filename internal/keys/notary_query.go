@@ -5,7 +5,7 @@
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
- * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Date: Fri 20 Nov 2026 22:39:55 UTC
  * Status: Updated
  */
 
@@ -16,12 +16,24 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"time"
+	"sync"
 
 	"mxkeys/internal/zero/log"
 )
 
-// QueryKeys queries keys for multiple servers (notary functionality).
+// queryConcurrency bounds how many servers of one query are looked up at
+// the same time.
+const queryConcurrency = 16
+
+// queryResult is the outcome for one server of a query.
+type queryResult struct {
+	keys    *ServerKeysResponse
+	failure map[string]interface{}
+}
+
+// QueryKeys answers POST /_matrix/key/v2/query. Servers are looked up in
+// parallel under one deadline; servers not answered in time are reported
+// under failures. Output order follows the sorted server names.
 func (n *Notary) QueryKeys(ctx context.Context, request *KeyQueryRequest) *KeyQueryResponse {
 	response := &KeyQueryResponse{
 		ServerKeys: make([]ServerKeysResponse, 0),
@@ -32,57 +44,74 @@ func (n *Notary) QueryKeys(ctx context.Context, request *KeyQueryRequest) *KeyQu
 		response.Failures[serverName] = failure
 	}
 
-	for _, serverName := range sortedServerNames(request.ServerKeys) {
-		keyCriteria := request.ServerKeys[serverName]
-		var minValidUntil int64
-		for _, criteria := range keyCriteria {
-			if criteria.MinimumValidUntilTS > minValidUntil {
-				minValidUntil = criteria.MinimumValidUntilTS
-			}
-		}
+	ctx, cancel := context.WithTimeout(ctx, n.queryTimeout())
+	defer cancel()
 
-		keys, err := n.GetServerKeysWithCriteria(ctx, serverName, minValidUntil)
-		if err != nil {
-			log.Warn("Failed to get keys for server", "server", serverName, "error", err)
-			if analytics := n.getAnalytics(); analytics != nil {
-				analytics.RecordFetchFailure(serverName)
-			}
-			if transparency := n.getTransparency(); transparency != nil {
-				_ = transparency.LogFailure(ctx, serverName, err.Error())
-			}
-			response.Failures[serverName] = sanitizeQueryFailure(err)
+	names := sortedServerNames(request.ServerKeys)
+	results := make([]queryResult, len(names))
+	slots := make(chan struct{}, queryConcurrency)
+	var wg sync.WaitGroup
+	for i, serverName := range names {
+		select {
+		case slots <- struct{}{}:
+		case <-ctx.Done():
+			results[i] = queryResult{failure: matrixFailure("M_UNKNOWN", "Lookup did not finish in time")}
 			continue
 		}
+		wg.Add(1)
+		go func(i int, serverName string) {
+			defer wg.Done()
+			defer func() { <-slots }()
+			results[i] = n.queryServer(ctx, serverName, minimumValidUntil(request.ServerKeys[serverName]))
+		}(i, serverName)
+	}
+	wg.Wait()
 
-		keysForResponse, err := n.countersign(keys)
-		if err != nil {
-			log.Error("Failed to add notary signature", "server", serverName, "error", err)
-			response.Failures[serverName] = matrixFailure("M_UNKNOWN", "Internal signing error")
-			continue
+	for i, serverName := range names {
+		if results[i].keys != nil {
+			response.ServerKeys = append(response.ServerKeys, *results[i].keys)
+		} else if results[i].failure != nil {
+			response.Failures[serverName] = results[i].failure
 		}
+	}
+	return response
+}
 
-		if violation := n.checkResponsePolicy(serverName, keysForResponse); violation != nil {
-			if transparency := n.getTransparency(); transparency != nil {
-				_ = transparency.LogPolicyViolation(ctx, violation)
-			}
-			response.Failures[serverName] = map[string]interface{}{
-				"errcode": "M_FORBIDDEN",
-				"error":   fmt.Sprintf("Trust policy violation (%s): %s", violation.Rule, violation.Details),
-			}
-			continue
-		}
-
+// queryServer looks up, countersigns and policy-checks one server.
+func (n *Notary) queryServer(ctx context.Context, serverName string, minValidUntil int64) queryResult {
+	keys, err := n.GetServerKeysWithCriteria(ctx, serverName, minValidUntil)
+	if err != nil {
+		log.Warn("Failed to get keys for server", "server", serverName, "error", err)
 		if analytics := n.getAnalytics(); analytics != nil {
-			analytics.RecordKeyObservation(serverName, keysForResponse)
+			analytics.RecordFetchFailure(serverName)
 		}
 		if transparency := n.getTransparency(); transparency != nil {
-			_ = transparency.LogKey(ctx, serverName, keysForResponse)
+			_ = transparency.LogFailure(ctx, serverName, err.Error())
 		}
-
-		response.ServerKeys = append(response.ServerKeys, *keysForResponse)
+		return queryResult{failure: sanitizeQueryFailure(err)}
 	}
 
-	return response
+	countersigned, err := n.countersign(keys)
+	if err != nil {
+		log.Error("Failed to add notary signature", "server", serverName, "error", err)
+		return queryResult{failure: matrixFailure("M_UNKNOWN", "Internal signing error")}
+	}
+
+	if violation := n.checkResponsePolicy(serverName, countersigned); violation != nil {
+		if transparency := n.getTransparency(); transparency != nil {
+			_ = transparency.LogPolicyViolation(ctx, violation)
+		}
+		return queryResult{failure: matrixFailure("M_FORBIDDEN",
+			fmt.Sprintf("Trust policy violation (%s): %s", violation.Rule, violation.Details))}
+	}
+
+	if analytics := n.getAnalytics(); analytics != nil {
+		analytics.RecordKeyObservation(serverName, countersigned)
+	}
+	if transparency := n.getTransparency(); transparency != nil {
+		_ = transparency.LogKey(ctx, serverName, countersigned)
+	}
+	return queryResult{keys: countersigned}
 }
 
 // countersign returns a copy of a verified key document with this notary's
@@ -103,10 +132,20 @@ func (n *Notary) countersign(keys *ServerKeysResponse) (*ServerKeysResponse, err
 	return countersigned, nil
 }
 
+func minimumValidUntil(criteria map[string]KeyCriteria) int64 {
+	var minValidUntil int64
+	for _, c := range criteria {
+		if c.MinimumValidUntilTS > minValidUntil {
+			minValidUntil = c.MinimumValidUntilTS
+		}
+	}
+	return minValidUntil
+}
+
 func sanitizeQueryFailure(err error) map[string]interface{} {
 	switch {
-	case errors.Is(err, ErrContextCanceled):
-		return matrixFailure("M_UNKNOWN", "Request canceled")
+	case errors.Is(err, ErrContextCanceled), errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
+		return matrixFailure("M_UNKNOWN", "Lookup did not finish in time")
 	case errors.Is(err, ErrConcurrencyLimit), errors.Is(err, ErrCircuitOpen):
 		return matrixFailure("M_LIMIT_EXCEEDED", "Upstream temporarily unavailable")
 	case errors.Is(err, ErrResolveFailed):
@@ -145,10 +184,8 @@ func (n *Notary) applyTrustPolicyToRequest(request *KeyQueryRequest) map[string]
 
 	for serverName := range request.ServerKeys {
 		if violation := trustPolicy.CheckServer(serverName); violation != nil {
-			failures[serverName] = map[string]interface{}{
-				"errcode": "M_FORBIDDEN",
-				"error":   fmt.Sprintf("Trust policy violation (%s): %s", violation.Rule, violation.Details),
-			}
+			failures[serverName] = matrixFailure("M_FORBIDDEN",
+				fmt.Sprintf("Trust policy violation (%s): %s", violation.Rule, violation.Details))
 			delete(request.ServerKeys, serverName)
 		}
 	}
@@ -162,93 +199,4 @@ func (n *Notary) checkResponsePolicy(serverName string, resp *ServerKeysResponse
 		return nil
 	}
 	return trustPolicy.CheckResponse(serverName, resp)
-}
-
-// GetServerKeysWithCriteria gets keys for a server respecting minimum_valid_until_ts.
-func (n *Notary) GetServerKeysWithCriteria(ctx context.Context, serverName string, minValidUntil int64) (*ServerKeysResponse, error) {
-	keys, err := n.GetServerKeys(ctx, serverName)
-	if err != nil {
-		return nil, err
-	}
-
-	if minValidUntil > 0 && keys.ValidUntilTS < minValidUntil {
-		log.Debug("Cached keys don't meet minimum_valid_until_ts, refetching",
-			"server", serverName,
-			"cached_valid", keys.ValidUntilTS,
-			"required_valid", minValidUntil,
-		)
-		recordRefetch(RefetchReasonMinValidUntil)
-		keys, err = n.fetchAndStoreWithSource(ctx, serverName, FetchSourceRefetch)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return keys, nil
-}
-
-// GetServerKeys gets keys for a server (from cache, storage, or fetch).
-func (n *Notary) GetServerKeys(ctx context.Context, serverName string) (*ServerKeysResponse, error) {
-	if ctx.Err() != nil {
-		return nil, &KeyError{Op: "get_keys", ServerName: serverName, Err: ErrContextCanceled}
-	}
-
-	now := time.Now()
-	n.cacheMu.RLock()
-	cached, ok := n.cache[serverName]
-	n.cacheMu.RUnlock()
-
-	if ok && n.cacheEntryValid(cached, now) {
-		log.Debug("Returning keys from memory cache", "server", serverName)
-		recordMemoryCacheHit()
-		return cloneServerKeysResponse(cached.response), nil
-	}
-	if ok {
-		n.cacheMu.Lock()
-		current, exists := n.cache[serverName]
-		if exists && current == cached && !n.cacheEntryValid(current, now) {
-			delete(n.cache, serverName)
-			updateMemoryCacheSize(len(n.cache))
-		}
-		n.cacheMu.Unlock()
-	}
-	recordMemoryCacheMiss()
-
-	stored, dbErr := n.storage.GetServerResponse(serverName)
-	if dbErr != nil {
-		log.Warn("Database cache unavailable, continuing with remote fetch", "error", dbErr)
-	}
-	if stored != nil && len(stored.Raw) > 0 && stored.ValidUntilTS > now.UnixMilli() {
-		recordDBCacheHit()
-		n.storeInMemoryCache(serverName, stored)
-
-		log.Debug("Returning keys from database cache", "server", serverName)
-		return stored, nil
-	}
-	recordDBCacheMiss()
-
-	result, err, _ := n.fetchGroup.Do(serverName, func() (interface{}, error) {
-		return n.fetchAndStore(ctx, serverName)
-	})
-	if err != nil {
-		n.cacheMu.RLock()
-		expired, hasExpired := n.cache[serverName]
-		n.cacheMu.RUnlock()
-
-		if hasExpired && expired.response != nil {
-			validUntil := time.UnixMilli(expired.response.ValidUntilTS)
-			if validUntil.After(time.Now()) {
-				log.Warn("Using stale memory cache entry after fetch failure",
-					"server", serverName,
-					"error", err,
-					"response_valid_until", validUntil,
-				)
-				return expired.response, nil
-			}
-		}
-
-		return nil, err
-	}
-
-	return result.(*ServerKeysResponse), nil
 }

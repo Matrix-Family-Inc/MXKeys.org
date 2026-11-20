@@ -5,39 +5,36 @@
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
- * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Date: Fri 20 Nov 2026 22:39:55 UTC
  * Status: Updated
  */
-
-// Raw-preserving server_key_responses persistence. Splitting this out
-// of storage.go keeps the per-key CRUD surface separate from the
-// whole-response cache surface and keeps file size under the 300-line
-// house rule.
 
 package keys
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
-// StoreServerResponse stores full server key response.
-//
-// Both the parsed struct (in the legacy `response` JSONB column) and
-// the raw origin bytes (when known, in `raw_response` BYTEA) are
-// persisted. The raw column is what later lets notary_query preserve
-// origin self-signatures byte-for-byte; the struct column keeps the
-// fast struct-based read path available for callers that only need
-// parsed fields.
+// StoreServerResponse stores a verified key document. raw_response holds the
+// delivered bytes, which are the only form ever served back; the response
+// JSONB column keeps a parsed copy for operator queries.
 func (s *Storage) StoreServerResponse(serverName string, response *ServerKeysResponse, validUntil time.Time) error {
-	responseJSON, err := json.Marshal(response)
+	if len(response.Raw) == 0 {
+		return fmt.Errorf("storage: key document for %s has no raw bytes", serverName)
+	}
+	responseJSON, err := json.Marshal(serverKeysResponseAlias{
+		ServerName:    response.ServerName,
+		VerifyKeys:    response.VerifyKeys,
+		OldVerifyKeys: response.OldVerifyKeys,
+		ValidUntilTS:  response.ValidUntilTS,
+		Signatures:    response.Signatures,
+	})
 	if err != nil {
 		return err
-	}
-	var rawBytes []byte
-	if len(response.Raw) > 0 {
-		rawBytes = append([]byte(nil), response.Raw...)
 	}
 
 	return s.execWrite(`
@@ -48,41 +45,31 @@ func (s *Storage) StoreServerResponse(serverName string, response *ServerKeysRes
 			raw_response = $3,
 			valid_until = $4,
 			fetched_at = NOW()
-	`, serverName, responseJSON, rawBytes, validUntil)
+	`, serverName, responseJSON, response.Raw, validUntil)
 }
 
-// GetServerResponse retrieves the cached server key response.
-//
-// When raw_response is present (written by post-0003 code or
-// backfilled on a recent fetch) the returned struct carries Raw so
-// downstream callers can preserve origin self-signature bytes. For
-// legacy rows with a NULL raw_response the returned struct has
-// Raw == nil, and callers fall back to the struct-based pipeline.
-func (s *Storage) GetServerResponse(serverName string) (*ServerKeysResponse, error) {
-	var responseJSON []byte
-	var rawResponse []byte
-	var validUntil time.Time
-
-	err := s.db.QueryRow(`
-		SELECT response, raw_response, valid_until
+// GetServerResponse returns the stored key document for serverName and when
+// it was fetched. Expired documents are returned too; the caller decides
+// whether one is acceptable. Rows written before raw bytes were stored are
+// ignored, since their signatures cannot be served verifiably.
+func (s *Storage) GetServerResponse(ctx context.Context, serverName string) (*ServerKeysResponse, time.Time, error) {
+	var raw []byte
+	var fetchedAt time.Time
+	err := s.db.QueryRowContext(ctx, `
+		SELECT raw_response, fetched_at
 		FROM server_key_responses
-		WHERE server_name = $1 AND valid_until > NOW()
-	`, serverName).Scan(&responseJSON, &rawResponse, &validUntil)
-
+		WHERE server_name = $1 AND raw_response IS NOT NULL
+	`, serverName).Scan(&raw, &fetchedAt)
 	if err == sql.ErrNoRows {
-		return nil, nil
+		return nil, time.Time{}, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
 
-	var response ServerKeysResponse
-	if err := json.Unmarshal(responseJSON, &response); err != nil {
-		return nil, err
+	response, _, err := parseServerKeys(raw)
+	if err != nil {
+		return nil, time.Time{}, fmt.Errorf("storage: stored document for %s: %w", serverName, err)
 	}
-	if len(rawResponse) > 0 {
-		response.Raw = append([]byte(nil), rawResponse...)
-	}
-
-	return &response, nil
+	return response, fetchedAt, nil
 }

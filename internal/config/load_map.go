@@ -71,6 +71,9 @@ func applyMapConfig(config *Config, m map[string]interface{}, _ string) {
 	if v := zeroconfig.GetInt(m, "keys.cleanup_hours"); v != 0 {
 		config.Keys.CleanupHours = v
 	}
+	if v := zeroconfig.GetInt(m, "keys.expired_retention_days"); v != 0 {
+		config.Keys.ExpiredRetentionDays = v
+	}
 	if v := zeroconfig.GetString(m, "keys.encryption.passphrase_env"); v != "" {
 		config.Keys.EncryptionPassphraseEnv = v
 	}

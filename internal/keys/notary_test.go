@@ -32,6 +32,7 @@ func testNotary(t *testing.T) (*Notary, ed25519.PublicKey) {
 		serverKeyID:   "ed25519:n",
 		serverKeyPair: priv,
 		validityHours: 24,
+		cacheTTLHours: 1,
 		cache:         make(map[string]*cachedResponse),
 	}, pub
 }

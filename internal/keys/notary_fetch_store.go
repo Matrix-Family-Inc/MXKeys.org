@@ -24,11 +24,6 @@ import (
 	"mxkeys/internal/zero/log"
 )
 
-// fetchAndStore fetches keys from remote and stores them.
-func (n *Notary) fetchAndStore(ctx context.Context, serverName string) (*ServerKeysResponse, error) {
-	return n.fetchAndStoreWithSource(ctx, serverName, FetchSourceDirect)
-}
-
 // fetchAndStoreWithSource fetches keys with source tracking for metrics,
 // persists them to storage, updates the in-memory cache, and
 // broadcasts the raw origin payload to cluster peers when a broadcast
@@ -43,22 +38,10 @@ func (n *Notary) fetchAndStoreWithSource(ctx context.Context, serverName, source
 	}
 	recordFetchSuccess(source, duration)
 
-	validUntil := time.UnixMilli(keys.ValidUntilTS)
-	if err := n.storage.StoreServerResponse(serverName, keys, validUntil); err != nil {
-		log.Warn("Failed to store server response in database", "error", err)
+	if n.storage != nil {
+		n.persist(serverName, keys)
 	}
-
-	for keyID, verifyKey := range keys.VerifyKeys {
-		pubKeyBytes, err := base64.RawStdEncoding.DecodeString(verifyKey.Key)
-		if err != nil {
-			continue
-		}
-		if err := n.storage.StoreKey(serverName, keyID, pubKeyBytes, validUntil); err != nil {
-			log.Warn("Failed to store key", "error", err)
-		}
-	}
-
-	n.storeInMemoryCache(serverName, keys)
+	n.storeInMemoryCache(serverName, keys, time.Now())
 
 	// Peers re-verify the origin self-signature on these exact bytes.
 	if broadcastHook := n.getKeyBroadcastHook(); broadcastHook != nil && len(keys.Raw) > 0 {
@@ -66,4 +49,22 @@ func (n *Notary) fetchAndStoreWithSource(ctx context.Context, serverName, source
 	}
 
 	return keys, nil
+}
+
+// persist writes a verified document and its keys to storage. Failures are
+// logged: the document is still served from memory.
+func (n *Notary) persist(serverName string, keys *ServerKeysResponse) {
+	validUntil := time.UnixMilli(keys.ValidUntilTS)
+	if err := n.storage.StoreServerResponse(serverName, keys, validUntil); err != nil {
+		log.Warn("Failed to store server response in database", "server", serverName, "error", err)
+	}
+	for keyID, verifyKey := range keys.VerifyKeys {
+		pubKeyBytes, err := base64.RawStdEncoding.DecodeString(verifyKey.Key)
+		if err != nil {
+			continue
+		}
+		if err := n.storage.StoreKey(serverName, keyID, pubKeyBytes, validUntil); err != nil {
+			log.Warn("Failed to store key", "server", serverName, "error", err)
+		}
+	}
 }

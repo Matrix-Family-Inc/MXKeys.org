@@ -36,6 +36,10 @@ keys:
   cache_ttl_hours: 1
   fetch_timeout_s: 30
   cleanup_hours: 6
+  # Days a key document is kept after it expires. When an origin server
+  # is unreachable the last known document is served, so signatures made
+  # while it was valid can still be checked.
+  expired_retention_days: 365
   # At-rest encryption for the signing key.
   #
   # Set passphrase_env to the name of an environment variable that holds

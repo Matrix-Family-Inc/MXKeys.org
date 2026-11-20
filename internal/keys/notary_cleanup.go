@@ -5,7 +5,7 @@
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
- * Date: Mon 22 Jun 2026 00:50:40 UTC
+ * Date: Fri 20 Nov 2026 22:39:55 UTC
  * Status: Updated
  */
 
@@ -17,6 +17,9 @@ import (
 
 	"mxkeys/internal/zero/log"
 )
+
+// cleanupTimeout bounds one storage cleanup pass.
+const cleanupTimeout = time.Minute
 
 // StartCleanupRoutine starts the periodic cleanup of expired keys.
 // Restarting while a previous routine is active cancels and waits for it.
@@ -43,7 +46,7 @@ func (n *Notary) StartCleanupRoutine(ctx context.Context, interval time.Duration
 			case <-childCtx.Done():
 				return
 			case <-ticker.C:
-				n.cleanup()
+				n.cleanup(childCtx)
 			}
 		}
 	}()
@@ -64,19 +67,26 @@ func (n *Notary) StopCleanupRoutine() {
 
 // RunCleanup performs a one-shot cleanup of expired keys.
 func (n *Notary) RunCleanup() {
-	n.cleanup()
+	n.cleanup(context.Background())
 }
 
-func (n *Notary) cleanup() {
+func (n *Notary) cleanup(ctx context.Context) {
+	now := time.Now()
 	n.cacheMu.Lock()
 	for key, cached := range n.cache {
-		if time.Now().After(cached.validUntil) {
+		if now.After(cached.validUntil) {
 			delete(n.cache, key)
 		}
 	}
+	updateMemoryCacheSize(len(n.cache))
 	n.cacheMu.Unlock()
 
-	deleted, err := n.storage.DeleteExpiredKeys()
+	if n.storage == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, cleanupTimeout)
+	defer cancel()
+	deleted, err := n.storage.DeleteExpiredKeys(ctx, n.expiredRetention)
 	if err != nil {
 		log.Error("Failed to delete expired keys", "error", err)
 	} else if deleted > 0 {
@@ -108,8 +118,28 @@ func (n *Notary) cacheEntryValid(cached *cachedResponse, now time.Time) bool {
 	return cached.response.ValidUntilTS > now.UnixMilli()
 }
 
+// memoryLookup returns a valid memory cache entry and drops an invalid one.
+func (n *Notary) memoryLookup(serverName string, now time.Time) (*cachedResponse, bool) {
+	n.cacheMu.RLock()
+	cached, ok := n.cache[serverName]
+	n.cacheMu.RUnlock()
+	if !ok {
+		return nil, false
+	}
+	if n.cacheEntryValid(cached, now) {
+		return cached, true
+	}
+	n.cacheMu.Lock()
+	if current, exists := n.cache[serverName]; exists && current == cached {
+		delete(n.cache, serverName)
+		updateMemoryCacheSize(len(n.cache))
+	}
+	n.cacheMu.Unlock()
+	return nil, false
+}
+
 // storeInMemoryCache inserts or evicts a cached response under the cache lock.
-func (n *Notary) storeInMemoryCache(serverName string, response *ServerKeysResponse) {
+func (n *Notary) storeInMemoryCache(serverName string, response *ServerKeysResponse, fetchedAt time.Time) {
 	now := time.Now()
 	expiresAt := n.cacheExpiresAt(response, now)
 
@@ -125,6 +155,7 @@ func (n *Notary) storeInMemoryCache(serverName string, response *ServerKeysRespo
 	n.cache[serverName] = &cachedResponse{
 		response:   response,
 		validUntil: expiresAt,
+		fetchedAt:  fetchedAt,
 	}
 	updateMemoryCacheSize(len(n.cache))
 }

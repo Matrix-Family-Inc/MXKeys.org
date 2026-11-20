@@ -30,11 +30,12 @@ func validConfig() *Config {
 			Format: "text",
 		},
 		Keys: KeysConfig{
-			StoragePath:   "/var/lib/mxkeys/keys",
-			ValidityHours: 24,
-			CacheTTLHours: 1,
-			FetchTimeoutS: 30,
-			CleanupHours:  6,
+			StoragePath:          "/var/lib/mxkeys/keys",
+			ValidityHours:        24,
+			CacheTTLHours:        1,
+			FetchTimeoutS:        30,
+			CleanupHours:         6,
+			ExpiredRetentionDays: 365,
 		},
 		TrustedServers: TrustedServersConfig{
 			Fallback: []string{"matrix.org"},

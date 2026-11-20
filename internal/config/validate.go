@@ -59,6 +59,9 @@ func (c *Config) Validate() error {
 	if c.Keys.FetchTimeoutS <= 0 {
 		return fmt.Errorf("keys.fetch_timeout_s must be positive")
 	}
+	if c.Keys.ExpiredRetentionDays <= 0 {
+		return fmt.Errorf("keys.expired_retention_days must be positive")
+	}
 	if c.Keys.CleanupHours <= 0 {
 		return fmt.Errorf("keys.cleanup_hours must be positive")
 	}

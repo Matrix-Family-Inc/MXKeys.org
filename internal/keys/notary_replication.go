@@ -47,7 +47,7 @@ func (n *Notary) ApplyReplicatedServerResponse(serverName string, rawResponse st
 		}
 	}
 
-	n.storeInMemoryCache(serverName, cloneServerKeysResponse(response))
+	n.storeInMemoryCache(serverName, cloneServerKeysResponse(response), time.Now())
 
 	return nil
 }

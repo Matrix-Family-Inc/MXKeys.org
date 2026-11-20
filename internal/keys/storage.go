@@ -216,22 +216,22 @@ func (s *Storage) GetAllKeysForServer(serverName string) ([]*StoredKey, error) {
 	return keys, rows.Err()
 }
 
-// DeleteExpiredKeys removes expired keys
-func (s *Storage) DeleteExpiredKeys() (int64, error) {
-	result, err := s.db.Exec(`
-		DELETE FROM server_keys WHERE valid_until < NOW()
-	`)
+// DeleteExpiredKeys removes expired per-key rows and key documents that
+// expired more than retention ago. Expired documents are kept for that
+// long because they are still needed to verify events signed in the past
+// by servers that can no longer be reached.
+func (s *Storage) DeleteExpiredKeys(ctx context.Context, retention time.Duration) (int64, error) {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM server_keys WHERE valid_until < NOW()`)
 	if err != nil {
 		return 0, err
 	}
-
 	keysDeleted, _ := result.RowsAffected()
 
-	result2, err := s.db.Exec(`DELETE FROM server_key_responses WHERE valid_until < NOW()`)
+	cutoff := time.Now().Add(-retention)
+	result2, err := s.db.ExecContext(ctx, `DELETE FROM server_key_responses WHERE valid_until < $1`, cutoff)
 	if err != nil {
 		return keysDeleted, fmt.Errorf("failed to delete expired responses: %w", err)
 	}
-
 	responsesDeleted, _ := result2.RowsAffected()
 	return keysDeleted + responsesDeleted, nil
 }

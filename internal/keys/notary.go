@@ -47,6 +47,9 @@ type Notary struct {
 
 	validityHours    int
 	cacheTTLHours    int
+	fetchTimeout     time.Duration
+	queryDeadline    time.Duration
+	expiredRetention time.Duration
 	trustPolicy      *TrustPolicy
 	transparency     *TransparencyLog
 	analytics        *Analytics
@@ -58,6 +61,7 @@ type Notary struct {
 type cachedResponse struct {
 	response   *ServerKeysResponse
 	validUntil time.Time
+	fetchedAt  time.Time
 }
 
 // NotaryConfig holds the configuration required to build a Notary.
@@ -71,6 +75,11 @@ type NotaryConfig struct {
 	FetchTimeout        time.Duration
 	TrustedNotaries     []TrustedNotaryKey
 	MaxSignaturesPerKey int
+	// QueryTimeout bounds one POST /_matrix/key/v2/query. It must stay
+	// below the HTTP write timeout so the response can still be sent.
+	QueryTimeout time.Duration
+	// ExpiredRetention is how long a key document is kept after expiry.
+	ExpiredRetention time.Duration
 }
 
 // NewNotaryWithConfig constructs a Notary from the richer config struct and
@@ -93,12 +102,18 @@ func NewNotaryWithConfig(ctx context.Context, db *sql.DB, cfg NotaryConfig) (*No
 	})
 
 	n := &Notary{
-		serverName:    cfg.ServerName,
-		storage:       storage,
-		fetcher:       fetcher,
-		cache:         make(map[string]*cachedResponse),
-		validityHours: cfg.ValidityHours,
-		cacheTTLHours: cfg.CacheTTLHours,
+		serverName:       cfg.ServerName,
+		storage:          storage,
+		fetcher:          fetcher,
+		cache:            make(map[string]*cachedResponse),
+		validityHours:    cfg.ValidityHours,
+		cacheTTLHours:    cfg.CacheTTLHours,
+		fetchTimeout:     cfg.FetchTimeout,
+		queryDeadline:    cfg.QueryTimeout,
+		expiredRetention: cfg.ExpiredRetention,
+	}
+	if n.expiredRetention <= 0 {
+		n.expiredRetention = defaultExpiredRetention
 	}
 
 	priv, keyID, err := cfg.KeyProvider.LoadOrGenerate(ctx)

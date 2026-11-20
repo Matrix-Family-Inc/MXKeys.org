@@ -143,7 +143,7 @@ func TestStoreInMemoryCacheCapsExpiryToResponseValidity(t *testing.T) {
 		ValidUntilTS: responseExpiry.UnixMilli(),
 	}
 
-	n.storeInMemoryCache(resp.ServerName, resp)
+	n.storeInMemoryCache(resp.ServerName, resp, now)
 
 	cached, ok := n.cache[resp.ServerName]
 	if !ok {

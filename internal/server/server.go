@@ -155,6 +155,8 @@ func New(cfg *config.Config) (*Server, error) {
 		FetchTimeout:        fetchTimeout,
 		TrustedNotaries:     trustedNotaries,
 		MaxSignaturesPerKey: cfg.Security.MaxSignaturesPerKey,
+		QueryTimeout:        queryTimeout,
+		ExpiredRetention:    time.Duration(cfg.Keys.ExpiredRetentionDays) * 24 * time.Hour,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create notary: %w", err)

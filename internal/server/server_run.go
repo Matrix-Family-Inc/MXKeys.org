@@ -57,13 +57,20 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
+// httpWriteTimeout bounds writing one response; queryTimeout leaves room
+// within it to encode and send a key query reply.
+const (
+	httpWriteTimeout = 30 * time.Second
+	queryTimeout     = httpWriteTimeout - 5*time.Second
+)
+
 func (s *Server) newHTTPServer(addr string) *http.Server {
 	return &http.Server{
 		Addr:              addr,
 		Handler:           s.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		WriteTimeout:      httpWriteTimeout,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 16,
 	}

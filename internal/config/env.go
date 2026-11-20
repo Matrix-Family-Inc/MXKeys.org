@@ -99,6 +99,9 @@ func applyEnvOverrides(c *Config) error {
 	if err := envInt("MXKEYS_KEYS_CLEANUP_HOURS", &c.Keys.CleanupHours); err != nil {
 		return err
 	}
+	if err := envInt("MXKEYS_KEYS_EXPIRED_RETENTION_DAYS", &c.Keys.ExpiredRetentionDays); err != nil {
+		return err
+	}
 	if v := os.Getenv("MXKEYS_TRUSTED_SERVERS_FALLBACK"); v != "" {
 		c.TrustedServers.Fallback = splitCSV(v)
 	}
