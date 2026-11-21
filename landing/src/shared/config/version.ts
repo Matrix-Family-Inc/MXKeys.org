@@ -21,7 +21,7 @@
  *   - landing/package.json         (npm package version)
  *   - landing/src/shared/config/version.ts (this file)
  */
-export const APP_VERSION = '1.0.1';
+export const APP_VERSION = '1.0.2';
 
 /** Human-readable release tag with a leading `v`. */
 export const APP_VERSION_TAG = `v${APP_VERSION}`;

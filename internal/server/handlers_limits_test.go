@@ -59,19 +59,28 @@ func TestHandleKeyQueryRejectsOversizedBody(t *testing.T) {
 	}
 }
 
-func TestHandleKeyQueryRejectsEmptyRequest(t *testing.T) {
+func TestHandleKeyQueryEmptyServerKeys(t *testing.T) {
 	s := newValidationOnlyServer()
 
 	req := httptest.NewRequest(http.MethodPost, "/_matrix/key/v2/query", strings.NewReader(`{"server_keys":{}}`))
 	rr := httptest.NewRecorder()
 	s.handleKeyQuery(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rr.Code)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}
-	errBody := decodeMatrixErrorBody(t, rr)
-	if errBody["errcode"] != "M_BAD_JSON" {
-		t.Fatalf("expected M_BAD_JSON, got %q", errBody["errcode"])
+	var body struct {
+		ServerKeys []json.RawMessage `json:"server_keys"`
+		Failures   map[string]any    `json:"failures"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.ServerKeys == nil || len(body.ServerKeys) != 0 {
+		t.Fatalf("server_keys = %#v, want an empty array", body.ServerKeys)
+	}
+	if len(body.Failures) != 0 {
+		t.Fatalf("failures = %#v", body.Failures)
 	}
 }
 

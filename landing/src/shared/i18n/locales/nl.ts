@@ -27,13 +27,12 @@ export default {
     title: 'MXKeys',
     subtitle: 'Federatie-vertrouwensinfrastructuur',
     tagline: 'Vertrouwen. Verifiëren. Federeren.',
-    description: 'Federatiesleutel-vertrouwenslaag voor Matrix: sleutelverificatie, transparantielogging, anomaliedetectie en geauthenticeerde clustercoördinatie.',
+    description: 'Sleutelnotaris voor klassieke Matrix-federatie. Homeservers halen hier geverifieerde serversleutels op.',
     trust: 'Go-service met PostgreSQL-caching, Matrix-spec-discovery en operationele endpoints.',
     learnMore: 'Meer informatie',
     viewAPI: 'API bekijken',
     github: 'GitHub',
     matrixFamilyBadge: 'Matrix Family',
-    hushmeBadge: 'HushMe',
   },
 
   status: {
@@ -42,7 +41,7 @@ export default {
 
   about: {
     title: 'Wat is MXKeys?',
-    description: 'MXKeys is een Matrix Federatie-vertrouwensinfrastructuur die Matrix-servers helpt identiteiten te verifiëren, sleutelwijzigingen bij te houden, anomalieën te detecteren en vertrouwensbeleid af te dwingen.',
+    description: 'MXKeys is een Matrix-sleutelnotaris. Een homeserver vraagt de sleutels van een andere server op en krijgt een geverifieerd document met een perspectiefhandtekening.',
 
     problem: {
       title: 'Het probleem',
@@ -51,7 +50,7 @@ export default {
 
     solution: {
       title: 'De oplossing',
-      description: 'MXKeys biedt sleutelverificatie met perspectiefhandtekeningen, een hash-geketend transparantielog met Merkle-bewijzen, anomaliedetectie, configureerbaar vertrouwensbeleid en geauthenticeerde clustermodi.',
+      description: 'MXKeys haalt het sleuteldocument op, controleert de origin-handtekening en zet de eigen erbij. Transparantie, vertrouwensbeleid en clustermodus blijven uit tot een beheerder ze aanzet.',
     },
   },
 
@@ -177,27 +176,15 @@ export default {
 
   ecosystem: {
     title: 'Onderdeel van Matrix Family',
-    description: 'MXKeys is ontwikkeld door Matrix Family Inc. Beschikbaar voor alle Matrix-servers.',
+    description: 'MXKeys is de sleutelnotaris naast de homeserver en de clients van Matrix Family.',
 
     matrixFamily: {
       title: 'Matrix Family',
-      description: 'Ecosysteemhub',
-    },
-    hushme: {
-      title: 'HushMe',
-      description: 'Matrix-client',
-    },
-    hushmeStore: {
-      title: 'HushMe Store',
-      description: 'MFOS-apps',
+      description: 'Homeserver en clients',
     },
     mxcore: {
       title: 'MXCore',
       description: 'Matrix-homeserver',
-    },
-    mfos: {
-      title: 'MFOS',
-      description: 'Ontwikkelaarsplatform',
     },
   },
 
@@ -207,12 +194,7 @@ export default {
     contact: 'Contact',
 
     matrixFamily: 'Matrix Family',
-    hushme: 'HushMe Client',
-    hushmeStore: 'HushMe Store',
     mxcore: 'MXCore',
-    mfos: 'MFOS Docs',
-    hushmeWeb: 'HushMe Web',
-    appsGateway: 'Apps Gateway',
 
     architecture: 'Architectuur',
     apiReference: 'API-referentie',
@@ -223,7 +205,6 @@ export default {
 
     protocol: 'Protocol',
     matrixSpec: 'Matrix Spec',
-    hushmeSpace: 'HushMe Space',
 
     copyrightPrefix: '© 2026 Matrix Family Inc. Alle rechten voorbehouden. Onderdeel van het ',
     copyrightLink: 'Matrix Family',

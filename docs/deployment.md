@@ -11,6 +11,11 @@ Status: Updated
 
 ## Scope
 
+The shipping deployment is one `mxkeys` process and PostgreSQL.
+Cluster mode is optional and stays off unless `cluster.enabled` is
+set. This service is a classic Matrix key notary. It does not host
+an application platform.
+
 This document covers:
 
 - runtime prerequisites,

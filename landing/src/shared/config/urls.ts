@@ -17,29 +17,16 @@ import { siteURL } from './env';
  * gets correct self-references without forking the code.
  */
 export const URLS = {
-  hushmeOnline: 'https://hushme.online',
-  hushmeApp: 'https://hushme.app',
-  hushmeStore: 'https://hushme.store',
-  hushmeSpace: 'https://hushme.space',
   matrixFamily: 'https://matrix.family',
-  appsGateway: 'https://apps.hushme.app',
   mxkeys: siteURL,
   mxcore: 'https://mxcore.tech',
-  mfos: 'https://mfos.tech',
-} as const;
-
-export const DOCS = {
-  gettingStarted: `${URLS.mfos}/docs/getting-started`,
-  api: `${URLS.mfos}/docs/api`,
-  gateway: `${URLS.mfos}/docs/gateway`,
-  publishing: `${URLS.mfos}/docs/publishing`,
 } as const;
 
 export const MATRIX_CONTACTS = {
-  support: { id: '@support:matrix.family', href: `${URLS.hushmeSpace}/@support:matrix.family` },
-  developer: { id: '@dev:matrix.family', href: `${URLS.hushmeSpace}/@dev:matrix.family` },
-  devChat: { id: '#dev:matrix.family', href: `${URLS.hushmeSpace}/%23dev:matrix.family` },
-  announcements: { id: '#announcements:matrix.family', href: `${URLS.hushmeSpace}/%23announcements:matrix.family` },
+  support: { id: '@support:matrix.family', href: 'https://matrix.to/#/@support:matrix.family' },
+  developer: { id: '@dev:matrix.family', href: 'https://matrix.to/#/@dev:matrix.family' },
+  devChat: { id: '#dev:matrix.family', href: 'https://matrix.to/#/#dev:matrix.family' },
+  announcements: { id: '#announcements:matrix.family', href: 'https://matrix.to/#/#announcements:matrix.family' },
 } as const;
 
 export const EXTERNAL = {
@@ -52,14 +39,8 @@ export const EXTERNAL = {
  * which is intentionally broad so subdomains count as internal.
  */
 const INTERNAL_DOMAINS = [
-  'hushme.online',
-  'hushme.app',
-  'hushme.store',
-  'hushme.space',
   'matrix.family',
-  'apps.hushme.app',
   'mxcore.tech',
-  'mfos.tech',
 ] as const;
 
 /** isInternalLink reports whether url points to the ecosystem or the same origin. */

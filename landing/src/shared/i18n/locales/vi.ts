@@ -27,13 +27,12 @@ export default {
     title: 'MXKeys',
     subtitle: 'Hạ tầng tin cậy liên bang',
     tagline: 'Tin cậy. Xác minh. Liên bang.',
-    description: 'Tầng tin cậy khóa liên bang cho Matrix: xác minh khóa, ghi nhật ký minh bạch, phát hiện bất thường và phối hợp cụm được xác thực.',
+    description: 'Công chứng khóa cho liên kết Matrix cổ điển. Homeserver lấy khóa máy chủ đã xác minh tại đây.',
     trust: 'Dịch vụ Go với bộ nhớ đệm PostgreSQL, khám phá Matrix-spec và các endpoint vận hành.',
     learnMore: 'Tìm hiểu thêm',
     viewAPI: 'Xem API',
     github: 'GitHub',
     matrixFamilyBadge: 'Matrix Family',
-    hushmeBadge: 'HushMe',
   },
 
   status: {
@@ -42,7 +41,7 @@ export default {
 
   about: {
     title: 'MXKeys là gì?',
-    description: 'MXKeys là Hạ tầng tin cậy liên bang Matrix giúp các máy chủ Matrix xác minh danh tính, theo dõi thay đổi khóa, phát hiện bất thường và thực thi chính sách tin cậy.',
+    description: 'MXKeys là công chứng khóa Matrix. Homeserver hỏi khóa của máy chủ khác và nhận tài liệu đã xác minh kèm chữ ký phối cảnh.',
 
     problem: {
       title: 'Vấn đề',
@@ -51,7 +50,7 @@ export default {
 
     solution: {
       title: 'Giải pháp',
-      description: 'MXKeys cung cấp xác minh khóa với chữ ký phối cảnh, nhật ký minh bạch chuỗi băm với bằng chứng Merkle, phát hiện bất thường, chính sách tin cậy có thể cấu hình và các chế độ cụm được xác thực.',
+      description: 'MXKeys lấy tài liệu khóa, kiểm tra chữ ký gốc và thêm chữ ký của mình. Nhật ký minh bạch, chính sách tin cậy và chế độ cụm giữ tắt cho đến khi người vận hành bật.',
     },
   },
 
@@ -177,27 +176,15 @@ export default {
 
   ecosystem: {
     title: 'Thuộc Matrix Family',
-    description: 'MXKeys được phát triển bởi Matrix Family Inc. Khả dụng cho mọi máy chủ Matrix.',
+    description: 'MXKeys là công chứng khóa cạnh homeserver và máy khách của Matrix Family.',
 
     matrixFamily: {
       title: 'Matrix Family',
-      description: 'Trung tâm hệ sinh thái',
-    },
-    hushme: {
-      title: 'HushMe',
-      description: 'Ứng dụng khách Matrix',
-    },
-    hushmeStore: {
-      title: 'HushMe Store',
-      description: 'Ứng dụng MFOS',
+      description: 'Homeserver và máy khách',
     },
     mxcore: {
       title: 'MXCore',
       description: 'Máy chủ Matrix',
-    },
-    mfos: {
-      title: 'MFOS',
-      description: 'Nền tảng nhà phát triển',
     },
   },
 
@@ -207,12 +194,7 @@ export default {
     contact: 'Liên hệ',
 
     matrixFamily: 'Matrix Family',
-    hushme: 'HushMe Client',
-    hushmeStore: 'HushMe Store',
     mxcore: 'MXCore',
-    mfos: 'MFOS Docs',
-    hushmeWeb: 'HushMe Web',
-    appsGateway: 'Apps Gateway',
 
     architecture: 'Kiến trúc',
     apiReference: 'Tham chiếu API',
@@ -223,7 +205,6 @@ export default {
 
     protocol: 'Giao thức',
     matrixSpec: 'Matrix Spec',
-    hushmeSpace: 'HushMe Space',
 
     copyrightPrefix: '© 2026 Matrix Family Inc. Mọi quyền được bảo lưu. Thuộc hệ sinh thái ',
     copyrightLink: 'Matrix Family',

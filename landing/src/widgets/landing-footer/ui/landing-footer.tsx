@@ -35,18 +35,13 @@ export function LandingFooter() {
             <h3 className="font-medium text-text mb-3">{t('footer.ecosystem')}</h3>
             <ul className="space-y-2 text-sm">
               <li><a href={URLS.matrixFamily} {...getLinkProps(URLS.matrixFamily)} className="text-text-secondary hover:text-primary">{t('footer.matrixFamily')}</a></li>
-              <li><a href={URLS.hushmeApp} {...getLinkProps(URLS.hushmeApp)} className="text-text-secondary hover:text-primary">{t('footer.hushme')}</a></li>
-              <li><a href={URLS.hushmeStore} {...getLinkProps(URLS.hushmeStore)} className="text-text-secondary hover:text-primary">{t('footer.hushmeStore')}</a></li>
               <li><a href={URLS.mxcore} {...getLinkProps(URLS.mxcore)} className="text-text-secondary hover:text-primary">{t('footer.mxcore')}</a></li>
-              <li><a href={URLS.mfos} {...getLinkProps(URLS.mfos)} className="text-text-secondary hover:text-primary">{t('footer.mfos')}</a></li>
             </ul>
           </div>
 
           <div>
             <h3 className="font-medium text-text mb-3">{t('footer.resources')}</h3>
             <ul className="space-y-2 text-sm">
-              <li><a href={URLS.hushmeOnline} {...getLinkProps(URLS.hushmeOnline)} className="text-text-secondary hover:text-primary">{t('footer.hushmeWeb')}</a></li>
-              <li><a href={URLS.appsGateway} {...getLinkProps(URLS.appsGateway)} className="text-text-secondary hover:text-primary">{t('footer.appsGateway')}</a></li>
               <li><a href="#about" className="text-text-secondary hover:text-primary">{t('footer.architecture')}</a></li>
               <li><a href="#api" className="text-text-secondary hover:text-primary">{t('footer.apiReference')}</a></li>
             </ul>
@@ -65,7 +60,6 @@ export function LandingFooter() {
             <h3 className="font-medium text-text mb-3">{t('footer.protocol')}</h3>
             <ul className="space-y-2 text-sm">
               <li><a href="https://spec.matrix.org/latest/server-server-api/#querying-keys-through-another-server" target="_blank" rel="noopener noreferrer" className="text-text-secondary hover:text-primary">{t('footer.matrixSpec')}</a></li>
-              <li><a href={URLS.hushmeSpace} {...getLinkProps(URLS.hushmeSpace)} className="text-text-secondary hover:text-primary">{t('footer.hushmeSpace')}</a></li>
             </ul>
           </div>
         </div>

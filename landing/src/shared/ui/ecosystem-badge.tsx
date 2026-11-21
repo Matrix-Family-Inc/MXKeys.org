@@ -13,7 +13,7 @@ import { getLinkProps } from '@/shared/config/urls';
 
 /**
  * Pill-style hyperlink used to cross-link between Matrix Family
- * ecosystem sites (e.g. Matrix Family hub, HushMe). Kept in shared
+ * ecosystem sites (Matrix Family, MXCore). Kept in shared
  * so every widget that displays an ecosystem affiliation renders
  * the same visual contract (accent pill + hover opacity).
  *

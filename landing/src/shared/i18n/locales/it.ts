@@ -27,13 +27,12 @@ export default {
     title: 'MXKeys',
     subtitle: 'Infrastruttura di fiducia della federazione',
     tagline: 'Fiducia. Verifica. Federazione.',
-    description: 'Livello di fiducia delle chiavi di federazione per Matrix: verifica delle chiavi, registrazione della trasparenza, rilevamento delle anomalie e coordinamento dei cluster autenticato.',
+    description: 'Notaio delle chiavi per la federazione Matrix classica. Gli homeserver ottengono qui chiavi server verificate.',
     trust: 'Servizio Go con caching PostgreSQL, discovery Matrix-spec e endpoint operativi.',
     learnMore: 'Scopri di più',
     viewAPI: 'Vedi API',
     github: 'GitHub',
     matrixFamilyBadge: 'Matrix Family',
-    hushmeBadge: 'HushMe',
   },
 
   status: {
@@ -42,7 +41,7 @@ export default {
 
   about: {
     title: 'Cos\'è MXKeys?',
-    description: 'MXKeys è un\'infrastruttura di fiducia della federazione Matrix che aiuta i server Matrix a verificare le identità, tracciare le modifiche delle chiavi, rilevare anomalie e applicare le politiche di fiducia.',
+    description: 'MXKeys è un notaio di chiavi Matrix. Un homeserver chiede le chiavi di un altro server e riceve un documento verificato con una firma di prospettiva.',
 
     problem: {
       title: 'Il problema',
@@ -51,7 +50,7 @@ export default {
 
     solution: {
       title: 'La soluzione',
-      description: 'MXKeys fornisce verifica delle chiavi con firme prospettiche, un registro di trasparenza a catena hash con prove Merkle, rilevamento delle anomalie, politiche di fiducia configurabili e modalità cluster autenticate.',
+      description: 'MXKeys recupera il documento delle chiavi, controlla la firma di origine e aggiunge la propria. Trasparenza, policy di fiducia e modalità cluster restano spente finché un operatore non le attiva.',
     },
   },
 
@@ -177,27 +176,15 @@ export default {
 
   ecosystem: {
     title: 'Parte di Matrix Family',
-    description: 'MXKeys è sviluppato da Matrix Family Inc. Disponibile per tutti i server Matrix.',
+    description: 'MXKeys è il notaio delle chiavi accanto all’homeserver e ai client di Matrix Family.',
 
     matrixFamily: {
       title: 'Matrix Family',
-      description: 'Hub dell\'ecosistema',
-    },
-    hushme: {
-      title: 'HushMe',
-      description: 'Client Matrix',
-    },
-    hushmeStore: {
-      title: 'HushMe Store',
-      description: 'App MFOS',
+      description: 'Homeserver e client',
     },
     mxcore: {
       title: 'MXCore',
       description: 'Homeserver Matrix',
-    },
-    mfos: {
-      title: 'MFOS',
-      description: 'Piattaforma sviluppatori',
     },
   },
 
@@ -207,12 +194,7 @@ export default {
     contact: 'Contatti',
 
     matrixFamily: 'Matrix Family',
-    hushme: 'HushMe Client',
-    hushmeStore: 'HushMe Store',
     mxcore: 'MXCore',
-    mfos: 'MFOS Docs',
-    hushmeWeb: 'HushMe Web',
-    appsGateway: 'Apps Gateway',
 
     architecture: 'Architettura',
     apiReference: 'Riferimento API',
@@ -223,7 +205,6 @@ export default {
 
     protocol: 'Protocollo',
     matrixSpec: 'Matrix Spec',
-    hushmeSpace: 'HushMe Space',
 
     copyrightPrefix: '© 2026 Matrix Family Inc. Tutti i diritti riservati. Parte dell\'ecosistema ',
     copyrightLink: 'Matrix Family',

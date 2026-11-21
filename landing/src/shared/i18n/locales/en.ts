@@ -27,13 +27,12 @@ export default {
     title: 'MXKeys',
     subtitle: 'Federation Trust Infrastructure',
     tagline: 'Trust. Verify. Federate.',
-    description: 'Federation key trust layer for Matrix: key verification, transparency logging, anomaly detection, and authenticated cluster coordination.',
+    description: 'Key notary for classic Matrix federation. Homeservers fetch verified server keys here.',
     trust: 'Go service with PostgreSQL caching, Matrix-spec discovery, and operational endpoints.',
     learnMore: 'Learn More',
     viewAPI: 'View API',
     github: 'GitHub',
     matrixFamilyBadge: 'Matrix Family',
-    hushmeBadge: 'HushMe',
   },
 
   status: {
@@ -42,7 +41,7 @@ export default {
 
   about: {
     title: 'What is MXKeys?',
-    description: 'MXKeys is a Matrix Federation Trust Infrastructure that helps Matrix servers verify identities, track key changes, detect anomalies, and enforce trust policies.',
+    description: 'MXKeys is a Matrix key notary. A homeserver asks it for another server\'s keys and receives a verified document with a perspective signature.',
     
     problem: {
       title: 'The Problem',
@@ -51,7 +50,7 @@ export default {
     
     solution: {
       title: 'The Solution',
-      description: 'MXKeys provides key verification with perspective signatures, a hash-chained transparency log with Merkle proofs, anomaly detection, configurable trust policies, and authenticated cluster modes.',
+      description: 'MXKeys fetches the server key document, checks the origin signature, and adds its own. Transparency, trust policy, and cluster mode stay off unless an operator enables them.',
     },
   },
 
@@ -226,27 +225,15 @@ export default {
 
   ecosystem: {
     title: 'Part of Matrix Family',
-    description: 'MXKeys is developed by Matrix Family Inc. Available for all Matrix servers.',
+    description: 'MXKeys is the key notary next to the Matrix Family homeserver and clients.',
     
     matrixFamily: {
       title: 'Matrix Family',
-      description: 'Ecosystem Hub',
-    },
-    hushme: {
-      title: 'HushMe',
-      description: 'Matrix Client',
-    },
-    hushmeStore: {
-      title: 'HushMe Store',
-      description: 'MFOS Apps',
+      description: 'Homeserver and clients',
     },
     mxcore: {
       title: 'MXCore',
-      description: 'Matrix Homeserver',
-    },
-    mfos: {
-      title: 'MFOS',
-      description: 'Developer Platform',
+      description: 'Matrix homeserver',
     },
   },
 
@@ -256,12 +243,7 @@ export default {
     contact: 'Contact',
     
     matrixFamily: 'Matrix Family',
-    hushme: 'HushMe Client',
-    hushmeStore: 'HushMe Store',
     mxcore: 'MXCore',
-    mfos: 'MFOS Docs',
-    hushmeWeb: 'HushMe Web',
-    appsGateway: 'Apps Gateway',
     
     architecture: 'Architecture',
     apiReference: 'API Reference',
@@ -272,7 +254,6 @@ export default {
     
     protocol: 'Protocol',
     matrixSpec: 'Matrix Spec',
-    hushmeSpace: 'HushMe Space',
 
     copyrightPrefix: '© 2026 Matrix Family Inc. All rights reserved. Part of the ',
     copyrightLink: 'Matrix Family',

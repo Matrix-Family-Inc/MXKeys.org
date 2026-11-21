@@ -44,6 +44,7 @@ This file is the only maintained v1.16 conformance artifact in `docs/`.
 | M-004 | Invalid `keyID` returns `M_INVALID_PARAM` | PASS | `handleServerKeys()` | `internal/server/handlers_test.go` |
 | M-005 | Unknown `keyID` returns `M_NOT_FOUND` | PASS | `handleServerKeys()` | `internal/server/handlers_test.go` |
 | M-006 | `POST /_matrix/key/v2/query` supports multiple servers | PASS | `handleKeyQuery()`, `Notary.QueryKeys()` | `internal/server/handlers_test.go`, live tests |
+| M-006a | An empty `server_keys` object returns `200` and an empty array | PASS | `handleKeyQuery()` | `internal/server/handlers_limits_test.go` |
 | M-007 | Partial upstream failures are reported via `failures` | PASS | `Notary.QueryKeys()` | `internal/server/handlers_live_test.go` |
 | M-008 | Strict JSON rejects trailing payload | PASS | `decodeStrictJSON()` | `internal/server/handlers_test.go` |
 | M-009 | Request body size is bounded | PASS | `http.MaxBytesReader` | `internal/server/handlers_limits_test.go` |

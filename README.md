@@ -8,14 +8,51 @@
 
 **Matrix Federation Key Notary**
 
-Current release line: `v1.0.1` (cache-read, server-info, CI, and
-release-hygiene hardening).
+Current release line: `v1.0.2`.
+
+MXKeys is the key notary for a classic Matrix deployment: a homeserver,
+Matrix clients, and this service. It does not ship an application
+platform, an app store, or MF Sys.
 
 MXKeys verifies remote Matrix server keys, adds a perspective signature,
 and caches verified responses in PostgreSQL and memory. The default
 deployment is a single Go binary plus PostgreSQL; optional modules
 (transparency log, analytics, trust policy, clustering, server-info
 enrichment) are off by default and opt in via config.
+
+## Release 1.0.2
+
+1.0.2 makes the notary match the Matrix signing and discovery rules a
+relying homeserver checks. `https://mxkeys.org/_mxkeys/health` reports
+the binary last deployed with `scripts/deploy-mxkeys.sh`.
+
+- Signatures cover the canonical JSON of the key document without
+  `signatures` and `unsigned`, encoded as unpadded base64. The bytes
+  served are those signed bytes, so `old_verify_keys` stays in the
+  document. A current document must be signed by a key in
+  `verify_keys`. A document taken from a fallback notary must carry a
+  valid origin self-signature.
+- TLS and the `Host` header use the name from discovery (the server
+  name, or the delegated hostname), including when the connection goes
+  to an SRV target. SRV is looked up as `_matrix-fed._tcp`, then the
+  deprecated `_matrix._tcp`. With private-address blocking on,
+  `.well-known` and key fetches dial only public addresses.
+- `POST /_matrix/key/v2/query` finishes inside the HTTP write timeout.
+  One client disconnect does not fail the shared fetch. An unreachable
+  origin is answered with the last stored document. A
+  `minimum_valid_until_ts` the cache does not meet is refetched at most
+  once per five minutes.
+- The circuit breaker counts the half-open probe and releases it when
+  the fetch never starts. Analytics stay off until `analytics.enabled`
+  is set. The config loader strips inline comments, reads flow lists
+  (`[]`, `[a, b]`) and `{}`, and rejects YAML it cannot represent.
+- `POST /_matrix/key/v2/query` with `"server_keys": {}` returns `200`
+  and an empty `server_keys` array.
+
+Production stays one Go process and PostgreSQL. Cluster mode stays off
+unless an operator enables it. On two stand hosts the same live
+`matrix.org` document was fetched; the origin signature and each
+notary countersignature verified.
 
 ## Design principles
 
@@ -27,7 +64,7 @@ enrichment) are off by default and opt in via config.
 ## How it works
 
 1. Resolve the target homeserver via `.well-known`, SRV, explicit `host:port`, or IP literal.
-2. Fetch `/_matrix/key/v2/server`, enforce canonical JSON, and verify each Ed25519 self-signature.
+2. Fetch `/_matrix/key/v2/server`, check canonical JSON, and require one valid Ed25519 self-signature from `verify_keys`.
 3. Apply trust policy (if enabled) and caching/freshness rules.
 4. Add the notary's perspective signature and persist the verified response in PostgreSQL and the in-process cache.
 
@@ -147,8 +184,10 @@ health/live/ready probes, and the gated `/_mxkeys/status` +
 | Server-info enrichment | `server_info.enabled` | `false` | DNS/reachability/WHOIS lookup endpoint |
 | At-rest key encryption | `keys.encryption.passphrase_env` | unset — plaintext 0600 | AES-256-GCM envelope for the signing key |
 
-If none of the optional modules are enabled, the runtime surface is the
-core federation API plus three probes; nothing else is reachable.
+If none of the optional modules are enabled, the reachable surface is
+the core federation API, the three probes, and `/_mxkeys/status` plus
+`/_mxkeys/metrics`. Admin routes stay unregistered until
+`security.admin_access_token` is set.
 
 ## Integration
 
@@ -237,8 +276,9 @@ Apache License 2.0. See `LICENSE` and `SECURITY.md`.
 
 ## Landing Page
 
-The `landing/` tree is an operator-forkable marketing page for a deployed
-notary. Feature-Sliced Design with Zustand for UI state, Zod for env
+The `landing/` tree is an operator-forkable page for a deployed notary.
+It links Matrix Family and MXCore. It does not link an app store or MF Sys.
+Feature-Sliced Design with Zustand for UI state, Zod for env
 validation, TanStack Router/Query ready for future pages, lazy-loaded i18n
 (20 locales, ~7-12 KB each), and Sentry opt-in via `VITE_SENTRY_DSN`.
 Set `VITE_SITE_URL` to rebrand without file edits.
@@ -258,8 +298,8 @@ See `docs/adr/0009-landing-fsd-stack.md` for stack rationale.
 
 MXKeys is an independent Matrix federation key-notary server maintained by
 Matrix Family Inc. It works with any Matrix homeserver (Synapse, Dendrite,
-Conduit, MXCore). Operators deploy their own branded notary without
-coupling to any specific homeserver or ecosystem.
+Conduit, MXCore). The current product is that classic notary. Operators
+deploy their own branded notary without coupling to any specific homeserver.
 
 Company: Matrix Family Inc. (https://matrix.family)
 Contact: dev@matrix.family

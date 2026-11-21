@@ -27,13 +27,12 @@ export default {
     title: 'MXKeys',
     subtitle: 'תשתית אמון פדרציה',
     tagline: 'אמון. אימות. פדרציה.',
-    description: 'שכבת אמון מפתחות פדרציה עבור Matrix: אימות מפתחות, רישום שקיפות, זיהוי חריגות ותיאום אשכולות מאומת.',
+    description: 'נוטריון מפתחות לפדרציית Matrix הקלאסית. שרתי הבית מקבלים כאן מפתחות שרת מאומתים.',
     trust: 'שירות Go עם מטמון PostgreSQL, גילוי Matrix-spec ונקודות קצה תפעוליות.',
     learnMore: 'למד עוד',
     viewAPI: 'צפה ב-API',
     github: 'GitHub',
     matrixFamilyBadge: 'Matrix Family',
-    hushmeBadge: 'HushMe',
   },
 
   status: {
@@ -42,7 +41,7 @@ export default {
 
   about: {
     title: 'מהו MXKeys?',
-    description: 'MXKeys הוא תשתית אמון פדרציה של Matrix המסייעת לשרתי Matrix לאמת זהויות, לעקוב אחר שינויי מפתחות, לזהות חריגות ולאכוף מדיניות אמון.',
+    description: 'MXKeys הוא נוטריון מפתחות של Matrix. שרת בית מבקש את מפתחותיו של שרת אחר ומקבל מסמך מאומת עם חתימת פרספקטיבה.',
 
     problem: {
       title: 'הבעיה',
@@ -51,7 +50,7 @@ export default {
 
     solution: {
       title: 'הפתרון',
-      description: 'MXKeys מספק אימות מפתחות עם חתימות פרספקטיבה, יומן שקיפות משורשר בגיבוב עם הוכחות Merkle, זיהוי חריגות, מדיניות אמון הניתנת להגדרה ומצבי אשכול מאומתים.',
+      description: 'MXKeys מביא את מסמך המפתחות, בודק את חתימת המקור ומוסיף את שלו. שקיפות, מדיניות אמון ומצב אשכול נשארים כבויים עד שמפעיל מפעיל אותם.',
     },
   },
 
@@ -177,27 +176,15 @@ export default {
 
   ecosystem: {
     title: 'חלק מ-Matrix Family',
-    description: 'MXKeys פותח על ידי Matrix Family Inc. זמין לכל שרתי Matrix.',
+    description: 'MXKeys הוא נוטריון המפתחות לצד שרת הבית והלקוחות של Matrix Family.',
 
     matrixFamily: {
       title: 'Matrix Family',
-      description: 'מרכז האקוסיסטם',
-    },
-    hushme: {
-      title: 'HushMe',
-      description: 'לקוח Matrix',
-    },
-    hushmeStore: {
-      title: 'HushMe Store',
-      description: 'אפליקציות MFOS',
+      description: 'שרת בית ולקוחות',
     },
     mxcore: {
       title: 'MXCore',
       description: 'שרת Matrix ביתי',
-    },
-    mfos: {
-      title: 'MFOS',
-      description: 'פלטפורמת מפתחים',
     },
   },
 
@@ -207,12 +194,7 @@ export default {
     contact: 'יצירת קשר',
 
     matrixFamily: 'Matrix Family',
-    hushme: 'HushMe Client',
-    hushmeStore: 'HushMe Store',
     mxcore: 'MXCore',
-    mfos: 'MFOS Docs',
-    hushmeWeb: 'HushMe Web',
-    appsGateway: 'Apps Gateway',
 
     architecture: 'ארכיטקטורה',
     apiReference: 'מסמכי API',
@@ -223,7 +205,6 @@ export default {
 
     protocol: 'פרוטוקול',
     matrixSpec: 'Matrix Spec',
-    hushmeSpace: 'HushMe Space',
 
     copyrightPrefix: '© 2026 Matrix Family Inc. כל הזכויות שמורות. חלק מאקוסיסטם ',
     copyrightLink: 'Matrix Family',

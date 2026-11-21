@@ -27,13 +27,12 @@ export default {
     title: 'MXKeys',
     subtitle: 'Infrastruktur Kepercayaan Federasi',
     tagline: 'Percaya. Verifikasi. Federasi.',
-    description: 'Lapisan kepercayaan kunci federasi untuk Matrix: verifikasi kunci, pencatatan transparansi, deteksi anomali, dan koordinasi klaster terotentikasi.',
+    description: 'Notaris kunci untuk federasi Matrix klasik. Homeserver mengambil kunci server yang terverifikasi di sini.',
     trust: 'Layanan Go dengan caching PostgreSQL, penemuan Matrix-spec, dan endpoint operasional.',
     learnMore: 'Pelajari Lebih Lanjut',
     viewAPI: 'Lihat API',
     github: 'GitHub',
     matrixFamilyBadge: 'Matrix Family',
-    hushmeBadge: 'HushMe',
   },
 
   status: {
@@ -42,7 +41,7 @@ export default {
 
   about: {
     title: 'Apa itu MXKeys?',
-    description: 'MXKeys adalah Infrastruktur Kepercayaan Federasi Matrix yang membantu server Matrix memverifikasi identitas, melacak perubahan kunci, mendeteksi anomali, dan menerapkan kebijakan kepercayaan.',
+    description: 'MXKeys adalah notaris kunci Matrix. Homeserver meminta kunci server lain dan menerima dokumen terverifikasi dengan tanda tangan perspektif.',
 
     problem: {
       title: 'Masalah',
@@ -51,7 +50,7 @@ export default {
 
     solution: {
       title: 'Solusi',
-      description: 'MXKeys menyediakan verifikasi kunci dengan tanda tangan perspektif, log transparansi berantai hash dengan bukti Merkle, deteksi anomali, kebijakan kepercayaan yang dapat dikonfigurasi, dan mode klaster terotentikasi.',
+      description: 'MXKeys mengambil dokumen kunci, memeriksa tanda tangan asal, lalu menambahkan tandanya sendiri. Transparansi, kebijakan kepercayaan, dan mode klaster tetap mati sampai operator mengaktifkannya.',
     },
   },
 
@@ -177,27 +176,15 @@ export default {
 
   ecosystem: {
     title: 'Bagian dari Matrix Family',
-    description: 'MXKeys dikembangkan oleh Matrix Family Inc. Tersedia untuk semua server Matrix.',
+    description: 'MXKeys adalah notaris kunci di samping homeserver dan klien Matrix Family.',
 
     matrixFamily: {
       title: 'Matrix Family',
-      description: 'Pusat Ekosistem',
-    },
-    hushme: {
-      title: 'HushMe',
-      description: 'Klien Matrix',
-    },
-    hushmeStore: {
-      title: 'HushMe Store',
-      description: 'Aplikasi MFOS',
+      description: 'Homeserver dan klien',
     },
     mxcore: {
       title: 'MXCore',
       description: 'Homeserver Matrix',
-    },
-    mfos: {
-      title: 'MFOS',
-      description: 'Platform Pengembang',
     },
   },
 
@@ -207,12 +194,7 @@ export default {
     contact: 'Kontak',
 
     matrixFamily: 'Matrix Family',
-    hushme: 'HushMe Client',
-    hushmeStore: 'HushMe Store',
     mxcore: 'MXCore',
-    mfos: 'MFOS Docs',
-    hushmeWeb: 'HushMe Web',
-    appsGateway: 'Apps Gateway',
 
     architecture: 'Arsitektur',
     apiReference: 'Referensi API',
@@ -223,7 +205,6 @@ export default {
 
     protocol: 'Protokol',
     matrixSpec: 'Matrix Spec',
-    hushmeSpace: 'HushMe Space',
 
     copyrightPrefix: '© 2026 Matrix Family Inc. Hak cipta dilindungi. Bagian dari ekosistem ',
     copyrightLink: 'Matrix Family',

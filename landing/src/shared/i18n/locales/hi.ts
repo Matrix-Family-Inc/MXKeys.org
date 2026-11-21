@@ -27,13 +27,12 @@ export default {
     title: 'MXKeys',
     subtitle: 'फ़ेडरेशन ट्रस्ट इंफ्रास्ट्रक्चर',
     tagline: 'विश्वास। सत्यापन। फ़ेडरेशन।',
-    description: 'Matrix के लिए फ़ेडरेशन की ट्रस्ट लेयर: की सत्यापन, पारदर्शिता लॉगिंग, विसंगति पहचान, और प्रमाणित क्लस्टर समन्वय।',
+    description: 'क्लासिक Matrix फ़ेडरेशन के लिए कुंजी नोटरी। होमसर्वर यहाँ सत्यापित सर्वर कुंजियाँ लेते हैं।',
     trust: 'PostgreSQL कैशिंग, Matrix-spec डिस्कवरी, और ऑपरेशनल एंडपॉइंट्स के साथ Go सर्विस।',
     learnMore: 'और जानें',
     viewAPI: 'API देखें',
     github: 'GitHub',
     matrixFamilyBadge: 'Matrix Family',
-    hushmeBadge: 'HushMe',
   },
 
   status: {
@@ -42,7 +41,7 @@ export default {
 
   about: {
     title: 'MXKeys क्या है?',
-    description: 'MXKeys एक Matrix फ़ेडरेशन ट्रस्ट इंफ्रास्ट्रक्चर है जो Matrix सर्वर को पहचान सत्यापित करने, की परिवर्तनों को ट्रैक करने, विसंगतियों का पता लगाने, और ट्रस्ट नीतियाँ लागू करने में सहायता करता है।',
+    description: 'MXKeys एक Matrix कुंजी नोटरी है। होमसर्वर दूसरे सर्वर की कुंजियाँ माँगता है और परिप्रेक्ष्य हस्ताक्षर वाला सत्यापित दस्तावेज़ पाता है।',
 
     problem: {
       title: 'समस्या',
@@ -51,7 +50,7 @@ export default {
 
     solution: {
       title: 'समाधान',
-      description: 'MXKeys पर्सपेक्टिव सिग्नेचर के साथ की सत्यापन, Merkle प्रमाणों के साथ हैश-चेन्ड पारदर्शिता लॉग, विसंगति पहचान, कॉन्फ़िगर करने योग्य ट्रस्ट नीतियाँ, और प्रमाणित क्लस्टर मोड प्रदान करता है।',
+      description: 'MXKeys कुंजी दस्तावेज़ लाता है, मूल हस्ताक्षर जाँचता है और अपना जोड़ता है। पारदर्शिता, विश्वास नीति और क्लस्टर मोड तब तक बंद रहते हैं जब तक ऑपरेटर उन्हें चालू न करे।',
     },
   },
 
@@ -177,27 +176,15 @@ export default {
 
   ecosystem: {
     title: 'Matrix Family का हिस्सा',
-    description: 'MXKeys को Matrix Family Inc. द्वारा विकसित किया गया है। सभी Matrix सर्वर के लिए उपलब्ध।',
+    description: 'MXKeys, Matrix Family के होमसर्वर और क्लाइंट के साथ कुंजी नोटरी है।',
 
     matrixFamily: {
       title: 'Matrix Family',
-      description: 'इकोसिस्टम हब',
-    },
-    hushme: {
-      title: 'HushMe',
-      description: 'Matrix क्लाइंट',
-    },
-    hushmeStore: {
-      title: 'HushMe Store',
-      description: 'MFOS ऐप्स',
+      description: 'होमसर्वर और क्लाइंट',
     },
     mxcore: {
       title: 'MXCore',
       description: 'Matrix होमसर्वर',
-    },
-    mfos: {
-      title: 'MFOS',
-      description: 'डेवलपर प्लेटफ़ॉर्म',
     },
   },
 
@@ -207,12 +194,7 @@ export default {
     contact: 'संपर्क',
 
     matrixFamily: 'Matrix Family',
-    hushme: 'HushMe Client',
-    hushmeStore: 'HushMe Store',
     mxcore: 'MXCore',
-    mfos: 'MFOS Docs',
-    hushmeWeb: 'HushMe Web',
-    appsGateway: 'Apps Gateway',
 
     architecture: 'आर्किटेक्चर',
     apiReference: 'API संदर्भ',
@@ -223,7 +205,6 @@ export default {
 
     protocol: 'प्रोटोकॉल',
     matrixSpec: 'Matrix Spec',
-    hushmeSpace: 'HushMe Space',
 
     copyrightPrefix: '© 2026 Matrix Family Inc. सर्वाधिकार सुरक्षित। ',
     copyrightLink: 'Matrix Family',

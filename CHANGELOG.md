@@ -4,7 +4,7 @@ Owner: Matrix Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
-Date: Fri 20 Nov 2026 23:30:00 UTC
+Date: Sat 21 Nov 2026 00:05:00 UTC
 Status: Updated
 
 # Changelog
@@ -12,6 +12,12 @@ Status: Updated
 All notable changes to MXKeys are documented in this file.
 
 ## [Unreleased]
+
+## [1.0.2] - 2026-11-21
+
+Classic Matrix key-notary release. Signing and server discovery follow
+the Matrix specification. The landing no longer links an application
+platform or an app store. The shipping topology remains a single node.
 
 ### Security
 
@@ -56,6 +62,8 @@ All notable changes to MXKeys are documented in this file.
 - The circuit breaker treats the request that moves a server to
   half-open as its probe, and releases that probe when the request
   never starts a fetch.
+- `POST /_matrix/key/v2/query` with an empty `server_keys` object
+  returns `200` and `"server_keys": []`.
 
 ### Added
 
@@ -67,6 +75,10 @@ All notable changes to MXKeys are documented in this file.
 
 ### Changed
 
+- Release version is `1.0.2` in `internal/version`, the landing
+  package, and the landing badge.
+- The landing links Matrix Family and MXCore. Links to an app store,
+  an apps gateway, and MF Sys are removed.
 - In-memory key analytics run only when `analytics.enabled` is true.
   A failed lookup does not create an entry. Counts move when a
   server's document changes, and readers receive a copy.

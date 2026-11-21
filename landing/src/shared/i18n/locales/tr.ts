@@ -27,13 +27,12 @@ export default {
     title: 'MXKeys',
     subtitle: 'Federasyon Güven Altyapısı',
     tagline: 'Güven. Doğrula. Federasyon.',
-    description: 'Matrix için federasyon anahtar güven katmanı: anahtar doğrulama, şeffaflık günlüğü, anomali tespiti ve kimliği doğrulanmış küme koordinasyonu.',
+    description: 'Klasik Matrix federasyonu için anahtar noteri. Ev sunucuları doğrulanmış sunucu anahtarlarını burada alır.',
     trust: 'PostgreSQL önbellekleme, Matrix-spec keşfi ve operasyonel uç noktalar ile Go servisi.',
     learnMore: 'Daha Fazla Bilgi',
     viewAPI: 'API Görüntüle',
     github: 'GitHub',
     matrixFamilyBadge: 'Matrix Family',
-    hushmeBadge: 'HushMe',
   },
 
   status: {
@@ -42,7 +41,7 @@ export default {
 
   about: {
     title: 'MXKeys Nedir?',
-    description: 'MXKeys, Matrix sunucularının kimlikleri doğrulamasına, anahtar değişikliklerini izlemesine, anomalileri tespit etmesine ve güven politikalarını uygulamasına yardımcı olan bir Matrix Federasyon Güven Altyapısıdır.',
+    description: 'MXKeys bir Matrix anahtar noteridir. Bir ev sunucusu başka bir sunucunun anahtarlarını sorar ve perspektif imzalı doğrulanmış bir belge alır.',
 
     problem: {
       title: 'Sorun',
@@ -51,7 +50,7 @@ export default {
 
     solution: {
       title: 'Çözüm',
-      description: 'MXKeys, perspektif imzalarıyla anahtar doğrulama, Merkle kanıtlarıyla karma zincirleme şeffaflık günlüğü, anomali tespiti, yapılandırılabilir güven politikaları ve kimliği doğrulanmış küme modları sağlar.',
+      description: 'MXKeys anahtar belgesini alır, kaynak imzasını denetler ve kendisininkini ekler. Şeffaflık, güven ilkesi ve küme kipi bir işletmeci açana kadar kapalı kalır.',
     },
   },
 
@@ -177,27 +176,15 @@ export default {
 
   ecosystem: {
     title: 'Matrix Family\'nin Parçası',
-    description: 'MXKeys, Matrix Family Inc. tarafından geliştirilmiştir. Tüm Matrix sunucuları için kullanılabilir.',
+    description: 'MXKeys, Matrix Family ev sunucusu ve istemcilerinin yanındaki anahtar noteridir.',
 
     matrixFamily: {
       title: 'Matrix Family',
-      description: 'Ekosistem Merkezi',
-    },
-    hushme: {
-      title: 'HushMe',
-      description: 'Matrix İstemcisi',
-    },
-    hushmeStore: {
-      title: 'HushMe Store',
-      description: 'MFOS Uygulamaları',
+      description: 'Ev sunucusu ve istemciler',
     },
     mxcore: {
       title: 'MXCore',
       description: 'Matrix Ev Sunucusu',
-    },
-    mfos: {
-      title: 'MFOS',
-      description: 'Geliştirici Platformu',
     },
   },
 
@@ -207,12 +194,7 @@ export default {
     contact: 'İletişim',
 
     matrixFamily: 'Matrix Family',
-    hushme: 'HushMe Client',
-    hushmeStore: 'HushMe Store',
     mxcore: 'MXCore',
-    mfos: 'MFOS Docs',
-    hushmeWeb: 'HushMe Web',
-    appsGateway: 'Apps Gateway',
 
     architecture: 'Mimari',
     apiReference: 'API Referansı',
@@ -223,7 +205,6 @@ export default {
 
     protocol: 'Protokol',
     matrixSpec: 'Matrix Spec',
-    hushmeSpace: 'HushMe Space',
 
     copyrightPrefix: '© 2026 Matrix Family Inc. Tüm hakları saklıdır. ',
     copyrightLink: 'Matrix Family',

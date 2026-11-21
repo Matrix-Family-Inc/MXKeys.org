@@ -27,13 +27,12 @@ export default {
     title: 'MXKeys',
     subtitle: 'ফেডারেশন ট্রাস্ট ইনফ্রাস্ট্রাকচার',
     tagline: 'বিশ্বাস। যাচাই। ফেডারেশন।',
-    description: 'Matrix-এর জন্য ফেডারেশন কী ট্রাস্ট লেয়ার: কী যাচাই, স্বচ্ছতা লগিং, অসঙ্গতি সনাক্তকরণ, এবং প্রমাণীকৃত ক্লাস্টার সমন্বয়।',
+    description: 'ক্লাসিক Matrix ফেডারেশনের চাবি-নোটারি। হোমসার্ভার এখানে যাচাই করা সার্ভার চাবি নেয়।',
     trust: 'PostgreSQL ক্যাশিং, Matrix-spec ডিসকভারি, এবং অপারেশনাল এন্ডপয়েন্ট সহ Go সার্ভিস।',
     learnMore: 'আরও জানুন',
     viewAPI: 'API দেখুন',
     github: 'GitHub',
     matrixFamilyBadge: 'Matrix Family',
-    hushmeBadge: 'HushMe',
   },
 
   status: {
@@ -42,7 +41,7 @@ export default {
 
   about: {
     title: 'MXKeys কী?',
-    description: 'MXKeys হল একটি Matrix ফেডারেশন ট্রাস্ট ইনফ্রাস্ট্রাকচার যা Matrix সার্ভারগুলিকে পরিচয় যাচাই করতে, কী পরিবর্তন ট্র্যাক করতে, অসঙ্গতি সনাক্ত করতে এবং ট্রাস্ট নীতি প্রয়োগ করতে সাহায্য করে।',
+    description: 'MXKeys একটি Matrix চাবি-নোটারি। হোমসার্ভার অন্য সার্ভারের চাবি চায় এবং দৃষ্টিভঙ্গি স্বাক্ষরসহ যাচাই করা নথি পায়।',
 
     problem: {
       title: 'সমস্যা',
@@ -51,7 +50,7 @@ export default {
 
     solution: {
       title: 'সমাধান',
-      description: 'MXKeys পার্সপেক্টিভ স্বাক্ষর সহ কী যাচাই, Merkle প্রমাণ সহ হ্যাশ-চেইনড স্বচ্ছতা লগ, অসঙ্গতি সনাক্তকরণ, কনফিগারযোগ্য ট্রাস্ট নীতি, এবং প্রমাণীকৃত ক্লাস্টার মোড প্রদান করে।',
+      description: 'MXKeys চাবির নথি আনে, অরিজিন স্বাক্ষর যাচাই করে এবং নিজের স্বাক্ষর যোগ করে। স্বচ্ছতা, বিশ্বাস নীতি ও ক্লাস্টার মোড অপারেটর চালু না করা পর্যন্ত বন্ধ থাকে।',
     },
   },
 
@@ -177,27 +176,15 @@ export default {
 
   ecosystem: {
     title: 'Matrix Family-এর অংশ',
-    description: 'MXKeys Matrix Family Inc. দ্বারা তৈরি। সমস্ত Matrix সার্ভারের জন্য উপলব্ধ।',
+    description: 'MXKeys হলো Matrix Family-এর হোমসার্ভার ও ক্লায়েন্টের পাশের চাবি-নোটারি।',
 
     matrixFamily: {
       title: 'Matrix Family',
-      description: 'ইকোসিস্টেম হাব',
-    },
-    hushme: {
-      title: 'HushMe',
-      description: 'Matrix ক্লায়েন্ট',
-    },
-    hushmeStore: {
-      title: 'HushMe Store',
-      description: 'MFOS অ্যাপস',
+      description: 'হোমসার্ভার ও ক্লায়েন্ট',
     },
     mxcore: {
       title: 'MXCore',
       description: 'Matrix হোমসার্ভার',
-    },
-    mfos: {
-      title: 'MFOS',
-      description: 'ডেভেলপার প্ল্যাটফর্ম',
     },
   },
 
@@ -207,12 +194,7 @@ export default {
     contact: 'যোগাযোগ',
 
     matrixFamily: 'Matrix Family',
-    hushme: 'HushMe Client',
-    hushmeStore: 'HushMe Store',
     mxcore: 'MXCore',
-    mfos: 'MFOS Docs',
-    hushmeWeb: 'HushMe Web',
-    appsGateway: 'Apps Gateway',
 
     architecture: 'আর্কিটেকচার',
     apiReference: 'API রেফারেন্স',
@@ -223,7 +205,6 @@ export default {
 
     protocol: 'প্রোটোকল',
     matrixSpec: 'Matrix Spec',
-    hushmeSpace: 'HushMe Space',
 
     copyrightPrefix: '© 2026 Matrix Family Inc. সর্বস্বত্ব সংরক্ষিত। ',
     copyrightLink: 'Matrix Family',

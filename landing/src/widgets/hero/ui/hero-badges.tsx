@@ -34,7 +34,6 @@ export function HeroBadges() {
       </span>
       <span className="badge badge-primary">{APP_VERSION_TAG}</span>
       <EcosystemBadge href={URLS.matrixFamily} label={t('hero.matrixFamilyBadge')} />
-      <EcosystemBadge href={URLS.hushmeApp} label={t('hero.hushmeBadge')} />
     </div>
   );
 }

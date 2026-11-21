@@ -27,13 +27,12 @@ export default {
     title: 'MXKeys',
     subtitle: 'بنية ثقة الاتحاد',
     tagline: 'ثقة. تحقق. اتحاد.',
-    description: 'طبقة ثقة مفاتيح الاتحاد لـ Matrix: التحقق من المفاتيح، تسجيل الشفافية، كشف الشذوذ، وتنسيق المجموعات المُصادق عليها.',
+    description: 'موثّق مفاتيح لاتحاد Matrix الكلاسيكي. تحصل خوادم المنزل هنا على مفاتيح خادم مُتحقَّق منها.',
     trust: 'خدمة Go مع تخزين PostgreSQL المؤقت، واكتشاف Matrix-spec، ونقاط النهاية التشغيلية.',
     learnMore: 'اعرف المزيد',
     viewAPI: 'عرض API',
     github: 'GitHub',
     matrixFamilyBadge: 'Matrix Family',
-    hushmeBadge: 'HushMe',
   },
 
   status: {
@@ -42,7 +41,7 @@ export default {
 
   about: {
     title: 'ما هو MXKeys؟',
-    description: 'MXKeys هو بنية ثقة اتحاد Matrix التي تساعد خوادم Matrix على التحقق من الهويات، وتتبع تغييرات المفاتيح، وكشف الشذوذ، وإنفاذ سياسات الثقة.',
+    description: 'MXKeys موثّق مفاتيح Matrix. يطلب خادم المنزل مفاتيح خادم آخر ويتلقى وثيقة مُتحقَّقًا منها مع توقيع منظور.',
 
     problem: {
       title: 'المشكلة',
@@ -51,7 +50,7 @@ export default {
 
     solution: {
       title: 'الحل',
-      description: 'يوفر MXKeys التحقق من المفاتيح مع توقيعات المنظور، وسجل شفافية مسلسل بالتجزئة مع إثباتات Merkle، وكشف الشذوذ، وسياسات ثقة قابلة للتكوين، وأوضاع مجموعات مُصادق عليها.',
+      description: 'يجلب MXKeys وثيقة المفاتيح، يتحقق من توقيع الأصل ويضيف توقيعه. الشفافية وسياسة الثقة ووضع العنقود تبقى متوقفة حتى يفعّلها المشغّل.',
     },
   },
 
@@ -177,27 +176,15 @@ export default {
 
   ecosystem: {
     title: 'جزء من Matrix Family',
-    description: 'MXKeys مطوَّر بواسطة Matrix Family Inc. متاح لجميع خوادم Matrix.',
+    description: 'MXKeys هو موثّق المفاتيح إلى جانب خادم المنزل وعملاء Matrix Family.',
 
     matrixFamily: {
       title: 'Matrix Family',
-      description: 'مركز المنظومة',
-    },
-    hushme: {
-      title: 'HushMe',
-      description: 'عميل Matrix',
-    },
-    hushmeStore: {
-      title: 'HushMe Store',
-      description: 'تطبيقات MFOS',
+      description: 'خادم المنزل والعملاء',
     },
     mxcore: {
       title: 'MXCore',
       description: 'خادم Matrix المنزلي',
-    },
-    mfos: {
-      title: 'MFOS',
-      description: 'منصة المطورين',
     },
   },
 
@@ -207,12 +194,7 @@ export default {
     contact: 'التواصل',
 
     matrixFamily: 'Matrix Family',
-    hushme: 'HushMe Client',
-    hushmeStore: 'HushMe Store',
     mxcore: 'MXCore',
-    mfos: 'MFOS Docs',
-    hushmeWeb: 'HushMe Web',
-    appsGateway: 'Apps Gateway',
 
     architecture: 'الهندسة المعمارية',
     apiReference: 'مرجع API',
@@ -223,7 +205,6 @@ export default {
 
     protocol: 'البروتوكول',
     matrixSpec: 'Matrix Spec',
-    hushmeSpace: 'HushMe Space',
 
     copyrightPrefix: '© 2026 Matrix Family Inc. جميع الحقوق محفوظة. جزء من منظومة ',
     copyrightLink: 'Matrix Family',

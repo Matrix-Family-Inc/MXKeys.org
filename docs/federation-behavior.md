@@ -13,6 +13,8 @@ Status: Updated
 
 This document specifies deterministic federation-key behavior for MXKeys.
 It defines request/response semantics, validation rules, resolution order, and failure behavior.
+The contract is the classic Matrix key API. MXKeys does not define an
+application platform.
 
 The **compatibility-stable** surface is the Matrix Key Server API and related
 `/_matrix/federation/v1/version` behavior. Other HTTP routes listed below are
@@ -123,7 +125,9 @@ MXKeys MUST process requests in this order:
 
 1. Enforce request body size limit.
 2. Decode strict JSON and reject trailing payload.
-3. Validate `server_keys` presence and server count limits.
+3. A missing `server_keys` field or an empty object is success:
+   `200` and `"server_keys": []`. A `server_keys` value that is not
+   an object is `M_BAD_JSON`. Otherwise enforce the server count limit.
 4. Validate each `server_name`, `key_id`, and criteria fields.
 5. Resolve/fetch/verify keys per server.
 6. Return `server_keys` and `failures` envelope.
@@ -136,12 +140,18 @@ If validation fails, MXKeys MUST return matrix-compatible error shape:
 
 ## Server Discovery Behavior
 
-For remote server key fetches, resolver MUST follow this order:
+For remote server key fetches, the resolver follows the Matrix
+discovery order:
 
-1. `.well-known/matrix/server` delegation (when applicable),
-2. SRV records,
-3. explicit host/port rules,
-4. direct connection fallback behavior defined by resolver policy.
+1. IP literal, or a hostname with an explicit port: connect there.
+   `.well-known` is not consulted.
+2. Otherwise `https://<hostname>/.well-known/matrix/server`.
+3. If that fails, SRV `_matrix-fed._tcp`, then the deprecated
+   `_matrix._tcp`.
+4. If no SRV record exists, `hostname:8448`.
+
+The certificate name and the `Host` header are the discovery name,
+not the SRV target.
 
 Resolver behavior MUST remain deterministic for equivalent inputs.
 
@@ -163,10 +173,13 @@ MXKeys uses memory and database caching.
 
 Cache behavior requirements:
 
-- only valid key material may be returned,
-- expired cryptographic material MUST NOT be served as valid,
-- stale fallbacks are allowed only under explicit logic constraints,
-- cleanup of expired entries MUST run periodically.
+- a cache hit requires `valid_until_ts` in the future,
+- when a fresh fetch fails, the last stored document may be returned
+  even if `valid_until_ts` is in the past, so signatures made while it
+  was valid can still be checked,
+- rows without raw signed bytes are not served,
+- cleanup of expired rows runs after `keys.expired_retention_days`
+  (default 365).
 
 ## Failure Semantics
 

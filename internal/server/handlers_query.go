@@ -51,10 +51,11 @@ func (s *Server) handleKeyQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Matrix spec: no servers in the query is a successful empty result,
+	// not a client error.
 	if len(request.ServerKeys) == 0 {
-		RecordRequestRejection(RejectReasonEmptyRequest)
-		RecordKeyQuery(QueryStatusFailure, 0)
-		writeMatrixError(w, http.StatusBadRequest, "M_BAD_JSON", "No servers specified in server_keys")
+		RecordKeyQuery(QueryStatusSuccess, 0)
+		writeJSON(w, keys.KeyQueryResponse{ServerKeys: []keys.ServerKeysResponse{}})
 		return
 	}
 

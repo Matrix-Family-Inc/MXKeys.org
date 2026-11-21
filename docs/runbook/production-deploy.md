@@ -55,7 +55,7 @@ On the build host (wherever this runbook is executed from):
   See `docs/matrix-family-standardization.md` for `~/.ssh/config`.
 - `rsync`, `scp`, `curl`, `sha256sum`, `file`, `bash` on PATH.
 - Go toolchain for binary builds; Bun for landing builds.
-- Working tree at the tag you intend to deploy (e.g. `git checkout v1.0.1`).
+- Working tree at the tag you intend to deploy (e.g. `git checkout v1.0.2`).
 
 ## 1) Deploy the Go binary
 

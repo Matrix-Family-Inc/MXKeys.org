@@ -19,7 +19,9 @@ import (
 
 // Request rejection reasons
 const (
-	RejectReasonInvalidJSON       = "invalid_json"
+	RejectReasonInvalidJSON = "invalid_json"
+	// RejectReasonEmptyRequest remains defined so older dashboards keep the
+	// label. An empty server_keys object is a successful query, not a rejection.
 	RejectReasonEmptyRequest      = "empty_request"
 	RejectReasonTooManyServers    = "too_many_servers"
 	RejectReasonBodyTooLarge      = "body_too_large"

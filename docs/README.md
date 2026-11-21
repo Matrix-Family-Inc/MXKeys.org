@@ -9,6 +9,11 @@ Status: Updated
 
 # Docs Index
 
+MXKeys 1.0.2 is the key notary for a classic Matrix deployment
+(homeserver, clients, this service). Cluster runbooks describe the
+optional cluster, which stays off in the shipping configuration.
+There is no application platform in this repository.
+
 ## Core Set
 
 - `matrix-family-standardization.md` — Matrix Family headers, branding, git SSH (port 42224)

@@ -92,11 +92,11 @@ Client
 ## Notary Reply Integrity (raw-preserving pipeline)
 
 The reply pipeline preserves the origin-delivered
-`/_matrix/key/v2/server` payload byte-for-byte from upstream fetch
-all the way through to the `/_matrix/key/v2/query` response this
-notary returns. This is what lets a downstream client verify the
-origin self-signature end-to-end against our reply, not just the
-perspective signature this notary adds.
+`/_matrix/key/v2/server` object from the upstream fetch through to
+the `/_matrix/key/v2/query` response this notary returns. The reply
+is canonical JSON with this notary's signature added. Origin fields,
+including `old_verify_keys`, are not dropped, so a downstream client
+can verify the origin self-signature on the reply.
 
 Moving pieces:
 
@@ -115,14 +115,12 @@ Moving pieces:
   without reshaping any other field, and returns canonical JSON
   bytes. Presence/absence of `old_verify_keys` and any future
   Matrix schema extension survive the round-trip.
-- `internal/keys/notary_query.go` prefers `AttachNotarySignature`
-  when `Raw` is present; the struct-based `addNotarySignature`
-  stays as a fallback for legacy rows and notary-fallback fetches
-  where raw bytes are not available.
+- `internal/keys/notary_query.go` `countersign` calls
+  `AttachNotarySignature` on `Raw` and refuses a document that has
+  no raw bytes. There is no struct-remarshal fallback.
 - Storage: `server_key_responses.raw_response BYTEA` (migration
-  `0003_raw_server_response.sql`). Legacy NULL rows transparently
-  fall back to the struct-based path until the next successful
-  fetch backfills the column.
+  `0003_raw_server_response.sql`). A row with NULL `raw_response`
+  is not served. The next successful fetch stores the signed bytes.
 - Cluster replication moves `raw_response` between peers
   verbatim, so any node that has the raw bytes can serve a
   signature-verifiable notary reply. There is no leader-only hot
@@ -131,11 +129,10 @@ Moving pieces:
 Regression guard: unit tests under `notary_raw_response_test.go`
 cover origin signatures surviving `old_verify_keys` being
 omitted / empty / populated, notary-signature validity, and
-bad-input rejection. End-to-end proof lives in the federation smoke
-test against the live Synapse pair (see the `federation_edge_test`
-harness under `mfos.sdk`). The three-node raft smoke cluster that
-previously ran this on `test_servers/` has been decommissioned;
-production `mxkeys.org` runs as a single node today.
+bad-input rejection. The three-node raft smoke cluster that
+previously ran under `test_servers/` has been decommissioned.
+Production `mxkeys.org` runs as a single node. Raft remains
+optional code behind `cluster.enabled`.
 
 ## Server Info Enrichment (`/_mxkeys/server-info`)
 

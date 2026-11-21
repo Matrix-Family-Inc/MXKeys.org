@@ -10,15 +10,12 @@
  */
 
 import { useTranslation } from 'react-i18next';
-import { BookOpen, ExternalLink, Globe, MessageSquare, Server, Store } from 'lucide-react';
+import { ExternalLink, Globe, Server } from 'lucide-react';
 import { URLS, getLinkProps } from '@/shared/config/urls';
 
 const ecosystemItems = [
   { key: 'matrixFamily', icon: Globe, href: URLS.matrixFamily },
-  { key: 'hushme', icon: MessageSquare, href: URLS.hushmeApp },
-  { key: 'hushmeStore', icon: Store, href: URLS.hushmeStore },
   { key: 'mxcore', icon: Server, href: URLS.mxcore },
-  { key: 'mfos', icon: BookOpen, href: URLS.mfos },
 ];
 
 export function EcosystemSection() {
@@ -34,7 +31,7 @@ export function EcosystemSection() {
           {t('ecosystem.description')}
         </p>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-6">
+        <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
           {ecosystemItems.map((item) => (
             <a
               key={item.key}

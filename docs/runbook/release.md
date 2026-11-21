@@ -52,7 +52,7 @@ Also confirm:
 
 At the commit to ship:
 
-    VERSION=v1.0.1 TARGETS="linux/amd64 linux/arm64" \
+    VERSION=v1.0.2 TARGETS="linux/amd64 linux/arm64" \
       bash scripts/build-release.sh
 
 Output under `dist/`:
@@ -76,8 +76,8 @@ Build flags set by the script:
 Reproducibility cross-check:
 
     # On a second host with the same Go toolchain version:
-    git checkout v1.0.1
-    VERSION=v1.0.1 bash scripts/build-release.sh
+    git checkout v1.0.2
+    VERSION=v1.0.2 bash scripts/build-release.sh
     sha256sum --check dist/SHA256SUMS
 
 Any mismatch is a release blocker and must be investigated before
@@ -93,8 +93,8 @@ the binaries.
 
 Tag the release commit with a signed annotated tag:
 
-    git tag -s v1.0.1 -m "mxkeys v1.0.1"
-    git push origin v1.0.1
+    git tag -s v1.0.2 -m "mxkeys v1.0.2"
+    git push origin v1.0.2
 
 Operator-side verification:
 

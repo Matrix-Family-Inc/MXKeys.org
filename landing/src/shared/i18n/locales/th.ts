@@ -27,13 +27,12 @@ export default {
     title: 'MXKeys',
     subtitle: 'โครงสร้างพื้นฐานความน่าเชื่อถือสหพันธ์',
     tagline: 'เชื่อถือ ตรวจสอบ สหพันธ์',
-    description: 'ชั้นความน่าเชื่อถือคีย์สหพันธ์สำหรับ Matrix: การตรวจสอบคีย์ การบันทึกความโปร่งใส การตรวจจับความผิดปกติ และการประสานงานคลัสเตอร์ที่รับรองแล้ว',
+    description: 'โนตารีคีย์สำหรับสหพันธรัฐ Matrix แบบคลาสสิก โฮมเซิร์ฟเวอร์ดึงคีย์เซิร์ฟเวอร์ที่ยืนยันแล้วที่นี่',
     trust: 'บริการ Go พร้อมแคช PostgreSQL การค้นหา Matrix-spec และ endpoint ปฏิบัติการ',
     learnMore: 'เรียนรู้เพิ่มเติม',
     viewAPI: 'ดู API',
     github: 'GitHub',
     matrixFamilyBadge: 'Matrix Family',
-    hushmeBadge: 'HushMe',
   },
 
   status: {
@@ -42,7 +41,7 @@ export default {
 
   about: {
     title: 'MXKeys คืออะไร?',
-    description: 'MXKeys คือโครงสร้างพื้นฐานความน่าเชื่อถือสหพันธ์ Matrix ที่ช่วยเซิร์ฟเวอร์ Matrix ตรวจสอบตัวตน ติดตามการเปลี่ยนแปลงคีย์ ตรวจจับความผิดปกติ และบังคับใช้นโยบายความน่าเชื่อถือ',
+    description: 'MXKeys คือโนตารีคีย์ของ Matrix โฮมเซิร์ฟเวอร์ขอคีย์ของเซิร์ฟเวอร์อื่นและได้รับเอกสารที่ยืนยันแล้วพร้อมลายเซ็นมุมมอง',
 
     problem: {
       title: 'ปัญหา',
@@ -51,7 +50,7 @@ export default {
 
     solution: {
       title: 'ทางออก',
-      description: 'MXKeys ให้การตรวจสอบคีย์ด้วยลายเซ็นมุมมอง บันทึกความโปร่งใสแบบเชนแฮชพร้อมหลักฐาน Merkle การตรวจจับความผิดปกติ นโยบายความน่าเชื่อถือที่กำหนดค่าได้ และโหมดคลัสเตอร์ที่รับรองแล้ว',
+      description: 'MXKeys ดึงเอกสารคีย์ ตรวจลายเซ็นต้นทาง แล้วใส่ลายเซ็นของตนเอง ความโปร่งใส นโยบายความเชื่อถือ และโหมดคลัสเตอร์ยังปิดจนกว่าผู้ดูแลจะเปิด',
     },
   },
 
@@ -177,27 +176,15 @@ export default {
 
   ecosystem: {
     title: 'ส่วนหนึ่งของ Matrix Family',
-    description: 'MXKeys พัฒนาโดย Matrix Family Inc. ใช้งานได้กับเซิร์ฟเวอร์ Matrix ทั้งหมด',
+    description: 'MXKeys คือโนตารีคีย์ข้างโฮมเซิร์ฟเวอร์และไคลเอนต์ของ Matrix Family',
 
     matrixFamily: {
       title: 'Matrix Family',
-      description: 'ศูนย์กลางระบบนิเวศ',
-    },
-    hushme: {
-      title: 'HushMe',
-      description: 'ไคลเอนต์ Matrix',
-    },
-    hushmeStore: {
-      title: 'HushMe Store',
-      description: 'แอป MFOS',
+      description: 'โฮมเซิร์ฟเวอร์และไคลเอนต์',
     },
     mxcore: {
       title: 'MXCore',
       description: 'โฮมเซิร์ฟเวอร์ Matrix',
-    },
-    mfos: {
-      title: 'MFOS',
-      description: 'แพลตฟอร์มนักพัฒนา',
     },
   },
 
@@ -207,12 +194,7 @@ export default {
     contact: 'ติดต่อ',
 
     matrixFamily: 'Matrix Family',
-    hushme: 'HushMe Client',
-    hushmeStore: 'HushMe Store',
     mxcore: 'MXCore',
-    mfos: 'MFOS Docs',
-    hushmeWeb: 'HushMe Web',
-    appsGateway: 'Apps Gateway',
 
     architecture: 'สถาปัตยกรรม',
     apiReference: 'อ้างอิง API',
@@ -223,7 +205,6 @@ export default {
 
     protocol: 'โปรโตคอล',
     matrixSpec: 'Matrix Spec',
-    hushmeSpace: 'HushMe Space',
 
     copyrightPrefix: '© 2026 Matrix Family Inc. สงวนลิขสิทธิ์ ส่วนหนึ่งของระบบนิเวศ ',
     copyrightLink: 'Matrix Family',
