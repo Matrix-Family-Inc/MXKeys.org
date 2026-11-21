@@ -1,6 +1,6 @@
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
@@ -30,9 +30,8 @@ For deployment and operations, see `docs/deployment.md`.
 ## Required Configuration
 
 - `database.url` must be set explicitly.
-- `cluster.shared_secret` is required when cluster mode is enabled (>=32 chars, placeholder values rejected at startup).
-- `cluster.raft_state_dir` is required when `cluster.consensus_mode=raft`.
 - `security.admin_access_token` is required only when the admin-only operational routes are intended to be exposed.
+- `cluster.shared_secret` is required when `cluster.enabled` is true. `cluster.raft_state_dir` is required when `cluster.consensus_mode` is `raft`.
 
 ## Build Commands
 
@@ -84,8 +83,6 @@ packages="$(bash ./scripts/go-package-list.sh | tr '\n' ' ')"
 package_dirs="$(bash ./scripts/go-package-list.sh dirs | tr '\n' ' ')"
 
 go test -count=1 ${packages}
-go test -count=1 ./internal/server ./internal/keys ./internal/cluster \
-    ./internal/zero/canonical ./internal/zero/merkle ./internal/zero/raft
 go test -tags=integration -race ./tests/integration/...
 go test -race -count=1 ${packages}
 go vet ${packages}

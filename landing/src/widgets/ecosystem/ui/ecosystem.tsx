@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -10,12 +10,11 @@
  */
 
 import { useTranslation } from 'react-i18next';
-import { ExternalLink, Globe, Server } from 'lucide-react';
+import { ExternalLink, Globe } from 'lucide-react';
 import { URLS, getLinkProps } from '@/shared/config/urls';
 
 const ecosystemItems = [
   { key: 'matrixFamily', icon: Globe, href: URLS.matrixFamily },
-  { key: 'mxcore', icon: Server, href: URLS.mxcore },
 ];
 
 export function EcosystemSection() {
@@ -31,7 +30,7 @@ export function EcosystemSection() {
           {t('ecosystem.description')}
         </p>
 
-        <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+        <div className="grid max-w-md mx-auto">
           {ecosystemItems.map((item) => (
             <a
               key={item.key}

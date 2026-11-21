@@ -1,6 +1,6 @@
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
@@ -59,9 +59,6 @@ advisory draft.
 4. Release prepared; CVE requested when applicable.
 5. Disclosure date agreed with the reporter. Public advisory,
    CHANGELOG entry, and release notes land on that date.
-
-No fixed turnaround is published. Fix-to-release cycles are
-measured in days for critical bugs and weeks for lower severity.
 
 ## Severity
 

@@ -1,13 +1,13 @@
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
 Date: Mon 22 Jun 2026 00:51:51 UTC
 Status: Updated
 
-# MXK-<NNNN> - <title>
+# ADR-<NNNN>: <title>
 
 ## Status
 

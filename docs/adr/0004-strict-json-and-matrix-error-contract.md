@@ -1,10 +1,10 @@
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
-Date: Mon 22 Jun 2026 00:51:51 UTC
+Date: Sat 21 Nov 2026 01:41:00 UTC
 Status: Updated
 
 # ADR-0004: Strict JSON Validation and Matrix Error Contract
@@ -45,7 +45,7 @@ Enforce strict JSON decoding semantics and matrix-compatible error response shap
 ## References
 
 - `internal/server/json_decode.go` - strict JSON decoder and payload checks.
-- `internal/server/handlers.go` - Matrix-facing HTTP error mapping.
+- `internal/server/handlers_helpers.go` - `writeMatrixError`, the Matrix-facing HTTP error mapping.
 - `internal/server/handlers_matrix_errors_test.go` - regression coverage for
   Matrix-compatible error envelopes.
 - `docs/federation-behavior.md` - external behavior contract for federation

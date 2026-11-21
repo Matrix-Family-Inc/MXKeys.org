@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -32,7 +32,7 @@ export default {
     learnMore: 'Meer informatie',
     viewAPI: 'API bekijken',
     github: 'GitHub',
-    matrixFamilyBadge: 'Matrix Family',
+    matrixFamilyBadge: 'Matrix.Family',
   },
 
   status: {
@@ -171,20 +171,16 @@ export default {
     description: 'Configureer uw Matrix-server om MXKeys als vertrouwde sleutelserver te gebruiken.',
 
     synapse: 'Synapse-configuratie',
-    mxcore: 'MXCore-configuratie',
+    matrixFamily: 'Matrix.Family-configuratie',
   },
 
   ecosystem: {
-    title: 'Onderdeel van Matrix Family',
-    description: 'MXKeys is de sleutelnotaris naast de homeserver en de clients van Matrix Family.',
+    title: 'Onderdeel van Matrix.Family',
+    description: 'MXKeys is de sleutelnotaris naast de homeserver en de clients van Matrix.Family.',
 
     matrixFamily: {
-      title: 'Matrix Family',
+      title: 'Matrix.Family',
       description: 'Homeserver en clients',
-    },
-    mxcore: {
-      title: 'MXCore',
-      description: 'Matrix-homeserver',
     },
   },
 
@@ -193,8 +189,7 @@ export default {
     resources: 'Bronnen',
     contact: 'Contact',
 
-    matrixFamily: 'Matrix Family',
-    mxcore: 'MXCore',
+    matrixFamily: 'Matrix.Family',
 
     architecture: 'Architectuur',
     apiReference: 'API-referentie',
@@ -206,8 +201,8 @@ export default {
     protocol: 'Protocol',
     matrixSpec: 'Matrix Spec',
 
-    copyrightPrefix: '© 2026 Matrix Family Inc. Alle rechten voorbehouden. Onderdeel van het ',
-    copyrightLink: 'Matrix Family',
+    copyrightPrefix: '© 2026 Matrix.Family Inc. Alle rechten voorbehouden. Onderdeel van het ',
+    copyrightLink: 'Matrix.Family',
     copyrightSuffix: '-ecosysteem.',
     tagline: 'Key Notary voor Matrix-federatie.',
   },

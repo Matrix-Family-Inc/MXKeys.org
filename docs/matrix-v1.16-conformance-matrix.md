@@ -1,10 +1,10 @@
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
-Date: Mon 22 Jun 2026 00:51:51 UTC
+Date: Sat 21 Nov 2026 01:41:00 UTC
 Status: Updated
 
 # MXKeys Matrix v1.16 Conformance Matrix
@@ -32,14 +32,14 @@ Out of scope:
 - `PARTIAL`: implemented with caveats or incomplete evidence.
 - `FAIL`: intentionally absent or not yet implemented.
 
-This file is the only maintained v1.16 conformance artifact in `docs/`.
+This file is the status table. The requirement-to-code map is `docs/matrix-v1.16-clause-map.md`. Both are maintained.
 
 ## Matrix
 
 | ID | Requirement | Status | Implementation | Evidence |
 |---|---|---|---|---|
-| M-001 | `/_matrix/federation/v1/version` is available | PASS | `internal/server/handlers.go` `handleVersion()` | `internal/server/handlers_test.go` |
-| M-002 | `GET /_matrix/key/v2/server` returns own server keys | PASS | `handleServerKeys()`, `Notary.GetOwnKeys()` | `internal/server/handlers_test.go` |
+| M-001 | `/_matrix/federation/v1/version` is available | PASS | `internal/server/handlers_probes.go` `handleVersion()` | `internal/server/handlers_test.go` |
+| M-002 | `GET /_matrix/key/v2/server` returns own server keys | PASS | `internal/server/handlers_keys.go` `handleServerKeys()`, `internal/keys/notary.go` `GetOwnKeys()` | `internal/server/handlers_test.go` |
 | M-003 | `GET /_matrix/key/v2/server/{keyID}` validates and selects key IDs | PASS | `handleServerKeys()`, `ValidateKeyID()` | `internal/server/handlers_test.go` |
 | M-004 | Invalid `keyID` returns `M_INVALID_PARAM` | PASS | `handleServerKeys()` | `internal/server/handlers_test.go` |
 | M-005 | Unknown `keyID` returns `M_NOT_FOUND` | PASS | `handleServerKeys()` | `internal/server/handlers_test.go` |
@@ -55,8 +55,8 @@ This file is the only maintained v1.16 conformance artifact in `docs/`.
 | M-014 | Resolver supports `.well-known` delegation | PASS | `internal/keys/resolver_wellknown.go` | `internal/keys/resolver_test.go` |
 | M-015 | Resolver supports SRV plus fallback | PASS | `internal/keys/resolver_srv.go` | `internal/keys/resolver_test.go` |
 | M-016 | IPv6 URLs are formatted correctly | PASS | `ResolvedServer.URL()` | `internal/keys/resolver_test.go` |
-| M-017 | Self-signature verification is mandatory | PASS | `verifySelfSignature()` | `internal/keys/fetcher_test.go` |
-| M-018 | Pinned notary signatures are verified cryptographically | PASS | `verifyNotarySignature()` | `internal/keys/fetcher_test.go` |
+| M-017 | Self-signature verification is mandatory | PASS | `internal/keys/server_keys_parse.go` `verifySelfSignedServerKeys()` | `internal/keys/fetcher_test.go` |
+| M-018 | Pinned notary signatures are verified cryptographically | PASS | `internal/keys/fetcher_signature.go` `verifyNotarySignature()` | `internal/keys/fetcher_helpers_test.go` |
 | M-019 | Canonical JSON is deterministic | PASS | `internal/zero/canonical/json.go` | `internal/zero/canonical/json_test.go` |
 | M-020 | Canonical JSON rejects unsupported numeric shapes | PASS | `internal/zero/canonical/json.go` | `internal/zero/canonical/json_test.go` |
 | M-021 | Query responses avoid map-iteration nondeterminism | PASS | `sortedServerNames()` | `internal/keys/notary_query.go` |

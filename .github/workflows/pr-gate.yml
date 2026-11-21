@@ -1,6 +1,6 @@
 # Project: MXKeys (mxkeys.org)
-# Company: Matrix Family Inc. (https://matrix.family)
-# Owner: Matrix Family Inc.
+# Company: Matrix.Family Inc. (https://matrix.family)
+# Owner: Matrix.Family Inc.
 # Contact: dev@matrix.family
 # Support: support@matrix.family
 # Matrix: @support:matrix.family
@@ -271,6 +271,6 @@ jobs:
         with:
           # Needed so git ls-files has the full working tree.
           fetch-depth: 1
-      - name: Enforce ADR-0010 file-size policy
+      - name: Enforce file-size limits
         shell: bash
         run: bash ./scripts/file-size-lint.sh

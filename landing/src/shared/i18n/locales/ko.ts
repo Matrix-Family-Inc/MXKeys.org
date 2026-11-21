@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -31,7 +31,7 @@ export default {
     learnMore: '자세히 보기',
     viewAPI: 'API 보기',
     github: 'GitHub',
-    matrixFamilyBadge: 'Matrix Family',
+    matrixFamilyBadge: 'Matrix.Family',
   },
   status: {
     online: '인프라 온라인',
@@ -158,20 +158,18 @@ export default {
     title: '통합',
     description: 'Matrix 서버에서 MXKeys를 신뢰할 수 있는 키 서버로 사용하도록 구성하세요.',
     synapse: 'Synapse 구성',
-    mxcore: 'MXCore 구성',
+    matrixFamily: 'Matrix.Family 구성',
   },
   ecosystem: {
-    title: 'Matrix Family의 일원',
-    description: 'MXKeys는 Matrix Family 홈서버와 클라이언트 옆의 키 공증인입니다.',
-    matrixFamily: { title: 'Matrix Family', description: '홈서버와 클라이언트' },
-    mxcore: { title: 'MXCore', description: 'Matrix 홈서버' },
+    title: 'Matrix.Family의 일원',
+    description: 'MXKeys는 Matrix.Family 홈서버와 클라이언트 옆의 키 공증인입니다.',
+    matrixFamily: { title: 'Matrix.Family', description: '홈서버와 클라이언트' },
   },
   footer: {
     ecosystem: '에코시스템',
     resources: '리소스',
     contact: '연락처',
-    matrixFamily: 'Matrix Family',
-    mxcore: 'MXCore',
+    matrixFamily: 'Matrix.Family',
     architecture: '아키텍처',
     apiReference: 'API 레퍼런스',
     support: '@support',
@@ -179,8 +177,8 @@ export default {
     devChat: '#dev',
     protocol: '프로토콜',
     matrixSpec: 'Matrix Spec',
-    copyrightPrefix: '© 2026 Matrix Family Inc. All rights reserved. ',
-    copyrightLink: 'Matrix Family',
+    copyrightPrefix: '© 2026 Matrix.Family Inc. All rights reserved. ',
+    copyrightLink: 'Matrix.Family',
     copyrightSuffix: ' 에코시스템의 일원입니다.',
     tagline: 'Matrix 페더레이션을 위한 키 공증 서비스.',
   },

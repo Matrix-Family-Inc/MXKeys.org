@@ -1,118 +1,20 @@
 # MXKeys
 
-![Go](https://img.shields.io/badge/go-1.26+-blue)
-![License](https://img.shields.io/badge/license-Apache%202.0-green)
-![Matrix](https://img.shields.io/badge/matrix-federation-purple)
-![Prometheus](https://img.shields.io/badge/metrics-prometheus-orange)
-![Dependencies](https://img.shields.io/badge/go%20deps-4-brightgreen)
+Matrix federation key notary. Current release: `1.0.2`.
 
-**Matrix Federation Key Notary**
+MXKeys fetches another server's signing keys, checks the signature, adds its own, and stores the result. A homeserver can then ask MXKeys instead of trusting that fetch itself. One Go process and PostgreSQL. No application platform.
 
-Current release line: `v1.0.2`.
-
-MXKeys is the key notary for a classic Matrix deployment: a homeserver,
-Matrix clients, and this service. It does not ship an application
-platform, an app store, or MF Sys.
-
-MXKeys verifies remote Matrix server keys, adds a perspective signature,
-and caches verified responses in PostgreSQL and memory. The default
-deployment is a single Go binary plus PostgreSQL; optional modules
-(transparency log, analytics, trust policy, clustering, server-info
-enrichment) are off by default and opt in via config.
-
-## Release 1.0.2
-
-1.0.2 makes the notary match the Matrix signing and discovery rules a
-relying homeserver checks. `https://mxkeys.org/_mxkeys/health` reports
-the binary last deployed with `scripts/deploy-mxkeys.sh`.
-
-- Signatures cover the canonical JSON of the key document without
-  `signatures` and `unsigned`, encoded as unpadded base64. The bytes
-  served are those signed bytes, so `old_verify_keys` stays in the
-  document. A current document must be signed by a key in
-  `verify_keys`. A document taken from a fallback notary must carry a
-  valid origin self-signature.
-- TLS and the `Host` header use the name from discovery (the server
-  name, or the delegated hostname), including when the connection goes
-  to an SRV target. SRV is looked up as `_matrix-fed._tcp`, then the
-  deprecated `_matrix._tcp`. With private-address blocking on,
-  `.well-known` and key fetches dial only public addresses.
-- `POST /_matrix/key/v2/query` finishes inside the HTTP write timeout.
-  One client disconnect does not fail the shared fetch. An unreachable
-  origin is answered with the last stored document. A
-  `minimum_valid_until_ts` the cache does not meet is refetched at most
-  once per five minutes.
-- The circuit breaker counts the half-open probe and releases it when
-  the fetch never starts. Analytics stay off until `analytics.enabled`
-  is set. The config loader strips inline comments, reads flow lists
-  (`[]`, `[a, b]`) and `{}`, and rejects YAML it cannot represent.
-- `POST /_matrix/key/v2/query` with `"server_keys": {}` returns `200`
-  and an empty `server_keys` array.
-
-Production stays one Go process and PostgreSQL. Cluster mode stays off
-unless an operator enables it. On two stand hosts the same live
-`matrix.org` document was fetched; the origin signature and each
-notary countersignature verified.
-
-## Design principles
-
-- Minimal default surface: key notary plus health/live/ready probes.
-- Opt-in modules: transparency, analytics, trust policy, clustering, enrichment.
-- Deterministic validation: canonical JSON, explicit SSRF and timeout policy.
-- Operator-owned data: PostgreSQL and a local signing key, no external calls without config.
-
-## How it works
-
-1. Resolve the target homeserver via `.well-known`, SRV, explicit `host:port`, or IP literal.
-2. Fetch `/_matrix/key/v2/server`, check canonical JSON, and require one valid Ed25519 self-signature from `verify_keys`.
-3. Apply trust policy (if enabled) and caching/freshness rules.
-4. Add the notary's perspective signature and persist the verified response in PostgreSQL and the in-process cache.
-
-See `docs/federation-behavior.md` for the normative contract, including
-SSRF handling, timeouts, and error mapping. Optional modules
-(transparency log, analytics, trust policy, clustering with CRDT or
-Raft, server-info enrichment) are opt-in; see
-[Core vs optional modules](#core-vs-optional-modules) for the full table.
-
-## Why a dedicated notary
-
-Homeservers fetch keys as part of federation, which is correct by spec
-but couples trust decisions to the homeserver's codebase and operational
-surface. A dedicated notary:
-
-- Isolates key verification from message and state handling.
-- Lets multiple homeservers share a single audit and observability point.
-- Makes trust policy (allow and deny lists, signature requirements, TLS rules) explicit and configurable independently of any homeserver.
-
-The public hostname `mxkeys.org` is the notary Matrix `server_name`. MXKeys
-stays a separate infrastructure product and is not folded into the Matrix
-Family client brand or served as the notary under `matrix.family`. See
-`ecosystem-docs` ADR ECO-0011.
-
-## Use cases
-
-- Perspective notary for Synapse, Dendrite, Conduit, or MXCore via `trusted_key_servers`.
-- Internal notary for a restricted federation, with allow-list and mTLS on upstream fetches.
-- Standalone audit trail for server-key history through the transparency log and Merkle proofs.
-- Observability point for federation key behavior via Prometheus metrics and structured logs.
-
-## Quick Start
-
-1. Copy the example configuration and set `database.url`.
-2. Build the binary.
-3. Start the service.
+## Run
 
 ```bash
 cp config.example.yaml config.yaml
+# set server.name and database.url
 go build -o mxkeys ./cmd/mxkeys
 ./mxkeys
 ```
 
-Minimum config shape:
-
 ```yaml
 server:
-  # Set to the public server name of your deployment (must match TLS certificate).
   name: notary.example.org
 
 database:
@@ -120,29 +22,23 @@ database:
 
 keys:
   storage_path: /var/lib/mxkeys/keys
-
-trusted_servers:
-  fallback:
-    - matrix.org
 ```
 
-`server.name` must be configured explicitly to the public hostname of your deployment. `database.url` has no built-in default and must be configured explicitly. To gate the admin-only operational routes with a bearer token, set `security.admin_access_token`. For cluster mode, set `cluster.shared_secret` and, when binding to a wildcard address, `cluster.advertise_address`.
-If `security.trust_forwarded_headers` is enabled, configure the full trusted proxy chain in `security.trusted_proxies` and ensure those proxies overwrite forwarded headers instead of passing client-supplied values through unchanged.
+`server.name` is the public hostname of this notary. `database.url` has no default.
 
-A live instance is available for a quick sanity check against a running notary:
+Check a running notary:
 
 ```bash
 curl https://mxkeys.org/_matrix/key/v2/server
 ```
 
-## Public API
+## What it serves
 
 ```text
 GET  /_matrix/key/v2/server
 GET  /_matrix/key/v2/server/{keyID}
 POST /_matrix/key/v2/query
 GET  /_matrix/federation/v1/version
-
 GET  /_mxkeys/health
 GET  /_mxkeys/live
 GET  /_mxkeys/ready
@@ -150,48 +46,15 @@ GET  /_mxkeys/status
 GET  /_mxkeys/metrics
 ```
 
-Query example (replace `notary.example.org` with your deployed hostname):
-
 ```bash
 curl -X POST https://notary.example.org/_matrix/key/v2/query \
   -H "Content-Type: application/json" \
   -d '{"server_keys":{"matrix.org":{}}}'
 ```
 
-Admin-only operational routes for transparency inspection, analytics,
-cluster status, and trust-policy checks sit behind a bearer token
-(`security.admin_access_token`) and are not part of the stable
-federation contract. They are local ops/debug surfaces, not a product
-tier. The normative API contract lives in `docs/federation-behavior.md`.
+The key API is the stable contract. Probes and metrics are for the operator. The request rules are in `docs/federation-behavior.md`.
 
-The strongest compatibility promise applies to the Matrix key-notary endpoints. Operational probes are documented and supported, but they do not carry the same strict compatibility scope as the core federation API.
-
-## Core vs optional modules
-
-The default deployment ships only the Matrix key-notary endpoints, the
-health/live/ready probes, and the gated `/_mxkeys/status` +
-`/_mxkeys/metrics` pair. Everything else is opt-in.
-
-| Module | Config flag | Default | Purpose |
-|---|---|---|---|
-| Key notary (Matrix v2) | always on | on | `/_matrix/key/v2/*`, `/_matrix/federation/v1/version` |
-| Health/live/ready probes | always on | on | Kubernetes / orchestration probes |
-| Status + metrics | `security.admin_access_token` (optional gate) | served, token-gated if set | `/_mxkeys/status`, `/_mxkeys/metrics` |
-| Admin routes (transparency inspection, analytics, circuits, cluster/policy status) | `security.admin_access_token` | unset — routes not registered | Local ops/debug surface |
-| Trust policy | `trust_policy.enabled` | `false` | Allow/deny list, TLS/notary-signature requirements |
-| Transparency log | `transparency.enabled` | `false` | Append-only log with Merkle proofs |
-| Cluster (CRDT or Raft) | `cluster.enabled` | `false` | Multi-node replication |
-| Server-info enrichment | `server_info.enabled` | `false` | DNS/reachability/WHOIS lookup endpoint |
-| At-rest key encryption | `keys.encryption.passphrase_env` | unset — plaintext 0600 | AES-256-GCM envelope for the signing key |
-
-If none of the optional modules are enabled, the reachable surface is
-the core federation API, the three probes, and `/_mxkeys/status` plus
-`/_mxkeys/metrics`. Admin routes stay unregistered until
-`security.admin_access_token` is set.
-
-## Integration
-
-Replace `notary.example.org` with the public hostname of your MXKeys deployment.
+## Point a homeserver at it
 
 Synapse:
 
@@ -208,7 +71,7 @@ federation_api:
     - server_name: notary.example.org
 ```
 
-MXCore:
+Matrix.Family:
 
 ```yaml
 federation:
@@ -216,94 +79,36 @@ federation:
     - notary.example.org
 ```
 
-## Verification
+Replace `notary.example.org` with the hostname from `server.name`.
 
-For a full local verification pass:
+## Cluster
 
-```bash
-./scripts/ci-parity-preflight.sh
-```
+Off unless `cluster.enabled` is true. Two modes, both in this tree:
 
-This script mirrors the PR gate workflow: unit + race + tagged integration tests, vet, gofmt, govulncheck, gosec, coverage gate, staticcheck, errcheck, a 30s-per-target fuzz pass, and the landing lint/test/build/typecheck cycle.
+- `crdt` (default when clustering is on) shares key updates between nodes.
+- `raft` commits those updates to a write-ahead log under `cluster.raft_state_dir` and survives a restart.
 
-## Documentation
+Nodes share `cluster.shared_secret` (at least 32 characters). Do not publish the cluster port. See `docs/deployment.md` and `docs/adr/0001-cluster-consensus-modes.md`. Recovery is in `docs/runbook/cluster-disaster-recovery.md`. A v2 Raft log is upgraded with `docs/runbook/raft-wal-upgrade.md`.
 
-- Start here: `docs/README.md`
-- Matrix Family standardization: `docs/matrix-family-standardization.md`
-- Public contract: `docs/federation-behavior.md`
-- Architecture: `ARCHITECTURE.md`
-- Deployment: `docs/deployment.md`
-- Monitoring: `docs/monitoring.md`
-- Build and verification: `docs/build.md`
-- Security: `docs/threat-model.md`
-- Runbooks: `docs/runbook/`
-- ADRs: `docs/adr/`
+## Documents
 
-## Source repository
+The ordered index is `docs/README.md`. Start with
+`docs/federation-behavior.md` for the HTTP API, `docs/deployment.md`
+to install, and `ARCHITECTURE.md` for the query path.
 
-Matrix Family Git servers use **SSH port 42224 only** (never port 22).
-
-```text
-Web:  https://git.matrix.family/dev/MXKeys.org
-SSH:  git@git.matrix.family:dev/MXKeys.org.git
-Port: 42224
-```
+## Source
 
 ```bash
-git clone ssh://git@git.matrix.family:42224/dev/MXKeys.org.git
+git clone git@github.com:Matrix-Family-Inc/MXKeys.org.git
 ```
 
-`~/.ssh/config`:
-
-```text
-Host git.matrix.family
-    HostName git.matrix.family
-    Port 42224
-    User git
-    IdentityFile ~/.ssh/<deploy_key>
-    IdentitiesOnly yes
-```
-
-Production checkout on `mxkeys.org`: `/opt/MXKeys.org`. Landing build served from `/var/www/mxkeys.org/`.
-
----
+https://github.com/Matrix-Family-Inc/MXKeys.org
 
 ## License
 
 Apache License 2.0. See `LICENSE` and `SECURITY.md`.
 
----
-
-## Landing Page
-
-The `landing/` tree is an operator-forkable page for a deployed notary.
-It links Matrix Family and MXCore. It does not link an app store or MF Sys.
-Feature-Sliced Design with Zustand for UI state, Zod for env
-validation, TanStack Router/Query ready for future pages, lazy-loaded i18n
-(20 locales, ~7-12 KB each), and Sentry opt-in via `VITE_SENTRY_DSN`.
-Set `VITE_SITE_URL` to rebrand without file edits.
-
-Supported languages: Arabic, Bengali, Chinese (Simplified), Dutch, English,
-French, German, Hebrew, Hindi, Indonesian, Italian, Japanese, Korean,
-Polish, Portuguese, Spanish, Thai, Turkish, Urdu, Vietnamese. Cyrillic
-locales (Russian, Ukrainian) were removed per Matrix Family English-only
-source policy; RTL languages (Arabic, Hebrew, Urdu) keep automatic layout
-direction.
-
-See `docs/adr/0009-landing-fsd-stack.md` for stack rationale.
-
----
-
-## Project
-
-MXKeys is an independent Matrix federation key-notary server maintained by
-Matrix Family Inc. It works with any Matrix homeserver (Synapse, Dendrite,
-Conduit, MXCore). The current product is that classic notary. Operators
-deploy their own branded notary without coupling to any specific homeserver.
-
-Company: Matrix Family Inc. (https://matrix.family)
+Company: Matrix.Family Inc. (https://matrix.family)
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
-
-Copyright (c) 2026 Matrix Family Inc. All rights reserved.

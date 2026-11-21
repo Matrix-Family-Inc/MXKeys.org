@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -19,7 +19,6 @@ import { siteURL } from './env';
 export const URLS = {
   matrixFamily: 'https://matrix.family',
   mxkeys: siteURL,
-  mxcore: 'https://mxcore.tech',
 } as const;
 
 export const MATRIX_CONTACTS = {
@@ -40,7 +39,6 @@ export const EXTERNAL = {
  */
 const INTERNAL_DOMAINS = [
   'matrix.family',
-  'mxcore.tech',
 ] as const;
 
 /** isInternalLink reports whether url points to the ecosystem or the same origin. */

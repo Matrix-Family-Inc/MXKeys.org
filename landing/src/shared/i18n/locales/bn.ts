@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -32,7 +32,7 @@ export default {
     learnMore: 'আরও জানুন',
     viewAPI: 'API দেখুন',
     github: 'GitHub',
-    matrixFamilyBadge: 'Matrix Family',
+    matrixFamilyBadge: 'Matrix.Family',
   },
 
   status: {
@@ -171,20 +171,16 @@ export default {
     description: 'আপনার Matrix সার্ভারকে MXKeys-কে বিশ্বস্ত কী সার্ভার হিসেবে ব্যবহার করতে কনফিগার করুন।',
 
     synapse: 'Synapse কনফিগারেশন',
-    mxcore: 'MXCore কনফিগারেশন',
+    matrixFamily: 'Matrix.Family কনফিগারেশন',
   },
 
   ecosystem: {
-    title: 'Matrix Family-এর অংশ',
-    description: 'MXKeys হলো Matrix Family-এর হোমসার্ভার ও ক্লায়েন্টের পাশের চাবি-নোটারি।',
+    title: 'Matrix.Family-এর অংশ',
+    description: 'MXKeys হলো Matrix.Family-এর হোমসার্ভার ও ক্লায়েন্টের পাশের চাবি-নোটারি।',
 
     matrixFamily: {
-      title: 'Matrix Family',
+      title: 'Matrix.Family',
       description: 'হোমসার্ভার ও ক্লায়েন্ট',
-    },
-    mxcore: {
-      title: 'MXCore',
-      description: 'Matrix হোমসার্ভার',
     },
   },
 
@@ -193,8 +189,7 @@ export default {
     resources: 'রিসোর্স',
     contact: 'যোগাযোগ',
 
-    matrixFamily: 'Matrix Family',
-    mxcore: 'MXCore',
+    matrixFamily: 'Matrix.Family',
 
     architecture: 'আর্কিটেকচার',
     apiReference: 'API রেফারেন্স',
@@ -206,8 +201,8 @@ export default {
     protocol: 'প্রোটোকল',
     matrixSpec: 'Matrix Spec',
 
-    copyrightPrefix: '© 2026 Matrix Family Inc. সর্বস্বত্ব সংরক্ষিত। ',
-    copyrightLink: 'Matrix Family',
+    copyrightPrefix: '© 2026 Matrix.Family Inc. সর্বস্বত্ব সংরক্ষিত। ',
+    copyrightLink: 'Matrix.Family',
     copyrightSuffix: ' ইকোসিস্টেমের অংশ।',
     tagline: 'Matrix ফেডারেশনের জন্য Key Notary।',
   },

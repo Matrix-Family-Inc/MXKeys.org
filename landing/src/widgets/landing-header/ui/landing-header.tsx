@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -20,7 +20,6 @@ const navLinks = [
   { href: '#about', key: 'about' },
   { href: '#how-it-works', key: 'howItWorks' },
   { href: '#api', key: 'api' },
-  { href: '#ecosystem', key: 'ecosystem' },
 ] as const;
 
 export function LandingHeader() {

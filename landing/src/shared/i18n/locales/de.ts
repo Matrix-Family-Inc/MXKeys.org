@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -31,7 +31,7 @@ export default {
     learnMore: 'Mehr erfahren',
     viewAPI: 'API anzeigen',
     github: 'GitHub',
-    matrixFamilyBadge: 'Matrix Family',
+    matrixFamilyBadge: 'Matrix.Family',
   },
   status: {
     online: 'Infrastruktur online',
@@ -158,20 +158,18 @@ export default {
     title: 'Integration',
     description: 'Konfigurieren Sie Ihren Matrix-Server, um MXKeys als vertrauenswürdigen Schlüsselserver zu verwenden.',
     synapse: 'Synapse-Konfiguration',
-    mxcore: 'MXCore-Konfiguration',
+    matrixFamily: 'Matrix.Family-Konfiguration',
   },
   ecosystem: {
-    title: 'Teil von Matrix Family',
-    description: 'MXKeys ist der Schlüsselnotar neben Homeserver und Clients von Matrix Family.',
-    matrixFamily: { title: 'Matrix Family', description: 'Homeserver und Clients' },
-    mxcore: { title: 'MXCore', description: 'Matrix-Homeserver' },
+    title: 'Teil von Matrix.Family',
+    description: 'MXKeys ist der Schlüsselnotar neben Homeserver und Clients von Matrix.Family.',
+    matrixFamily: { title: 'Matrix.Family', description: 'Homeserver und Clients' },
   },
   footer: {
     ecosystem: 'Ökosystem',
     resources: 'Ressourcen',
     contact: 'Kontakt',
-    matrixFamily: 'Matrix Family',
-    mxcore: 'MXCore',
+    matrixFamily: 'Matrix.Family',
     architecture: 'Architektur',
     apiReference: 'API-Referenz',
     support: '@support',
@@ -179,8 +177,8 @@ export default {
     devChat: '#dev',
     protocol: 'Protokoll',
     matrixSpec: 'Matrix Spec',
-    copyrightPrefix: '© 2026 Matrix Family Inc. Alle Rechte vorbehalten. Teil des ',
-    copyrightLink: 'Matrix Family',
+    copyrightPrefix: '© 2026 Matrix.Family Inc. Alle Rechte vorbehalten. Teil des ',
+    copyrightLink: 'Matrix.Family',
     copyrightSuffix: '-Ökosystems.',
     tagline: 'Schlüsselnotar für Matrix-Föderation.',
   },

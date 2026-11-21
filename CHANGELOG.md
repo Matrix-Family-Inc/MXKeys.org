@@ -1,6 +1,6 @@
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
@@ -12,6 +12,15 @@ Status: Updated
 All notable changes to MXKeys are documented in this file.
 
 ## [Unreleased]
+
+### Changed
+
+- The public documents describe one notary: one process and PostgreSQL,
+  plus the optional cluster that ships in the binary.
+  Source is `git@github.com:Matrix-Family-Inc/MXKeys.org.git`.
+  `docs/README.md` is the reading order for the notary.
+  The internal git URL and the production-host runbook are no longer
+  part of this tree.
 
 ## [1.0.2] - 2026-11-21
 
@@ -77,7 +86,8 @@ platform or an app store. The shipping topology remains a single node.
 
 - Release version is `1.0.2` in `internal/version`, the landing
   package, and the landing badge.
-- The landing links Matrix Family and MXCore. Links to an app store,
+- The landing links Matrix.Family. The homeserver example is labeled
+  Matrix.Family. Links to an app store,
   an apps gateway, and MF Sys are removed.
 - In-memory key analytics run only when `analytics.enabled` is true.
   A failed lookup does not create an entry. Counts move when a
@@ -175,7 +185,7 @@ homeservers.
   a TanStack useMutation hook, and an MSW mock for local
   development.
 - Top-level `ARCHITECTURE.md` promoted from `docs/architecture.md`.
-  Matrix Family projects keep the architecture document at the
+  Matrix.Family projects keep the architecture document at the
   repository root for discoverability from the GitHub overview.
   The document gains a new **Notary Reply Integrity** section
   covering the raw-preserving pipeline (`ServerKeysResponse.Raw`,

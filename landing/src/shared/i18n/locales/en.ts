@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -32,7 +32,7 @@ export default {
     learnMore: 'Learn More',
     viewAPI: 'View API',
     github: 'GitHub',
-    matrixFamilyBadge: 'Matrix Family',
+    matrixFamilyBadge: 'Matrix.Family',
   },
 
   status: {
@@ -171,7 +171,7 @@ export default {
     description: 'Configure your Matrix server to use MXKeys as a trusted key server.',
     
     synapse: 'Synapse Configuration',
-    mxcore: 'MXCore Configuration',
+    matrixFamily: 'Matrix.Family Configuration',
   },
 
   lookup: {
@@ -224,16 +224,12 @@ export default {
   },
 
   ecosystem: {
-    title: 'Part of Matrix Family',
-    description: 'MXKeys is the key notary next to the Matrix Family homeserver and clients.',
+    title: 'Part of Matrix.Family',
+    description: 'MXKeys is the key notary next to the Matrix.Family homeserver and clients.',
     
     matrixFamily: {
-      title: 'Matrix Family',
+      title: 'Matrix.Family',
       description: 'Homeserver and clients',
-    },
-    mxcore: {
-      title: 'MXCore',
-      description: 'Matrix homeserver',
     },
   },
 
@@ -242,8 +238,7 @@ export default {
     resources: 'Resources',
     contact: 'Contact',
     
-    matrixFamily: 'Matrix Family',
-    mxcore: 'MXCore',
+    matrixFamily: 'Matrix.Family',
     
     architecture: 'Architecture',
     apiReference: 'API Reference',
@@ -255,8 +250,8 @@ export default {
     protocol: 'Protocol',
     matrixSpec: 'Matrix Spec',
 
-    copyrightPrefix: '© 2026 Matrix Family Inc. All rights reserved. Part of the ',
-    copyrightLink: 'Matrix Family',
+    copyrightPrefix: '© 2026 Matrix.Family Inc. All rights reserved. Part of the ',
+    copyrightLink: 'Matrix.Family',
     copyrightSuffix: ' ecosystem.',
     tagline: 'Key Notary for Matrix federation.',
   },

@@ -1,6 +1,6 @@
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
@@ -20,7 +20,7 @@ Public.
 ## Context
 
 MXKeys aims to minimize supply-chain and runtime risk while keeping deterministic behavior for critical federation trust logic.
-Some infrastructure layers are security-sensitive and small enough to maintain in-tree: metrics, config helpers, canonical JSON, Merkle primitives, and raft internals. The module targets Go 1.26. Routing relies on stdlib `http.ServeMux` method/path patterns introduced in Go 1.22; no custom router is required.
+Some infrastructure layers are security-sensitive and small enough to maintain in-tree: metrics, config helpers, canonical JSON, Merkle primitives, and the Raft log. The module targets Go 1.26. Routing relies on stdlib `http.ServeMux` method/path patterns introduced in Go 1.22; no custom router is required.
 
 ## Decision
 
@@ -47,4 +47,4 @@ Maintain internal `internal/zero/*` packages for core cross-cutting functionalit
 - `internal/zero/log` - structured logging wrapper.
 - `internal/zero/merkle` - Merkle primitives for transparency proofs.
 - `internal/zero/metrics` - in-tree metrics primitives.
-- `internal/zero/raft` - in-tree consensus implementation.
+- `internal/zero/raft` - in-tree Raft log, election, and snapshots. Used when `cluster.consensus_mode` is `raft`.

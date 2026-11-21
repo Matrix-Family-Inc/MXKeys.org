@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -31,7 +31,7 @@ export default {
     learnMore: '了解更多',
     viewAPI: '查看 API',
     github: 'GitHub',
-    matrixFamilyBadge: 'Matrix Family',
+    matrixFamilyBadge: 'Matrix.Family',
   },
   status: {
     online: '基础设施在线',
@@ -158,20 +158,18 @@ export default {
     title: '集成',
     description: '配置您的 Matrix 服务器以使用 MXKeys 作为受信任的密钥服务器。',
     synapse: 'Synapse 配置',
-    mxcore: 'MXCore 配置',
+    matrixFamily: 'Matrix.Family 配置',
   },
   ecosystem: {
-    title: 'Matrix Family 的一部分',
-    description: 'MXKeys 是 Matrix Family 家园服务器和客户端旁边的密钥公证。',
-    matrixFamily: { title: 'Matrix Family', description: '家园服务器和客户端' },
-    mxcore: { title: 'MXCore', description: 'Matrix 家庭服务器' },
+    title: 'Matrix.Family 的一部分',
+    description: 'MXKeys 是 Matrix.Family 家园服务器和客户端旁边的密钥公证。',
+    matrixFamily: { title: 'Matrix.Family', description: '家园服务器和客户端' },
   },
   footer: {
     ecosystem: '生态系统',
     resources: '资源',
     contact: '联系方式',
-    matrixFamily: 'Matrix Family',
-    mxcore: 'MXCore',
+    matrixFamily: 'Matrix.Family',
     architecture: '架构',
     apiReference: 'API 参考',
     support: '@support',
@@ -179,8 +177,8 @@ export default {
     devChat: '#dev',
     protocol: '协议',
     matrixSpec: 'Matrix Spec',
-    copyrightPrefix: '© 2026 Matrix Family Inc. 保留所有权利。属于 ',
-    copyrightLink: 'Matrix Family',
+    copyrightPrefix: '© 2026 Matrix.Family Inc. 保留所有权利。属于 ',
+    copyrightLink: 'Matrix.Family',
     copyrightSuffix: ' 生态系统。',
     tagline: 'Matrix 联邦的密钥公证服务。',
   },

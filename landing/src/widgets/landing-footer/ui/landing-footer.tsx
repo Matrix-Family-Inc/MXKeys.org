@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -35,7 +35,6 @@ export function LandingFooter() {
             <h3 className="font-medium text-text mb-3">{t('footer.ecosystem')}</h3>
             <ul className="space-y-2 text-sm">
               <li><a href={URLS.matrixFamily} {...getLinkProps(URLS.matrixFamily)} className="text-text-secondary hover:text-primary">{t('footer.matrixFamily')}</a></li>
-              <li><a href={URLS.mxcore} {...getLinkProps(URLS.mxcore)} className="text-text-secondary hover:text-primary">{t('footer.mxcore')}</a></li>
             </ul>
           </div>
 
@@ -75,7 +74,7 @@ export function LandingFooter() {
             <span className="text-sm">github.com/Matrix-Family-Inc</span>
           </a>
           <p className="text-sm text-text-muted">
-            © {new Date().getFullYear()} Matrix Family Inc. All rights reserved.
+            © {new Date().getFullYear()} Matrix.Family Inc. All rights reserved.
           </p>
         </div>
       </div>

@@ -1,6 +1,6 @@
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
@@ -19,8 +19,8 @@ A backup tarball contains:
   database (server-key cache, transparency log, migrations table).
 - `keys/` : signing-key directory as on disk, including the
   `MXKENC01` envelope when at-rest encryption is on.
-- `raft/` : Raft state directory (WAL and snapshot) for clusters
-  running in Raft mode.
+- `raft/` : Raft state directory, only when that directory exists.
+  A single-node notary with clustering off has nothing here.
 - `MANIFEST.txt` : backup timestamp, binary version, sha256 for
   every file in the archive.
 
@@ -34,29 +34,27 @@ two runs against the same on-disk state produce identical bytes.
 - `pg_dump` on PATH with read access to the notary database.
 - Write access to the output directory (default
   `/var/backups/mxkeys`).
-- Free disk roughly `keys_dir + raft_dir + db_size * 1.5`.
+- Free disk roughly `keys_dir + db_size * 1.5`.
 
 ### Command
 
     scripts/mxkeys-backup.sh \
       --database-url postgres://mxkeys:password@localhost/mxkeys \
       --keys-dir /var/lib/mxkeys/keys \
-      --raft-dir /var/lib/mxkeys/raft \
       --output-dir /var/backups/mxkeys
 
 Steps the script performs:
 
 1. `pg_dump` with `--clean --if-exists` (idempotent restore).
 2. `cp -a` the keys directory (permissions preserved).
-3. `cp -a` the Raft state directory when present.
+3. `cp -a` the Raft directory when it exists. Pass `--raft-dir` to override `/var/lib/mxkeys/raft`.
 4. Write `MANIFEST.txt` with per-file sha256.
 5. Write `mxkeys-backup-<UTC>.tar.gz` at 0600 using atomic rename.
 
 The service does not need to be stopped. `pg_dump` runs in a
-read-only transaction. The key and Raft directories are
-append-only from the service's view, so a live copy captures a
-point-in-time snapshot; a file that races with a concurrent write
-is caught on the next cycle.
+read-only transaction. The key directory is copied as it sits on
+disk; a file that races with a concurrent write is caught on the
+next cycle.
 
 ### Scheduling
 
@@ -100,8 +98,7 @@ replay may deadlock or corrupt state.
     scripts/mxkeys-restore.sh \
       --input /var/backups/mxkeys/mxkeys-backup-20260420T120000Z.tar.gz \
       --database-url postgres://mxkeys:password@localhost/mxkeys \
-      --keys-dir /var/lib/mxkeys/keys \
-      --raft-dir /var/lib/mxkeys/raft
+      --keys-dir /var/lib/mxkeys/keys
 
 Steps the script performs:
 
@@ -109,7 +106,7 @@ Steps the script performs:
 2. Print `MANIFEST.txt` so the operator can confirm source version.
 3. `psql --set=ON_ERROR_STOP=1` replay of `database.sql`.
 4. Replace `keys_dir` atomically (`rm -rf` + `cp -a`).
-5. Replace `raft_dir` atomically.
+5. Replace the Raft directory when the archive contains `raft/`.
 6. Restore 0600 / 0700 permissions on the copied trees.
 
 After the script exits, start the service and verify:
@@ -137,10 +134,10 @@ worse than a longer outage.
 
 ## Disaster Recovery
 
-For complete loss (all nodes gone), restore a single node from
-the most recent off-site tarball. The restored node is the new
-source of truth; rebuild other nodes by joining the standard
-cluster flow (see `docs/runbook/cluster-disaster-recovery.md`).
+For a lost machine, restore that one node from the most recent
+off-site tarball. The restored database and signing key are the
+notary. A Raft cluster that lost quorum is covered in
+`docs/runbook/cluster-disaster-recovery.md`.
 
 If the signing key is unrecoverable (all backups lost), follow
 `docs/runbook/key-rotation.md`. Relying homeservers re-fetch the

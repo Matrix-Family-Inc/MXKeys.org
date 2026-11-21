@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -32,7 +32,7 @@ export default {
     learnMore: 'למד עוד',
     viewAPI: 'צפה ב-API',
     github: 'GitHub',
-    matrixFamilyBadge: 'Matrix Family',
+    matrixFamilyBadge: 'Matrix.Family',
   },
 
   status: {
@@ -171,20 +171,16 @@ export default {
     description: 'הגדר את שרת ה-Matrix שלך להשתמש ב-MXKeys כשרת מפתחות מהימן.',
 
     synapse: 'הגדרת Synapse',
-    mxcore: 'הגדרת MXCore',
+    matrixFamily: 'הגדרת Matrix.Family',
   },
 
   ecosystem: {
-    title: 'חלק מ-Matrix Family',
-    description: 'MXKeys הוא נוטריון המפתחות לצד שרת הבית והלקוחות של Matrix Family.',
+    title: 'חלק מ-Matrix.Family',
+    description: 'MXKeys הוא נוטריון המפתחות לצד שרת הבית והלקוחות של Matrix.Family.',
 
     matrixFamily: {
-      title: 'Matrix Family',
+      title: 'Matrix.Family',
       description: 'שרת בית ולקוחות',
-    },
-    mxcore: {
-      title: 'MXCore',
-      description: 'שרת Matrix ביתי',
     },
   },
 
@@ -193,8 +189,7 @@ export default {
     resources: 'משאבים',
     contact: 'יצירת קשר',
 
-    matrixFamily: 'Matrix Family',
-    mxcore: 'MXCore',
+    matrixFamily: 'Matrix.Family',
 
     architecture: 'ארכיטקטורה',
     apiReference: 'מסמכי API',
@@ -206,8 +201,8 @@ export default {
     protocol: 'פרוטוקול',
     matrixSpec: 'Matrix Spec',
 
-    copyrightPrefix: '© 2026 Matrix Family Inc. כל הזכויות שמורות. חלק מאקוסיסטם ',
-    copyrightLink: 'Matrix Family',
+    copyrightPrefix: '© 2026 Matrix.Family Inc. כל הזכויות שמורות. חלק מאקוסיסטם ',
+    copyrightLink: 'Matrix.Family',
     copyrightSuffix: '.',
     tagline: 'נוטריון מפתחות עבור פדרציית Matrix.',
   },

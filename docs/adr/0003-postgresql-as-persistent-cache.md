@@ -1,10 +1,10 @@
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
-Date: Mon 22 Jun 2026 00:51:51 UTC
+Date: Sat 21 Nov 2026 01:41:00 UTC
 Status: Updated
 
 # ADR-0003: PostgreSQL as Persistent Key Cache
@@ -45,6 +45,6 @@ Use PostgreSQL as persistent cache/storage for verified federation key responses
 - `internal/keys/storage.go` - PostgreSQL persistence layer for key responses.
 - `internal/keys/notary_query.go` - query path that reads and writes the
   persistent cache.
-- `internal/server/handlers.go` - HTTP handlers that expose cached notary
-  responses.
+- `internal/server/handlers_keys.go` and `internal/server/handlers_query.go`
+  - HTTP handlers that expose cached notary responses.
 - `docs/deployment.md` - operator database configuration guidance.

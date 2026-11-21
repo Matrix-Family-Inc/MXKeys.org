@@ -1,10 +1,10 @@
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
-Date: Mon 22 Jun 2026 00:51:51 UTC
+Date: Sat 21 Nov 2026 01:41:00 UTC
 Status: Updated
 
 # Runbook: Release
@@ -41,8 +41,8 @@ Also confirm:
 - `go.mod` declares the Go version documented in the README.
 - `CHANGELOG.md` has an entry for the target version matching the
   git tag to be created.
-- `docs/` matches shipped behaviour (no stale runbook references,
-  ADR numbering contiguous).
+- `docs/` matches shipped behaviour. `docs/adr/README.md` lists the
+  decisions about this notary.
 - Required check names in branch protection stay aligned with
   `.github/workflows/pr-gate.yml`,
   `.github/workflows/release-live-interop-gate.yml`, and

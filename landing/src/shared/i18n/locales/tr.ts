@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -32,7 +32,7 @@ export default {
     learnMore: 'Daha Fazla Bilgi',
     viewAPI: 'API Görüntüle',
     github: 'GitHub',
-    matrixFamilyBadge: 'Matrix Family',
+    matrixFamilyBadge: 'Matrix.Family',
   },
 
   status: {
@@ -171,20 +171,16 @@ export default {
     description: 'Matrix sunucunuzu MXKeys\'i güvenilir anahtar sunucusu olarak kullanacak şekilde yapılandırın.',
 
     synapse: 'Synapse Yapılandırması',
-    mxcore: 'MXCore Yapılandırması',
+    matrixFamily: 'Matrix.Family Yapılandırması',
   },
 
   ecosystem: {
-    title: 'Matrix Family\'nin Parçası',
-    description: 'MXKeys, Matrix Family ev sunucusu ve istemcilerinin yanındaki anahtar noteridir.',
+    title: 'Matrix.Family\'nin Parçası',
+    description: 'MXKeys, Matrix.Family ev sunucusu ve istemcilerinin yanındaki anahtar noteridir.',
 
     matrixFamily: {
-      title: 'Matrix Family',
+      title: 'Matrix.Family',
       description: 'Ev sunucusu ve istemciler',
-    },
-    mxcore: {
-      title: 'MXCore',
-      description: 'Matrix Ev Sunucusu',
     },
   },
 
@@ -193,8 +189,7 @@ export default {
     resources: 'Kaynaklar',
     contact: 'İletişim',
 
-    matrixFamily: 'Matrix Family',
-    mxcore: 'MXCore',
+    matrixFamily: 'Matrix.Family',
 
     architecture: 'Mimari',
     apiReference: 'API Referansı',
@@ -206,8 +201,8 @@ export default {
     protocol: 'Protokol',
     matrixSpec: 'Matrix Spec',
 
-    copyrightPrefix: '© 2026 Matrix Family Inc. Tüm hakları saklıdır. ',
-    copyrightLink: 'Matrix Family',
+    copyrightPrefix: '© 2026 Matrix.Family Inc. Tüm hakları saklıdır. ',
+    copyrightLink: 'Matrix.Family',
     copyrightSuffix: ' ekosisteminin parçası.',
     tagline: 'Matrix federasyonu için Key Notary.',
   },

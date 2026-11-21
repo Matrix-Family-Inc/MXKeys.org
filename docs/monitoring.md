@@ -1,6 +1,6 @@
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
@@ -132,7 +132,7 @@ Exported metrics:
 | `GET /_mxkeys/health` | None | Liveness probe |
 | `GET /_mxkeys/live` | None | Process alive |
 | `GET /_mxkeys/ready` | None | Database + key readiness |
-| `GET /_mxkeys/status` | Token | Detailed status with cache, DB, cluster stats |
+| `GET /_mxkeys/status` | Token | Detailed status with cache, database, and cluster fields when clustering is on |
 | `GET /_mxkeys/metrics` | Token | Prometheus metrics |
 | `GET /_mxkeys/circuits` | Token | Circuit breaker states |
 | `GET /_mxkeys/notary/key` | None | Public key for STH verification |

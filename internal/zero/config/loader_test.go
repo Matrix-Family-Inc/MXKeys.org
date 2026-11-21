@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -88,8 +88,8 @@ func TestLoadExampleConfig(t *testing.T) {
 	if got := GetString(m, "logging.format"); got != "text" {
 		t.Errorf("example logging.format = %q", got)
 	}
-	if got := GetString(m, "cluster.consensus_mode"); got != "crdt" {
-		t.Errorf("example consensus_mode = %q", got)
+	if got := GetInt(m, "server.port"); got != 8448 {
+		t.Errorf("example server.port = %d", got)
 	}
 	if got := GetInt(m, "keys.expired_retention_days"); got != 365 {
 		t.Errorf("example expired_retention_days = %d", got)
@@ -97,8 +97,11 @@ func TestLoadExampleConfig(t *testing.T) {
 	if GetBool(m, "analytics.enabled") {
 		t.Errorf("example analytics.enabled must be false")
 	}
-	if got := GetString(m, "cluster.tls.min_version"); got != "1.3" {
-		t.Errorf("example min_version = %q", got)
+	if GetBool(m, "cluster.enabled") {
+		t.Errorf("example cluster.enabled must be false")
+	}
+	if got := GetString(m, "cluster.consensus_mode"); got != "crdt" {
+		t.Errorf("example consensus_mode = %q", got)
 	}
 	if seeds := GetStringSlice(m, "cluster.seeds"); seeds == nil || len(seeds) != 0 {
 		t.Errorf("example seeds = %v", seeds)

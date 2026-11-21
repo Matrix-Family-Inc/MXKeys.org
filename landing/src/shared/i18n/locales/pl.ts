@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -32,7 +32,7 @@ export default {
     learnMore: 'Dowiedz się więcej',
     viewAPI: 'Zobacz API',
     github: 'GitHub',
-    matrixFamilyBadge: 'Matrix Family',
+    matrixFamilyBadge: 'Matrix.Family',
   },
 
   status: {
@@ -171,20 +171,16 @@ export default {
     description: 'Skonfiguruj swój serwer Matrix, aby używał MXKeys jako zaufanego serwera kluczy.',
 
     synapse: 'Konfiguracja Synapse',
-    mxcore: 'Konfiguracja MXCore',
+    matrixFamily: 'Konfiguracja Matrix.Family',
   },
 
   ecosystem: {
-    title: 'Część Matrix Family',
-    description: 'MXKeys to notariusz kluczy obok homeserwera i klientów Matrix Family.',
+    title: 'Część Matrix.Family',
+    description: 'MXKeys to notariusz kluczy obok homeserwera i klientów Matrix.Family.',
 
     matrixFamily: {
-      title: 'Matrix Family',
+      title: 'Matrix.Family',
       description: 'Homeserver i klienty',
-    },
-    mxcore: {
-      title: 'MXCore',
-      description: 'Serwer domowy Matrix',
     },
   },
 
@@ -193,8 +189,7 @@ export default {
     resources: 'Zasoby',
     contact: 'Kontakt',
 
-    matrixFamily: 'Matrix Family',
-    mxcore: 'MXCore',
+    matrixFamily: 'Matrix.Family',
 
     architecture: 'Architektura',
     apiReference: 'Referencja API',
@@ -206,8 +201,8 @@ export default {
     protocol: 'Protokół',
     matrixSpec: 'Matrix Spec',
 
-    copyrightPrefix: '© 2026 Matrix Family Inc. Wszelkie prawa zastrzeżone. Część ekosystemu ',
-    copyrightLink: 'Matrix Family',
+    copyrightPrefix: '© 2026 Matrix.Family Inc. Wszelkie prawa zastrzeżone. Część ekosystemu ',
+    copyrightLink: 'Matrix.Family',
     copyrightSuffix: '.',
     tagline: 'Key Notary dla federacji Matrix.',
   },

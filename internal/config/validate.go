@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -147,9 +147,7 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("cluster.consensus_mode must be 'crdt' or 'raft'")
 		}
 		// Raft mode demands a durable state directory. Silently degrading
-		// to in-memory would contradict the durability guarantees stated
-		// in ARCHITECTURE.md and docs/adr/0001. Fail fast instead of
-		// letting a mis-configured operator boot an ephemeral quorum.
+		// to in-memory would drop committed entries. Fail fast instead.
 		if c.Cluster.ConsensusMode == "raft" && strings.TrimSpace(c.Cluster.RaftStateDir) == "" {
 			return fmt.Errorf("cluster.raft_state_dir is required when cluster.consensus_mode=raft")
 		}

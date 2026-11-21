@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -48,9 +48,9 @@ var walMagicV2 = [12]byte{'M', 'X', 'K', 'S', '_', 'W', 'A', 'L', '_', 'v', '2',
 // matches but the HMAC does not, we can distinguish "bit rot" from
 // "tampered" in diagnostics.
 //
-// Upgrade from v2 is not automatic: operators run `mxkeys walctl
-// upgrade` (documented in docs/runbook/raft-wal-upgrade.md) or delete
-// the WAL and let the snapshot replay re-establish state.
+// Upgrade from v2 is not automatic: operators run `mxkeys-walctl`
+// (see docs/runbook/raft-wal-upgrade.md) or delete the WAL and let
+// snapshot replay re-establish state.
 var walMagicV3 = [12]byte{'M', 'X', 'K', 'S', '_', 'W', 'A', 'L', '_', 'v', '3', 0}
 
 // walMagic is the format this binary writes. New OpenWAL calls produce

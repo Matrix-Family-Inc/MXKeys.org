@@ -1,56 +1,50 @@
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
-Date: Sat 29 Aug 2026 16:11:22 UTC
+Date: Sat 21 Nov 2026 01:50:00 UTC
 Status: Updated
 
-# Docs Index
+# Docs
 
-MXKeys 1.0.2 is the key notary for a classic Matrix deployment
-(homeserver, clients, this service). Cluster runbooks describe the
-optional cluster, which stays off in the shipping configuration.
-There is no application platform in this repository.
+MXKeys 1.0.2 is a Matrix key notary. Read in this order. The usual
+deployment is one Go process and PostgreSQL. The cluster is in the
+binary and stays off until `cluster.enabled` is set.
 
-## Core Set
+## 1. Product
 
-- `matrix-family-standardization.md` — Matrix Family headers, branding, git SSH (port 42224)
-- `federation-behavior.md` — normative public API and request/response behavior
-- `../ARCHITECTURE.md` — runtime architecture and data flow (top-level)
-- `deployment.md` — deployment and operational guide
-- `build.md` — build, verification, and reproducibility commands
-- `threat-model.md` — security assumptions, risks, and controls
-- `matrix-v1.16-conformance-matrix.md` — Matrix v1.16 scope coverage
-- `matrix-v1.16-clause-map.md` — detailed clause-to-code mapping
+- `../README.md` — what it is, how to start it, where the source lives
+- `federation-behavior.md` — HTTP API
+- `../ARCHITECTURE.md` — path of one key query through the process
+- `deployment.md` — install, systemd, reverse proxy, backup, cluster switch
+- `build.md` — build and tests
+- `../SECURITY.md` — how to report a vulnerability
 
-## Runbooks
+## 2. Operate one node
 
-- `runbook/key-rotation.md` — signing-key rotation procedure
-- `runbook/cluster-disaster-recovery.md` — CRDT and Raft recovery paths
-- `runbook/schema-migration.md` — PostgreSQL schema change procedure
-- `runbook/backup-restore.md` — database and signing-key backup/restore
-- `runbook/production-deploy.md` — production rollout procedure
-- `runbook/raft-wal-upgrade.md` — WAL format upgrade procedure
-- `runbook/release.md` — release cut, tagging, and artifact publication
+- `runbook/backup-restore.md` — database and signing key
+- `runbook/key-rotation.md` — replace the notary signing key
+- `runbook/schema-migration.md` — PostgreSQL schema changes
+- `runbook/release.md` — tag and publish a release
 
-## Supporting Material
+## 3. Cluster, only if enabled
 
-- `adr/` — architecture decision records
-- `../../ecosystem-docs/adr/ECO-0011-mxkeys-remains-a-separate-notary-product.md`
-  — MXKeys remains a separate notary product; hostname `mxkeys.org` is the
-  Matrix `server_name` and is not collapsed into the client brand
-- `grafana/` — dashboard assets
-- `prometheus-alerts.yaml` — alert definitions
-- `monitoring.md` — metrics reference and Prometheus + Grafana setup notes
-- `transparency-verification.md` — external STH verification guide
+- `adr/0001-cluster-consensus-modes.md` — why `crdt` and `raft` both exist
+- `runbook/cluster-disaster-recovery.md` — recovery
+- `runbook/raft-wal-upgrade.md` — Raft log v2 to v3
 
-## Usage
+## 4. Evidence
 
-Read `federation-behavior.md` for the stable public contract.
-Read `../ARCHITECTURE.md` and `deployment.md` for implementation and operations.
-Use `build.md` for local verification and CI-parity commands.
-Consult `runbook/` for step-by-step operator procedures.
+- `threat-model.md` — what the service protects
+- `matrix-v1.16-conformance-matrix.md` — status of each in-scope Matrix rule
+- `matrix-v1.16-clause-map.md` — those rules mapped to code and tests
+- `monitoring.md` — metrics
+- `prometheus-alerts.yaml` — alert rules
+- `grafana/README.md` — how to import `grafana/mxkeys-overview.json` and `grafana/mxkeys-federation.json`
+- `transparency-verification.md` — check a signed tree head when the log is on
 
-The GitHub-facing overview remains in the repository `README.md`.
+## 5. Decisions
+
+`adr/README.md` lists the decisions about this notary.

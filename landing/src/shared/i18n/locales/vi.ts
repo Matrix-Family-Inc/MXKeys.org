@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -32,7 +32,7 @@ export default {
     learnMore: 'Tìm hiểu thêm',
     viewAPI: 'Xem API',
     github: 'GitHub',
-    matrixFamilyBadge: 'Matrix Family',
+    matrixFamilyBadge: 'Matrix.Family',
   },
 
   status: {
@@ -171,20 +171,16 @@ export default {
     description: 'Cấu hình máy chủ Matrix của bạn để sử dụng MXKeys làm máy chủ khóa tin cậy.',
 
     synapse: 'Cấu hình Synapse',
-    mxcore: 'Cấu hình MXCore',
+    matrixFamily: 'Cấu hình Matrix.Family',
   },
 
   ecosystem: {
-    title: 'Thuộc Matrix Family',
-    description: 'MXKeys là công chứng khóa cạnh homeserver và máy khách của Matrix Family.',
+    title: 'Thuộc Matrix.Family',
+    description: 'MXKeys là công chứng khóa cạnh homeserver và máy khách của Matrix.Family.',
 
     matrixFamily: {
-      title: 'Matrix Family',
+      title: 'Matrix.Family',
       description: 'Homeserver và máy khách',
-    },
-    mxcore: {
-      title: 'MXCore',
-      description: 'Máy chủ Matrix',
     },
   },
 
@@ -193,8 +189,7 @@ export default {
     resources: 'Tài nguyên',
     contact: 'Liên hệ',
 
-    matrixFamily: 'Matrix Family',
-    mxcore: 'MXCore',
+    matrixFamily: 'Matrix.Family',
 
     architecture: 'Kiến trúc',
     apiReference: 'Tham chiếu API',
@@ -206,8 +201,8 @@ export default {
     protocol: 'Giao thức',
     matrixSpec: 'Matrix Spec',
 
-    copyrightPrefix: '© 2026 Matrix Family Inc. Mọi quyền được bảo lưu. Thuộc hệ sinh thái ',
-    copyrightLink: 'Matrix Family',
+    copyrightPrefix: '© 2026 Matrix.Family Inc. Mọi quyền được bảo lưu. Thuộc hệ sinh thái ',
+    copyrightLink: 'Matrix.Family',
     copyrightSuffix: '.',
     tagline: 'Key Notary cho liên bang Matrix.',
   },

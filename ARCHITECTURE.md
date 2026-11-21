@@ -1,6 +1,6 @@
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
@@ -16,10 +16,11 @@ This document describes the current runtime shape of MXKeys:
 - HTTP request flow,
 - cache and fetch path,
 - transparency and analytics subsystems,
-- authenticated cluster transport,
-- Raft persistence (WAL + snapshots),
+- optional cluster transport (CRDT or Raft),
 - signing-key provider abstraction,
 - schema migration runner.
+
+The usual process is one node and PostgreSQL. Cluster code starts only when `cluster.enabled` is true.
 
 The normative API contract lives in `docs/federation-behavior.md`.
 
@@ -70,9 +71,9 @@ ops/debug surfaces gated by a bearer token, not a product tier.
 | `internal/keys/keyprovider` | Pluggable signing-key backend (file, env, kms-stub); see ADR-0007 |
 | `internal/keys/transparency*` | Append-only transparency log, Merkle proofs, verification |
 | `internal/keys/analytics*` | Runtime key statistics and anomaly tracking |
-| `internal/cluster/*` | Authenticated CRDT or Raft-backed replication |
+| `internal/cluster/*` | Optional CRDT or Raft replication of verified key updates |
 | `internal/storage/migrations` | Embedded SQL migrations runner (see ADR-0008) |
-| `internal/zero/*` | Internal infrastructure packages (config, canonical JSON, metrics, raft, logging) |
+| `internal/zero/*` | Internal infrastructure packages (config, canonical JSON, metrics, logging, Raft) |
 
 ## Key Query Flow
 
@@ -101,8 +102,8 @@ can verify the origin self-signature on the reply.
 Moving pieces:
 
 - `ServerKeysResponse.Raw []byte` (`internal/keys/types.go`) carries
-  the origin canonical JSON through cache, DB, cluster replication,
-  and the wire response. A custom `MarshalJSON` emits `Raw`
+  the origin canonical JSON through cache, the database, and the
+  wire response. A custom `MarshalJSON` emits `Raw`
   verbatim when populated so the query wire format keeps origin
   canonical form intact.
 - `internal/keys/fetcher_direct.go` captures origin bytes into
@@ -121,18 +122,11 @@ Moving pieces:
 - Storage: `server_key_responses.raw_response BYTEA` (migration
   `0003_raw_server_response.sql`). A row with NULL `raw_response`
   is not served. The next successful fetch stores the signed bytes.
-- Cluster replication moves `raw_response` between peers
-  verbatim, so any node that has the raw bytes can serve a
-  signature-verifiable notary reply. There is no leader-only hot
-  spot for federation reads.
 
 Regression guard: unit tests under `notary_raw_response_test.go`
 cover origin signatures surviving `old_verify_keys` being
 omitted / empty / populated, notary-signature validity, and
-bad-input rejection. The three-node raft smoke cluster that
-previously ran under `test_servers/` has been decommissioned.
-Production `mxkeys.org` runs as a single node. Raft remains
-optional code behind `cluster.enabled`.
+bad-input rejection. Production `mxkeys.org` runs as a single node.
 
 ## Server Info Enrichment (`/_mxkeys/server-info`)
 
@@ -191,30 +185,14 @@ See ADR-0007.
 - `EnvProvider`: base64 seed or full key from an env variable.
 - `KMSStub`: documents the future external-KMS contract; returns `ErrNotImplemented`.
 
-## Cluster Model
+## Cluster
 
-See ADR-0001. Production `mxkeys.org` currently runs as a single node
-(no cluster); the modes below apply when clustering is enabled, which
-is planned for a later project phase.
+See ADR-0001. `server.New` calls `cluster.NewCluster` only when `cluster.enabled` is true.
 
-- `crdt`: eventually consistent replication, LWW by timestamp.
-- `raft`: quorum commit with persistent WAL + snapshots under
-  `cluster.raft_state_dir` (recommended mode once clustered).
+- `crdt`: eventually consistent key updates, last-write-wins by timestamp.
+- `raft`: quorum commit. The write-ahead log and snapshot live under `cluster.raft_state_dir`.
 
-### Cluster Transport Invariants
-
-- Transport uses shared-secret HMAC-SHA256 authentication over canonical JSON of the message fields (type, from, timestamp, payload_hex). Canonical encoding eliminates structural ambiguity from ad-hoc string concatenation.
-- Wire messages are bounded in size and time-limited; 5-minute skew window.
-- Replay protection: MAC signatures are cached for the skew window; reuses are rejected.
-- Wildcard bind addresses require explicit advertise address.
-- Replicated server responses are treated as trusted cluster data and written into cache/storage on peers only after the embedded self-signature re-verifies.
-
-### Raft Persistence
-
-- WAL: append-only `raft.wal` with per-record length + CRC32C header. Group-commit batcher amortizes fsync across bursts with bounded queue backpressure.
-- Snapshot: `raft.snapshot` with magic prefix, metadata header, and CRC32C payload. Written via temp-file + rename for crash safety.
-- InstallSnapshot RPC catches up followers whose `nextIndex` sits below the leader's compaction boundary.
-- `SetSnapshotProvider` / `SetSnapshotInstaller` callbacks keep the state-machine payload opaque to the Raft layer.
+Cluster messages use HMAC-SHA256 over canonical JSON, with a shared secret of at least 32 characters. A replicated server response is applied only after its origin self-signature checks again. `GET /_mxkeys/cluster/status` and `GET /_mxkeys/cluster/nodes` exist when the cluster is on and `security.admin_access_token` is set.
 
 ## Security Notes
 
@@ -222,7 +200,6 @@ is planned for a later project phase.
 - Request decoding enforces size and JSON depth limits.
 - SSRF checks reject resolved private IPs when enabled.
 - Admin-only operational routes require bearer-token access via `security.admin_access_token`.
-- `cluster.shared_secret` rejects known example placeholders and enforces minimum length 32.
 - Canonical JSON parser is continuously fuzzed (`FuzzJSON`, `FuzzMarshalRoundTrip`) against round-trip and idempotence invariants.
 
 ## Metrics

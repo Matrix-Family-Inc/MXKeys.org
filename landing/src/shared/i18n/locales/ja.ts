@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -31,7 +31,7 @@ export default {
     learnMore: '詳細を見る',
     viewAPI: 'API を見る',
     github: 'GitHub',
-    matrixFamilyBadge: 'Matrix Family',
+    matrixFamilyBadge: 'Matrix.Family',
   },
   status: {
     online: 'インフラストラクチャ オンライン',
@@ -158,20 +158,18 @@ export default {
     title: 'インテグレーション',
     description: 'MXKeys を信頼できる鍵サーバーとして使用するよう Matrix サーバーを構成します。',
     synapse: 'Synapse 設定',
-    mxcore: 'MXCore 設定',
+    matrixFamily: 'Matrix.Family 設定',
   },
   ecosystem: {
-    title: 'Matrix Family の一員',
-    description: 'MXKeys は Matrix Family のホームサーバーとクライアントの隣にある鍵公証人です。',
-    matrixFamily: { title: 'Matrix Family', description: 'ホームサーバーとクライアント' },
-    mxcore: { title: 'MXCore', description: 'Matrix ホームサーバー' },
+    title: 'Matrix.Family の一員',
+    description: 'MXKeys は Matrix.Family のホームサーバーとクライアントの隣にある鍵公証人です。',
+    matrixFamily: { title: 'Matrix.Family', description: 'ホームサーバーとクライアント' },
   },
   footer: {
     ecosystem: 'エコシステム',
     resources: 'リソース',
     contact: 'お問い合わせ',
-    matrixFamily: 'Matrix Family',
-    mxcore: 'MXCore',
+    matrixFamily: 'Matrix.Family',
     architecture: 'アーキテクチャ',
     apiReference: 'API リファレンス',
     support: '@support',
@@ -179,8 +177,8 @@ export default {
     devChat: '#dev',
     protocol: 'プロトコル',
     matrixSpec: 'Matrix Spec',
-    copyrightPrefix: '© 2026 Matrix Family Inc. All rights reserved. ',
-    copyrightLink: 'Matrix Family',
+    copyrightPrefix: '© 2026 Matrix.Family Inc. All rights reserved. ',
+    copyrightLink: 'Matrix.Family',
     copyrightSuffix: ' エコシステムの一員です。',
     tagline: 'Matrix フェデレーションのための鍵公証サービス。',
   },

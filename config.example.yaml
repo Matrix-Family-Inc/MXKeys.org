@@ -1,6 +1,6 @@
 # Project: MXKeys (mxkeys.org)
-# Company: Matrix Family Inc. (https://matrix.family)
-# Owner: Matrix Family Inc.
+# Company: Matrix.Family Inc. (https://matrix.family)
+# Owner: Matrix.Family Inc.
 # Contact: dev@matrix.family
 # Support: support@matrix.family
 # Matrix: @support:matrix.family
@@ -122,45 +122,30 @@ transparency:
 analytics:
   enabled: false
 
+# Optional multi-node replication. Off in a normal deployment.
+# crdt shares key updates. raft also persists them under raft_state_dir.
 cluster:
   enabled: false
   node_id: ""
   bind_address: "0.0.0.0"
   bind_port: 7946
-  advertise_address: "notary-node-a.internal"
-  advertise_port: 7946
+  advertise_address: ""
+  advertise_port: 0
   seeds: []
   consensus_mode: crdt # crdt | raft
   sync_interval: 5
-  # Required when cluster.enabled=true. Must be at least 32 characters.
-  # Placeholder values (e.g. "replace-with-long-random-secret") are rejected.
-  shared_secret: "CHANGE-TO-A-LONG-RANDOM-SECRET-GTE-32-CHARS"
-  # Raft persistence. Directory created with 0700 if missing.
+  # Required when cluster.enabled=true. At least 32 characters.
+  # Placeholder values are rejected.
+  shared_secret: ""
   raft_state_dir: "/var/lib/mxkeys/raft"
   raft_sync_on_append: true
-
-  # Raft log compaction tuning. Leave empty to keep the built-in
-  # defaults (30s interval, 1024 entries). Tune up for
-  # write-heavy clusters (compact less often), tune down for
-  # recovery-sensitive deployments (keep the WAL shorter).
-  # raft_compaction_interval must be >= 1s when set.
-  # raft_compaction_interval: "30s"
-  # raft_compaction_log_threshold: 1024
-
-  # Transport-level TLS for cluster traffic (both CRDT and Raft).
-  # Strongly recommended in production. When enabled the three file
-  # paths (cert/key/ca) are required and verified at startup.
-  # Set require_client_cert=true for mutual TLS (each node must
-  # present a certificate signed by the same CA). Rotate certificates
-  # with a rolling restart of cluster nodes.
-  tls:
-    enabled: false
-    cert_file: "/etc/mxkeys/cluster.crt"
-    key_file: "/etc/mxkeys/cluster.key"
-    ca_file: "/etc/mxkeys/cluster-ca.crt"
-    require_client_cert: true
-    min_version: "1.3"     # only "1.3" is accepted; the field stays for forward compatibility
-    server_name: ""        # optional SNI pin
+  # tls:
+  #   enabled: false
+  #   cert_file: "/etc/mxkeys/cluster.crt"
+  #   key_file: "/etc/mxkeys/cluster.key"
+  #   ca_file: "/etc/mxkeys/cluster-ca.crt"
+  #   require_client_cert: true
+  #   min_version: "1.3"
 
 # Optional GET /_mxkeys/server-info enrichment endpoint. When
 # enabled the notary serves DNS + federation reachability +

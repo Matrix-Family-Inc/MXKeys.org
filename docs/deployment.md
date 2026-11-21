@@ -1,6 +1,6 @@
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
@@ -11,9 +11,9 @@ Status: Updated
 
 ## Scope
 
-The shipping deployment is one `mxkeys` process and PostgreSQL.
-Cluster mode is optional and stays off unless `cluster.enabled` is
-set. This service is a classic Matrix key notary. It does not host
+The usual deployment is one `mxkeys` process and PostgreSQL.
+Cluster mode is in the binary and stays off unless `cluster.enabled`
+is set. This service is a classic Matrix key notary. It does not host
 an application platform.
 
 This document covers:
@@ -23,11 +23,11 @@ This document covers:
 - reverse proxy requirements,
 - backup and recovery essentials,
 - monitoring and basic troubleshooting,
-- cluster transport hardening notes.
+- the optional cluster.
 
 For build and verification commands, see `docs/build.md`. Operator
-runbooks for specific tasks (key rotation, schema migration, cluster DR)
-live under `docs/runbook/`.
+runbooks for key rotation, schema migration, backup, and cluster
+recovery live under `docs/runbook/`.
 
 ## Runtime Requirements
 
@@ -36,8 +36,7 @@ live under `docs/runbook/`.
 - TLS termination for public deployments.
 - Explicit `database.url`.
 - `security.admin_access_token` when the admin-only operational routes are exposed.
-- `cluster.shared_secret` when cluster mode is enabled: minimum 32 characters, placeholder values rejected.
-- For cluster mode with Raft consensus, `cluster.raft_state_dir` (default `/var/lib/mxkeys/raft`) on a durable filesystem.
+- When `cluster.enabled` is true: `cluster.shared_secret` of at least 32 characters, and `cluster.raft_state_dir` when `cluster.consensus_mode` is `raft`.
 
 ## Config Resolution
 
@@ -143,41 +142,14 @@ MXKeys generates an ed25519 signing key on first start under
 
 For rotation procedure see `docs/runbook/key-rotation.md`.
 
-## Scaling
+## Cluster
 
-MXKeys supports multiple deployment patterns:
+Leave `cluster.enabled` false for one node. To replicate key updates:
 
-- Single-node with PostgreSQL-backed cache.
-- Multiple stateless HTTP instances sharing PostgreSQL (CRDT cluster optional for cache-warming coordination).
-- Authenticated cluster mode using CRDT (eventually consistent) or Raft (strong consistency with persistent WAL).
+- `consensus_mode: crdt` shares updates in memory. A full restart of every node drops what was not already written to PostgreSQL on each node.
+- `consensus_mode: raft` commits updates to `cluster.raft_state_dir` (default `/var/lib/mxkeys/raft`). Keep that directory on a real disk. `raft_sync_on_append` defaults to true.
 
-Clustered deployments require:
-
-- Explicit `cluster.advertise_address` when binding to wildcard addresses.
-- A shared `cluster.shared_secret` of 32+ random characters.
-- Network-level protection for cluster ports (see "Cluster Transport Hardening" below).
-
-Raft-specific requirements:
-
-- `cluster.raft_state_dir` must live on a durable local filesystem. Do not point this at a tmpfs; a crash loses committed entries otherwise.
-- `cluster.raft_sync_on_append=true` (default) enforces fsync-per-batch for power-loss durability. Disabling trades durability for throughput on battery-backed hosts.
-
-## Cluster Transport Hardening
-
-Cluster-to-cluster traffic is authenticated with HMAC-SHA256 over
-canonical JSON of the message fields; replay protection caches MAC
-signatures for the 5-minute skew window.
-
-Cluster TLS is opt-in and covers both CRDT and Raft transport when
-`cluster.tls.enabled=true`. Production clusters should enable TLS 1.3
-with mutual authentication. If TLS is disabled, use one of these
-network controls:
-
-- Dedicated private VLAN or VPN between cluster nodes (strong recommendation).
-- WireGuard / Tailscale overlay for multi-datacenter clusters.
-- `iptables`/`nftables` rules restricting the cluster port to peer IPs.
-
-Do not expose cluster ports to the public internet.
+Every node needs the same `cluster.shared_secret`. A wildcard bind address needs `cluster.advertise_address`. Keep the cluster port off the public internet. TLS for that port is `cluster.tls`. The mode choice is ADR-0001. Recovery is `docs/runbook/cluster-disaster-recovery.md`.
 
 ## Backup and Recovery
 
@@ -185,7 +157,7 @@ Minimum backup set:
 
 - PostgreSQL database.
 - Contents of `keys.storage_path` (for `file` provider: `mxkeys_ed25519.key`).
-- `cluster.raft_state_dir` contents for Raft cluster members (WAL + snapshot).
+- `cluster.raft_state_dir` when that node runs Raft.
 
 Example commands:
 
@@ -193,7 +165,6 @@ Example commands:
 pg_dump mxkeys > /backup/mxkeys_$(date +%Y%m%d%H%M%S).sql
 install -d -m 700 /backup/mxkeys-keys
 install -m 600 /var/lib/mxkeys/keys/mxkeys_ed25519.key /backup/mxkeys-keys/mxkeys_ed25519.key
-tar -cf /backup/mxkeys-raft_$(date +%Y%m%d%H%M%S).tar -C /var/lib/mxkeys raft
 ```
 
 Minimum recovery checks:
@@ -204,7 +175,7 @@ curl -fsS https://notary.example.org/_mxkeys/status
 curl -fsS https://notary.example.org/_matrix/key/v2/server | jq '.verify_keys'
 ```
 
-For cluster-specific disaster-recovery see `docs/runbook/cluster-disaster-recovery.md`.
+The step-by-step procedure is `docs/runbook/backup-restore.md`.
 
 ## Monitoring
 

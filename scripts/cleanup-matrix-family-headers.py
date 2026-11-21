@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # Project: MXKeys (mxkeys.org)
-# Company: Matrix Family Inc. (https://matrix.family)
-# Owner: Matrix Family Inc.
+# Company: Matrix.Family Inc. (https://matrix.family)
+# Owner: Matrix.Family Inc.
 # Contact: dev@matrix.family
 # Support: support@matrix.family
 # Matrix: @support:matrix.family
 # Date: Sun 22 Jun 2026 00:52:00 UTC
 # Status: Updated
 
-"""Dedupe Matrix Family headers and strip legacy Maintainer blocks."""
+"""Dedupe Matrix.Family headers and strip legacy Maintainer blocks."""
 
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 UTC = datetime.now(timezone.utc).strftime("%a %d %b %Y %H:%M:%S UTC")
 
 STANDARD_MD = f"""Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
@@ -30,8 +30,8 @@ Status: Updated"""
 
 STANDARD_BLOCK = f"""/*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family

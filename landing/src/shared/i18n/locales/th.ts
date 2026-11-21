@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -32,7 +32,7 @@ export default {
     learnMore: 'เรียนรู้เพิ่มเติม',
     viewAPI: 'ดู API',
     github: 'GitHub',
-    matrixFamilyBadge: 'Matrix Family',
+    matrixFamilyBadge: 'Matrix.Family',
   },
 
   status: {
@@ -171,20 +171,16 @@ export default {
     description: 'กำหนดค่าเซิร์ฟเวอร์ Matrix ของคุณเพื่อใช้ MXKeys เป็นเซิร์ฟเวอร์คีย์ที่น่าเชื่อถือ',
 
     synapse: 'การกำหนดค่า Synapse',
-    mxcore: 'การกำหนดค่า MXCore',
+    matrixFamily: 'การกำหนดค่า Matrix.Family',
   },
 
   ecosystem: {
-    title: 'ส่วนหนึ่งของ Matrix Family',
-    description: 'MXKeys คือโนตารีคีย์ข้างโฮมเซิร์ฟเวอร์และไคลเอนต์ของ Matrix Family',
+    title: 'ส่วนหนึ่งของ Matrix.Family',
+    description: 'MXKeys คือโนตารีคีย์ข้างโฮมเซิร์ฟเวอร์และไคลเอนต์ของ Matrix.Family',
 
     matrixFamily: {
-      title: 'Matrix Family',
+      title: 'Matrix.Family',
       description: 'โฮมเซิร์ฟเวอร์และไคลเอนต์',
-    },
-    mxcore: {
-      title: 'MXCore',
-      description: 'โฮมเซิร์ฟเวอร์ Matrix',
     },
   },
 
@@ -193,8 +189,7 @@ export default {
     resources: 'ทรัพยากร',
     contact: 'ติดต่อ',
 
-    matrixFamily: 'Matrix Family',
-    mxcore: 'MXCore',
+    matrixFamily: 'Matrix.Family',
 
     architecture: 'สถาปัตยกรรม',
     apiReference: 'อ้างอิง API',
@@ -206,8 +201,8 @@ export default {
     protocol: 'โปรโตคอล',
     matrixSpec: 'Matrix Spec',
 
-    copyrightPrefix: '© 2026 Matrix Family Inc. สงวนลิขสิทธิ์ ส่วนหนึ่งของระบบนิเวศ ',
-    copyrightLink: 'Matrix Family',
+    copyrightPrefix: '© 2026 Matrix.Family Inc. สงวนลิขสิทธิ์ ส่วนหนึ่งของระบบนิเวศ ',
+    copyrightLink: 'Matrix.Family',
     copyrightSuffix: '',
     tagline: 'Key Notary สำหรับสหพันธ์ Matrix',
   },

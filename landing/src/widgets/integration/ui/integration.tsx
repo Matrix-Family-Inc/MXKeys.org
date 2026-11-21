@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -26,7 +26,7 @@ export function IntegrationSection() {
 
         <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
           <div className="card">
-            <h3 className="font-semibold text-text mb-4">{t('integration.mxcore')}</h3>
+            <h3 className="font-semibold text-text mb-4">{t('integration.matrixFamily')}</h3>
             <div className="code-block">
               <div className="comment"># config.yaml</div>
               <div><span className="keyword">federation</span>:</div>

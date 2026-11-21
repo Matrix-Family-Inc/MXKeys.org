@@ -1,10 +1,10 @@
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
-Date: Mon 22 Jun 2026 00:51:51 UTC
+Date: Sat 21 Nov 2026 01:41:00 UTC
 Status: Updated
 
 # ADR-0001: Cluster Consensus Modes
@@ -57,14 +57,14 @@ care about. It is a decision aid, not a service-level agreement.
 | Consistency | Eventual (LWW by timestamp) | Strong (quorum commit) |
 | Availability | All nodes accept writes during partition | Minority becomes read-only |
 | Partition tolerance | Both sides converge after heal | Leader election after timeout |
-| State persistence | In-memory only | Write-ahead log + snapshot on disk |
-| Data on restart | Lost (requires re-sync from peers) | Preserved (WAL replay + snapshot install) |
+| Cluster cache | In memory on the node | Write-ahead log and snapshot on disk |
+| After process restart | That memory is empty until peers sync. Key rows already in this node's PostgreSQL stay | The Raft log is replayed into the cluster cache. PostgreSQL stays |
 | Log compaction | N/A | Snapshot via `Node.CompactLog`, truncates WAL prefix |
 | Catch-up for lagging peers | Full re-sync via CRDT merge | `InstallSnapshot` RPC + AppendEntries |
 
 ### Operational Implications
 
-- **CRDT**: clock skew between nodes can cause LWW conflicts; NTP synchronization required.
+- **CRDT**: clock skew between nodes can cause LWW conflicts; NTP synchronization required. A restart clears only the in-memory cluster cache. It does not delete key rows already stored in PostgreSQL on that node.
 - **Raft**: configure `cluster.raft_state_dir` on durable local storage; WAL and snapshot handling are covered by `docs/runbook/cluster-disaster-recovery.md`.
 - Both modes require `cluster.shared_secret` for message authentication (>=32 chars, placeholders rejected). TLS 1.3 is available for cluster transport and should be enabled for production clusters; deployments that leave TLS disabled must keep cluster ports on a private network or VPN.
 

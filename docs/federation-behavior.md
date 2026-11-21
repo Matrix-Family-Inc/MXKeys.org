@@ -1,6 +1,6 @@
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
@@ -225,7 +225,7 @@ MXKeys MUST enforce:
 - request size limits,
 - max server-count per query,
 - concurrency limits for upstream fetch paths,
-- bounded message size for cluster and raft transport.
+- a size limit on cluster messages.
 
 ## Timeout and Retry Policy
 

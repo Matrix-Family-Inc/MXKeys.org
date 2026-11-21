@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -12,8 +12,8 @@
 import { getLinkProps } from '@/shared/config/urls';
 
 /**
- * Pill-style hyperlink used to cross-link between Matrix Family
- * ecosystem sites (Matrix Family, MXCore). Kept in shared
+ * Pill-style hyperlink used to cross-link between Matrix.Family
+ * the Matrix.Family site. Kept in shared
  * so every widget that displays an ecosystem affiliation renders
  * the same visual contract (accent pill + hover opacity).
  *

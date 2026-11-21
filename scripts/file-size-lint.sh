@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Project: MXKeys (mxkeys.org)
-# Company: Matrix Family Inc. (https://matrix.family)
-# Owner: Matrix Family Inc.
+# Company: Matrix.Family Inc. (https://matrix.family)
+# Owner: Matrix.Family Inc.
 # Contact: dev@matrix.family
 # Support: support@matrix.family
 # Matrix: @support:matrix.family
 # Date: Mon 22 Jun 2026 00:50:40 UTC
 # Status: Updated
-# Enforce the file-size policy from ADR-0010:
+# Warn when a tracked source file exceeds 300 lines and fail at 400.
 #   - target: 250-300 lines per file
 #   - warn at 300 lines
 #   - fail at 400 lines (hard ceiling)
@@ -65,7 +65,7 @@ done
 
 echo
 if [[ "${fail}" -gt 0 ]]; then
-  echo "file-size-lint: ${fail} file(s) above hard ceiling ${FAIL_AT} (see ADR-0010)." >&2
+  echo "file-size-lint: ${fail} file(s) above hard ceiling ${FAIL_AT}." >&2
   exit 1
 fi
 if [[ "${warn}" -gt 0 ]]; then

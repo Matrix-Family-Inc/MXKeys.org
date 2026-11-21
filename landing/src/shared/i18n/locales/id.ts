@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -32,7 +32,7 @@ export default {
     learnMore: 'Pelajari Lebih Lanjut',
     viewAPI: 'Lihat API',
     github: 'GitHub',
-    matrixFamilyBadge: 'Matrix Family',
+    matrixFamilyBadge: 'Matrix.Family',
   },
 
   status: {
@@ -171,20 +171,16 @@ export default {
     description: 'Konfigurasikan server Matrix Anda untuk menggunakan MXKeys sebagai server kunci tepercaya.',
 
     synapse: 'Konfigurasi Synapse',
-    mxcore: 'Konfigurasi MXCore',
+    matrixFamily: 'Konfigurasi Matrix.Family',
   },
 
   ecosystem: {
-    title: 'Bagian dari Matrix Family',
-    description: 'MXKeys adalah notaris kunci di samping homeserver dan klien Matrix Family.',
+    title: 'Bagian dari Matrix.Family',
+    description: 'MXKeys adalah notaris kunci di samping homeserver dan klien Matrix.Family.',
 
     matrixFamily: {
-      title: 'Matrix Family',
+      title: 'Matrix.Family',
       description: 'Homeserver dan klien',
-    },
-    mxcore: {
-      title: 'MXCore',
-      description: 'Homeserver Matrix',
     },
   },
 
@@ -193,8 +189,7 @@ export default {
     resources: 'Sumber Daya',
     contact: 'Kontak',
 
-    matrixFamily: 'Matrix Family',
-    mxcore: 'MXCore',
+    matrixFamily: 'Matrix.Family',
 
     architecture: 'Arsitektur',
     apiReference: 'Referensi API',
@@ -206,8 +201,8 @@ export default {
     protocol: 'Protokol',
     matrixSpec: 'Matrix Spec',
 
-    copyrightPrefix: '© 2026 Matrix Family Inc. Hak cipta dilindungi. Bagian dari ekosistem ',
-    copyrightLink: 'Matrix Family',
+    copyrightPrefix: '© 2026 Matrix.Family Inc. Hak cipta dilindungi. Bagian dari ekosistem ',
+    copyrightLink: 'Matrix.Family',
     copyrightSuffix: '.',
     tagline: 'Key Notary untuk federasi Matrix.',
   },

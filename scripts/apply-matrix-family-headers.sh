@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Project: MXKeys (mxkeys.org)
-# Company: Matrix Family Inc. (https://matrix.family)
-# Owner: Matrix Family Inc.
+# Company: Matrix.Family Inc. (https://matrix.family)
+# Owner: Matrix.Family Inc.
 # Contact: dev@matrix.family
 # Support: support@matrix.family
 # Matrix: @support:matrix.family
 # Date: Mon 22 Jun 2026 00:50:40 UTC
 # Status: Updated
-# One-shot header normalizer for Matrix Family standardization.
+# One-shot header normalizer for Matrix.Family standardization.
 # Safe to re-run: idempotent on already-normalized files.
 
 set -euo pipefail
@@ -17,8 +17,8 @@ UTC_DATE="$(date -u '+%a %d %b %Y %H:%M:%S UTC')"
 
 BLOCK_HEADER="/*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -27,8 +27,8 @@ BLOCK_HEADER="/*
  */"
 
 MD_HEADER="Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family
@@ -36,8 +36,8 @@ Date: ${UTC_DATE}
 Status: Updated"
 
 HASH_HEADER="# Project: MXKeys (mxkeys.org)
-# Company: Matrix Family Inc. (https://matrix.family)
-# Owner: Matrix Family Inc.
+# Company: Matrix.Family Inc. (https://matrix.family)
+# Owner: Matrix.Family Inc.
 # Contact: dev@matrix.family
 # Support: support@matrix.family
 # Matrix: @support:matrix.family
@@ -46,8 +46,8 @@ HASH_HEADER="# Project: MXKeys (mxkeys.org)
 
 HTML_HEADER="<!--
 Project: MXKeys (mxkeys.org)
-Company: Matrix Family Inc. (https://matrix.family)
-Owner: Matrix Family Inc.
+Company: Matrix.Family Inc. (https://matrix.family)
+Owner: Matrix.Family Inc.
 Contact: dev@matrix.family
 Support: support@matrix.family
 Matrix: @support:matrix.family

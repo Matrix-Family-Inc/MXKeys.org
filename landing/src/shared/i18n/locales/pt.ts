@@ -1,7 +1,7 @@
 /*
  * Project: MXKeys (mxkeys.org)
- * Company: Matrix Family Inc. (https://matrix.family)
- * Owner: Matrix Family Inc.
+ * Company: Matrix.Family Inc. (https://matrix.family)
+ * Owner: Matrix.Family Inc.
  * Contact: dev@matrix.family
  * Support: support@matrix.family
  * Matrix: @support:matrix.family
@@ -31,7 +31,7 @@ export default {
     learnMore: 'Saiba mais',
     viewAPI: 'Ver API',
     github: 'GitHub',
-    matrixFamilyBadge: 'Matrix Family',
+    matrixFamilyBadge: 'Matrix.Family',
   },
   status: {
     online: 'Infraestrutura online',
@@ -158,20 +158,18 @@ export default {
     title: 'Integração',
     description: 'Configure seu servidor Matrix para usar MXKeys como servidor de chaves confiável.',
     synapse: 'Configuração Synapse',
-    mxcore: 'Configuração MXCore',
+    matrixFamily: 'Configuração Matrix.Family',
   },
   ecosystem: {
-    title: 'Parte da Matrix Family',
-    description: 'MXKeys é o notário de chaves ao lado do homeserver e dos clientes Matrix Family.',
-    matrixFamily: { title: 'Matrix Family', description: 'Homeserver e clientes' },
-    mxcore: { title: 'MXCore', description: 'Homeserver Matrix' },
+    title: 'Parte da Matrix.Family',
+    description: 'MXKeys é o notário de chaves ao lado do homeserver e dos clientes Matrix.Family.',
+    matrixFamily: { title: 'Matrix.Family', description: 'Homeserver e clientes' },
   },
   footer: {
     ecosystem: 'Ecossistema',
     resources: 'Recursos',
     contact: 'Contato',
-    matrixFamily: 'Matrix Family',
-    mxcore: 'MXCore',
+    matrixFamily: 'Matrix.Family',
     architecture: 'Arquitetura',
     apiReference: 'Referência API',
     support: '@support',
@@ -179,8 +177,8 @@ export default {
     devChat: '#dev',
     protocol: 'Protocolo',
     matrixSpec: 'Matrix Spec',
-    copyrightPrefix: '© 2026 Matrix Family Inc. Todos os direitos reservados. Parte do ',
-    copyrightLink: 'Matrix Family',
+    copyrightPrefix: '© 2026 Matrix.Family Inc. Todos os direitos reservados. Parte do ',
+    copyrightLink: 'Matrix.Family',
     copyrightSuffix: ' ecossistema.',
     tagline: 'Notário de chaves para federação Matrix.',
   },

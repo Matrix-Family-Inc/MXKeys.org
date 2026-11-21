@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Project: MXKeys (mxkeys.org)
-# Company: Matrix Family Inc. (https://matrix.family)
-# Owner: Matrix Family Inc.
+# Company: Matrix.Family Inc. (https://matrix.family)
+# Owner: Matrix.Family Inc.
 # Contact: dev@matrix.family
 # Support: support@matrix.family
 # Matrix: @support:matrix.family
@@ -93,7 +93,7 @@ bash ./scripts/coverage-gate.sh
 step "fuzz quick (seed corpus sweep)"
 bash ./scripts/fuzz-quick.sh
 
-step "file-size (ADR-0010)"
+step "file-size"
 bash ./scripts/file-size-lint.sh
 
 step "frontend lint"
