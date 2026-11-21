@@ -13,6 +13,12 @@ All notable changes to MXKeys are documented in this file.
 
 ## [Unreleased]
 
+### Security
+
+- Indirect `golang.org/x/net` is v0.62.0 (was v0.57.0). The notary does
+  not call the affected HTML or HTTP/2 paths. Dependabot reported the
+  older module.
+
 ### Changed
 
 - The public documents describe one notary: one process and PostgreSQL,
